@@ -1,22 +1,39 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Restaurant Management System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: menu
+    description: Menu management
+  - name: orders
+    description: Order management
+  - name: inventory
+    description: Inventory management
+  - name: customers
+    description: Customer management
+  - name: employees
+    description: Employee management
+  - name: reports
+    description: Analytics and reports
+  - name: tables
+    description: Table management
+  - name: delivery
+    description: Delivery management
+  - name: expenses
+    description: Expense management
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +41,760 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ---- MENU ----
+  /menu/categories:
+    get:
+      operationId: getMenuCategories
+      tags: [menu]
+      summary: Get all menu categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuCategory"
+    post:
+      operationId: createMenuCategory
+      tags: [menu]
+      summary: Create a menu category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMenuCategoryBody"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuCategory"
+
+  /menu/categories/{id}:
+    put:
+      operationId: updateMenuCategory
+      tags: [menu]
+      summary: Update a menu category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMenuCategoryBody"
+      responses:
+        "200":
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuCategory"
+    delete:
+      operationId: deleteMenuCategory
+      tags: [menu]
+      summary: Delete a menu category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /menu/items:
+    get:
+      operationId: getMenuItems
+      tags: [menu]
+      summary: Get all menu items
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: available
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of menu items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItem"
+    post:
+      operationId: createMenuItem
+      tags: [menu]
+      summary: Create a menu item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMenuItemBody"
+      responses:
+        "201":
+          description: Created menu item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+
+  /menu/items/{id}:
+    get:
+      operationId: getMenuItem
+      tags: [menu]
+      summary: Get a menu item by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Menu item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+    put:
+      operationId: updateMenuItem
+      tags: [menu]
+      summary: Update a menu item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMenuItemBody"
+      responses:
+        "200":
+          description: Updated menu item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+    delete:
+      operationId: deleteMenuItem
+      tags: [menu]
+      summary: Delete a menu item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ---- TABLES ----
+  /tables:
+    get:
+      operationId: getTables
+      tags: [tables]
+      summary: Get all tables
+      responses:
+        "200":
+          description: List of tables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RestaurantTable"
+    post:
+      operationId: createTable
+      tags: [tables]
+      summary: Create a table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTableBody"
+      responses:
+        "201":
+          description: Created table
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestaurantTable"
+
+  /tables/{id}:
+    put:
+      operationId: updateTable
+      tags: [tables]
+      summary: Update a table
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTableBody"
+      responses:
+        "200":
+          description: Updated table
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestaurantTable"
+
+  # ---- ORDERS ----
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [orders]
+      summary: Get orders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: date
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderBody"
+      responses:
+        "201":
+          description: Created order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get an order by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+    put:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderBody"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/status:
+    patch:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Update order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusBody"
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}/pay:
+    post:
+      operationId: payOrder
+      tags: [orders]
+      summary: Mark order as paid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayOrderBody"
+      responses:
+        "200":
+          description: Paid order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  # ---- INVENTORY ----
+  /inventory:
+    get:
+      operationId: getInventoryItems
+      tags: [inventory]
+      summary: Get all inventory items
+      responses:
+        "200":
+          description: List of inventory items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryItem"
+    post:
+      operationId: createInventoryItem
+      tags: [inventory]
+      summary: Create an inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryItemBody"
+      responses:
+        "201":
+          description: Created inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  /inventory/{id}:
+    put:
+      operationId: updateInventoryItem
+      tags: [inventory]
+      summary: Update an inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInventoryItemBody"
+      responses:
+        "200":
+          description: Updated inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+    delete:
+      operationId: deleteInventoryItem
+      tags: [inventory]
+      summary: Delete an inventory item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /inventory/{id}/adjust:
+    post:
+      operationId: adjustInventoryItem
+      tags: [inventory]
+      summary: Adjust inventory quantity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustInventoryBody"
+      responses:
+        "200":
+          description: Adjusted inventory item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryItem"
+
+  # ---- CUSTOMERS ----
+  /customers:
+    get:
+      operationId: getCustomers
+      tags: [customers]
+      summary: Get all customers
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerBody"
+      responses:
+        "201":
+          description: Created customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get a customer by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    put:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerBody"
+      responses:
+        "200":
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  # ---- EMPLOYEES ----
+  /employees:
+    get:
+      operationId: getEmployees
+      tags: [employees]
+      summary: Get all employees
+      responses:
+        "200":
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [employees]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /employees/{id}:
+    put:
+      operationId: updateEmployee
+      tags: [employees]
+      summary: Update an employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    delete:
+      operationId: deleteEmployee
+      tags: [employees]
+      summary: Delete an employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ---- EXPENSES ----
+  /expenses:
+    get:
+      operationId: getExpenses
+      tags: [expenses]
+      summary: Get all expenses
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+    post:
+      operationId: createExpense
+      tags: [expenses]
+      summary: Create an expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseBody"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+
+  /expenses/{id}:
+    delete:
+      operationId: deleteExpense
+      tags: [expenses]
+      summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ---- REPORTS ----
+  /reports/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [reports]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /reports/sales:
+    get:
+      operationId: getSalesReport
+      tags: [reports]
+      summary: Get sales report
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, yearly]
+            default: daily
+        - name: date
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sales report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesReport"
+
+  /reports/top-items:
+    get:
+      operationId: getTopItems
+      tags: [reports]
+      summary: Get top selling items
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: monthly
+      responses:
+        "200":
+          description: Top items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopItem"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +805,679 @@ components:
       required:
         - status
 
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    # MENU
+    MenuCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        nameAr:
+          type: string
+        nameKu:
+          type: string
+        icon:
+          type: string
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - nameAr
+
+    CreateMenuCategoryBody:
+      type: object
+      properties:
+        name:
+          type: string
+        nameAr:
+          type: string
+        nameKu:
+          type: string
+        icon:
+          type: string
+        sortOrder:
+          type: integer
+      required:
+        - name
+        - nameAr
+
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        categoryId:
+          type: integer
+        name:
+          type: string
+        nameAr:
+          type: string
+        nameKu:
+          type: string
+        description:
+          type: string
+        descriptionAr:
+          type: string
+        price:
+          type: number
+        cost:
+          type: number
+        imageUrl:
+          type: string
+        isAvailable:
+          type: boolean
+        preparationTime:
+          type: integer
+        calories:
+          type: integer
+        sortOrder:
+          type: integer
+        category:
+          $ref: "#/components/schemas/MenuCategory"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - categoryId
+        - name
+        - nameAr
+        - price
+        - isAvailable
+
+    CreateMenuItemBody:
+      type: object
+      properties:
+        categoryId:
+          type: integer
+        name:
+          type: string
+        nameAr:
+          type: string
+        nameKu:
+          type: string
+        description:
+          type: string
+        descriptionAr:
+          type: string
+        price:
+          type: number
+        cost:
+          type: number
+        imageUrl:
+          type: string
+        isAvailable:
+          type: boolean
+        preparationTime:
+          type: integer
+        calories:
+          type: integer
+        sortOrder:
+          type: integer
+      required:
+        - categoryId
+        - name
+        - nameAr
+        - price
+
+    # TABLES
+    RestaurantTable:
+      type: object
+      properties:
+        id:
+          type: integer
+        number:
+          type: string
+        capacity:
+          type: integer
+        status:
+          type: string
+          enum: [available, occupied, reserved, cleaning]
+        location:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - number
+        - capacity
+        - status
+
+    CreateTableBody:
+      type: object
+      properties:
+        number:
+          type: string
+        capacity:
+          type: integer
+        location:
+          type: string
+        status:
+          type: string
+          enum: [available, occupied, reserved, cleaning]
+      required:
+        - number
+        - capacity
+
+    UpdateTableBody:
+      type: object
+      properties:
+        number:
+          type: string
+        capacity:
+          type: integer
+        location:
+          type: string
+        status:
+          type: string
+          enum: [available, occupied, reserved, cleaning]
+
+    # ORDERS
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        menuItemId:
+          type: integer
+        menuItem:
+          $ref: "#/components/schemas/MenuItem"
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [pending, preparing, ready, served]
+      required:
+        - id
+        - orderId
+        - menuItemId
+        - quantity
+        - unitPrice
+        - totalPrice
+        - status
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderNumber:
+          type: string
+        type:
+          type: string
+          enum: [dine_in, takeaway, delivery]
+        status:
+          type: string
+          enum: [pending, confirmed, preparing, ready, served, paid, cancelled]
+        tableId:
+          type: integer
+        table:
+          $ref: "#/components/schemas/RestaurantTable"
+        customerId:
+          type: integer
+        customer:
+          $ref: "#/components/schemas/Customer"
+        employeeId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        subtotal:
+          type: number
+        tax:
+          type: number
+        discount:
+          type: number
+        total:
+          type: number
+        paymentMethod:
+          type: string
+          enum: [cash, card, transfer]
+        notes:
+          type: string
+        deliveryAddress:
+          type: string
+        deliveryPhone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - orderNumber
+        - type
+        - status
+        - subtotal
+        - total
+        - createdAt
+
+    CreateOrderBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [dine_in, takeaway, delivery]
+        tableId:
+          type: integer
+        customerId:
+          type: integer
+        employeeId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateOrderItemBody"
+        discount:
+          type: number
+        notes:
+          type: string
+        deliveryAddress:
+          type: string
+        deliveryPhone:
+          type: string
+      required:
+        - type
+        - items
+
+    CreateOrderItemBody:
+      type: object
+      properties:
+        menuItemId:
+          type: integer
+        quantity:
+          type: integer
+        notes:
+          type: string
+      required:
+        - menuItemId
+        - quantity
+
+    UpdateOrderBody:
+      type: object
+      properties:
+        type:
+          type: string
+        tableId:
+          type: integer
+        customerId:
+          type: integer
+        discount:
+          type: number
+        notes:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateOrderItemBody"
+
+    UpdateOrderStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, preparing, ready, served, paid, cancelled]
+      required:
+        - status
+
+    PayOrderBody:
+      type: object
+      properties:
+        paymentMethod:
+          type: string
+          enum: [cash, card, transfer]
+        discount:
+          type: number
+      required:
+        - paymentMethod
+
+    # INVENTORY
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        nameAr:
+          type: string
+        unit:
+          type: string
+        currentQuantity:
+          type: number
+        minimumQuantity:
+          type: number
+        costPerUnit:
+          type: number
+        category:
+          type: string
+        supplier:
+          type: string
+        lastRestockedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - nameAr
+        - unit
+        - currentQuantity
+        - minimumQuantity
+
+    CreateInventoryItemBody:
+      type: object
+      properties:
+        name:
+          type: string
+        nameAr:
+          type: string
+        unit:
+          type: string
+        currentQuantity:
+          type: number
+        minimumQuantity:
+          type: number
+        costPerUnit:
+          type: number
+        category:
+          type: string
+        supplier:
+          type: string
+      required:
+        - name
+        - nameAr
+        - unit
+        - currentQuantity
+        - minimumQuantity
+
+    AdjustInventoryBody:
+      type: object
+      properties:
+        adjustment:
+          type: number
+        reason:
+          type: string
+      required:
+        - adjustment
+
+    # CUSTOMERS
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        loyaltyPoints:
+          type: integer
+        totalOrders:
+          type: integer
+        totalSpent:
+          type: number
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+
+    CreateCustomerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        notes:
+          type: string
+      required:
+        - name
+
+    # EMPLOYEES
+    Employee:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, cashier, waiter, kitchen, delivery]
+        phone:
+          type: string
+        email:
+          type: string
+        salary:
+          type: number
+        isActive:
+          type: boolean
+        hireDate:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - role
+        - isActive
+
+    CreateEmployeeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, cashier, waiter, kitchen, delivery]
+        phone:
+          type: string
+        email:
+          type: string
+        salary:
+          type: number
+        isActive:
+          type: boolean
+        hireDate:
+          type: string
+          format: date-time
+      required:
+        - name
+        - role
+
+    # EXPENSES
+    Expense:
+      type: object
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        descriptionAr:
+          type: string
+        amount:
+          type: number
+        category:
+          type: string
+        date:
+          type: string
+          format: date-time
+        employeeId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - description
+        - amount
+        - category
+        - date
+
+    CreateExpenseBody:
+      type: object
+      properties:
+        description:
+          type: string
+        descriptionAr:
+          type: string
+        amount:
+          type: number
+        category:
+          type: string
+        date:
+          type: string
+          format: date-time
+        employeeId:
+          type: integer
+      required:
+        - description
+        - amount
+        - category
+
+    # REPORTS
+    DashboardStats:
+      type: object
+      properties:
+        todayRevenue:
+          type: number
+        todayOrders:
+          type: integer
+        activeOrders:
+          type: integer
+        availableTables:
+          type: integer
+        totalTables:
+          type: integer
+        lowStockItems:
+          type: integer
+        totalCustomers:
+          type: integer
+        monthRevenue:
+          type: number
+        monthOrders:
+          type: integer
+        revenueGrowth:
+          type: number
+        ordersGrowth:
+          type: number
+      required:
+        - todayRevenue
+        - todayOrders
+        - activeOrders
+        - availableTables
+        - totalTables
+        - lowStockItems
+        - totalCustomers
+        - monthRevenue
+        - monthOrders
+
+    SalesReport:
+      type: object
+      properties:
+        period:
+          type: string
+        totalRevenue:
+          type: number
+        totalOrders:
+          type: integer
+        averageOrderValue:
+          type: number
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesDataPoint"
+        byPaymentMethod:
+          type: object
+          additionalProperties:
+            type: number
+        byOrderType:
+          type: object
+          additionalProperties:
+            type: number
+      required:
+        - period
+        - totalRevenue
+        - totalOrders
+        - averageOrderValue
+        - data
+
+    SalesDataPoint:
+      type: object
+      properties:
+        label:
+          type: string
+        revenue:
+          type: number
+        orders:
+          type: integer
+      required:
+        - label
+        - revenue
+        - orders
+
+    TopItem:
+      type: object
+      properties:
+        menuItemId:
+          type: integer
+        name:
+          type: string
+        nameAr:
+          type: string
+        totalQuantity:
+          type: integer
+        totalRevenue:
+          type: number
+        imageUrl:
+          type: string
+      required:
+        - menuItemId
+        - name
+        - nameAr
+        - totalQuantity
+        - totalRevenue

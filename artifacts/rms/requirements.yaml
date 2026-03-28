@@ -1,0 +1,19 @@
+packages:
+  "framer-motion": "For page transitions and premium micro-interactions"
+  "recharts": "For rendering beautiful sales and analytics charts"
+  "date-fns": "For elegant date formatting on orders and reports"
+  "lucide-react": "For crisp, modern icons across the dashboard"
+  "clsx": "For dynamic class merging"
+  "tailwind-merge": "For resolving Tailwind conflicts cleanly"
+
+images:
+  - path: "artifacts/rms/public/images/hero-bg.png"
+    description: "Dark, moody professional restaurant interior with cinematic amber lighting, blurred background, luxurious feel"
+    aspect_ratio: "16:9"
+  - path: "artifacts/rms/public/images/logo-mark.png"
+    description: "Minimalist geometric restaurant logo mark in amber and gold on a transparent background, modern luxury"
+    aspect_ratio: "1:1"
+
+notes:
+  - App is RTL (Arabic primary) with English secondary labels.
+  - Using Dark Mode as default with a premium Amber/Gold accent palette.
