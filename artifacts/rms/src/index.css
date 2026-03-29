@@ -156,7 +156,7 @@
 
 /* Glassmorphism utilities */
 .glass-panel {
-  @apply bg-card/70 backdrop-blur-xl border border-white/5 shadow-2xl;
+  @apply bg-card/90 backdrop-blur-xl border border-border shadow-lg;
 }
 
 .text-gradient {

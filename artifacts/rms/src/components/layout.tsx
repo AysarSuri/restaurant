@@ -104,6 +104,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute:'2-digit' })}
               </div>
             </div>
+            <button
+              onClick={toggleTheme}
+              title={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors"
+            >
+              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full"></span>
