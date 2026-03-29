@@ -91,6 +91,47 @@
   --radius: 0.75rem;
 }
 
+/* LIGHT MODE */
+.light {
+  --background: 0 0% 97%;
+  --foreground: 240 10% 8%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 8%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 8%;
+
+  /* Amber / Gold stays consistent */
+  --primary: 38 92% 45%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 5% 93%;
+  --secondary-foreground: 240 10% 8%;
+
+  --muted: 240 5% 93%;
+  --muted-foreground: 240 5% 45%;
+
+  --accent: 38 85% 55%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 142 71% 38%;
+  --success-foreground: 0 0% 100%;
+
+  --warning: 38 92% 45%;
+  --warning-foreground: 0 0% 100%;
+
+  --info: 217 91% 55%;
+  --info-foreground: 0 0% 100%;
+
+  --border: 240 5% 84%;
+  --input: 240 5% 84%;
+  --ring: 38 92% 45%;
+}
+
 @layer base {
   * {
     @apply border-border;

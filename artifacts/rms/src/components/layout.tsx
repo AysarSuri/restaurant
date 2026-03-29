@@ -4,9 +4,10 @@ import { motion } from "framer-motion";
 import { 
   LayoutDashboard, ShoppingCart, ChefHat, MenuSquare, 
   Grid, ClipboardList, Package, Users, UsersRound, 
-  Receipt, LineChart, Settings, LogOut, Bell
+  Receipt, LineChart, LogOut, Bell, Sun, Moon
 } from "lucide-react";
 import { cn } from "./ui-elements";
+import { useTheme } from "@/App";
 
 const NAV_ITEMS = [
   { href: "/", label: "لوحة القيادة", labelEn: "Dashboard", icon: LayoutDashboard },
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   // Hide sidebar completely on POS and KDS for maximum screen space
   const isFullscreen = location === "/pos" || location === "/kds";
