@@ -55,8 +55,9 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setShift(s => !s)}
-                className={`h-12 px-4 rounded-xl text-base font-bold transition-colors flex-shrink-0 flex items-center justify-center min-w-[3rem]
+                className={`rounded-xl text-base font-bold transition-colors flex-shrink-0 flex items-center justify-center
                   ${shift ? "bg-primary text-primary-foreground" : "bg-white/8 hover:bg-white/15 border border-white/10 text-muted-foreground"}`}
+                style={{ height: "60px", width: "65px" }}
               >
                 ⇧
               </motion.button>
@@ -67,9 +68,10 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 key={key}
                 whileTap={{ scale: 0.82 }}
                 onClick={() => press(key)}
-                className="h-12 min-w-[2.4rem] flex-1 max-w-[3.6rem] rounded-xl bg-white/8 hover:bg-white/18 active:bg-white/28
+                className="rounded-xl bg-white/8 hover:bg-white/18 active:bg-white/28
                            border border-white/10 text-foreground font-bold text-base transition-colors
-                           flex items-center justify-center shadow-sm"
+                           flex items-center justify-center shadow-sm flex-shrink-0"
+                style={{ height: "60px", width: "65px" }}
               >
                 {key}
               </motion.button>
@@ -80,8 +82,9 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={backspace}
-                className="h-12 px-4 rounded-xl bg-[#7c1d1d]/80 hover:bg-[#a02020] border border-red-900/40
-                           text-red-300 transition-colors flex-shrink-0 flex items-center justify-center min-w-[3rem]"
+                className="rounded-xl bg-[#7c1d1d]/80 hover:bg-[#a02020] border border-red-900/40
+                           text-red-300 transition-colors flex-shrink-0 flex items-center justify-center"
+                style={{ height: "60px", width: "65px" }}
               >
                 <Delete className="w-5 h-5" />
               </motion.button>
