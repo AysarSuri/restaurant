@@ -238,25 +238,25 @@ export default function Login() {
       <button
         onClick={toggleTheme}
         title={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
-        className="fixed top-3 left-3 z-50 flex items-center h-9 px-1 rounded-full bg-secondary border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden"
-        style={{ width: "5rem" }}
+        className="fixed top-3 left-3 z-50 flex items-center h-12 px-1.5 rounded-full bg-secondary border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden"
+        style={{ width: "7rem" }}
       >
         <motion.span
           layout
           transition={{ type: "spring", stiffness: 400, damping: 28 }}
-          className={`absolute top-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center z-10
+          className={`absolute top-1.5 w-9 h-9 rounded-full shadow-md flex items-center justify-center z-10
             ${theme === "dark"
-              ? "bg-gradient-to-br from-slate-700 to-slate-900 right-1"
-              : "bg-gradient-to-br from-amber-300 to-amber-500 left-1"
+              ? "bg-gradient-to-br from-slate-700 to-slate-900 right-1.5"
+              : "bg-gradient-to-br from-amber-300 to-amber-500 left-1.5"
             }`}
         >
           {theme === "dark"
-            ? <Moon className="w-3.5 h-3.5 text-blue-300" />
-            : <Sun  className="w-3.5 h-3.5 text-white" />
+            ? <Moon className="w-5 h-5 text-blue-300" />
+            : <Sun  className="w-5 h-5 text-white" />
           }
         </motion.span>
-        <Sun  className="w-3.5 h-3.5 text-amber-400 ms-1.5 opacity-60" />
-        <Moon className="w-3.5 h-3.5 text-slate-400 me-1.5 ms-auto opacity-60" />
+        <Sun  className="w-5 h-5 text-amber-400 ms-2 opacity-60" />
+        <Moon className="w-5 h-5 text-slate-400 me-2 ms-auto opacity-60" />
       </button>
 
       {/* ── TOP: Logo (right) + Form (left) — compact ── */}
