@@ -149,14 +149,14 @@ function PinInput({
   value, onFocus, showPin, onToggleShow,
 }: {
   value: string;
-  onFocus: () => void;
+  onFocus?: () => void;
   showPin: boolean;
   onToggleShow: () => void;
 }) {
   return (
     <div
       onClick={onFocus}
-      className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 cursor-pointer transition-all
+      className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 cursor-default transition-all
         ${value.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40 hover:border-primary/50"}`}
     >
       <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -193,7 +193,6 @@ export default function Login() {
   const [selection, setSelection]     = useState(""); // employee name OR table label
   const [pin, setPin]                 = useState("");
   const [showPin, setShowPin]         = useState(false);
-  const [pinFocused, setPinFocused]   = useState(false);
   const [error, setError]             = useState("");
 
   const roleConfig = ROLES.find((r) => r.value === selectedRole);
@@ -216,7 +215,6 @@ export default function Login() {
     setSelection("");
     setPin("");
     setError("");
-    setPinFocused(false);
   };
 
   const handleLogin = () => {
@@ -232,39 +230,38 @@ export default function Login() {
   return (
     <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       {/* Background glows */}
-      <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-primary/8 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed top-0 right-0 w-[400px] h-[400px] bg-primary/8 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-0 left-0 w-[250px] h-[250px] bg-blue-500/5 rounded-full blur-[80px] pointer-events-none" />
 
-      {/* ── Main row: Logo (right) + Form (left) ── */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
+      {/* ── TOP: Logo (right) + Form (left) — compact ── */}
+      <div className="flex overflow-hidden min-h-0" style={{ height: "42%" }}>
 
         {/* ── RIGHT: Logo + Branding ── */}
-        <div className="w-2/5 flex flex-col items-center justify-center p-8 relative border-l border-border/30">
+        <div className="w-[38%] flex flex-col items-center justify-center px-6 py-3 relative border-l border-border/30 flex-shrink-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.45 }}
+            transition={{ duration: 0.4 }}
             className="text-center"
           >
-            <div className="w-28 h-28 bg-gradient-to-br from-primary to-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-primary/40">
-              <ChefHat className="w-16 h-16 text-primary-foreground" />
+            <div className="w-16 h-16 bg-gradient-to-br from-primary to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-xl shadow-primary/35">
+              <ChefHat className="w-9 h-9 text-primary-foreground" />
             </div>
-            <h1 className="text-4xl font-bold leading-tight mb-1">المطعم الذكي</h1>
-            <p className="text-primary font-display tracking-[0.3em] text-sm uppercase mb-3">RMS 2026</p>
-            <p className="text-muted-foreground text-sm max-w-[200px] mx-auto leading-relaxed">
-              نظام إدارة المطاعم الذكي — سجل دخولك للمتابعة
+            <h1 className="text-2xl font-bold leading-tight mb-0.5">المطعم الذكي</h1>
+            <p className="text-primary font-display tracking-[0.25em] text-xs uppercase mb-2">RMS 2026</p>
+            <p className="text-muted-foreground text-xs max-w-[170px] mx-auto leading-relaxed hidden sm:block">
+              نظام إدارة المطاعم الذكي
             </p>
-
             <AnimatePresence mode="wait">
               {selectedRole && roleConfig && (
                 <motion.div
                   key={selectedRole}
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  initial={{ opacity: 0, y: 6, scale: 0.93 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  className={`mt-5 inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r ${roleConfig.color} text-white text-sm font-bold shadow-xl`}
+                  exit={{ opacity: 0, y: -6, scale: 0.93 }}
+                  className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r ${roleConfig.color} text-white text-xs font-bold shadow-lg`}
                 >
-                  <span className="text-base">{ROLES.find(r => r.value === selectedRole)?.icon}</span>
+                  <span>{ROLES.find(r => r.value === selectedRole)?.icon}</span>
                   {roleConfig.label}
                 </motion.div>
               )}
@@ -273,14 +270,14 @@ export default function Login() {
         </div>
 
         {/* ── LEFT: Form ── */}
-        <div className="flex-1 flex flex-col justify-center px-7 py-4 gap-3.5">
+        <div className="flex-1 flex flex-col justify-center px-5 py-2 gap-2.5 overflow-hidden">
           <div>
-            <h2 className="text-xl font-bold mb-0.5">تسجيل الدخول</h2>
-            <p className="text-xs text-muted-foreground">اختر دورك وأدخل بياناتك</p>
+            <h2 className="text-base font-bold mb-0">تسجيل الدخول</h2>
+            <p className="text-[11px] text-muted-foreground">اختر دورك وأدخل بياناتك</p>
           </div>
 
           {/* Role buttons */}
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-5 gap-1.5">
             {ROLES.map((role) => {
               const isActive = selectedRole === role.value;
               return (
@@ -288,14 +285,14 @@ export default function Login() {
                   key={role.value}
                   whileTap={{ scale: 0.92 }}
                   onClick={() => handleRoleSelect(role.value)}
-                  className={`flex flex-col items-center py-3 px-1 rounded-xl border-2 transition-all duration-150
+                  className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all duration-150
                     ${isActive
                       ? `bg-gradient-to-br ${role.color} ${role.ring} ring-2 shadow-lg text-white`
                       : `bg-card/40 ${role.fade} text-foreground`}`}
                 >
-                  <span className="text-2xl mb-1">{role.icon}</span>
-                  <span className="font-bold text-[11px] leading-tight text-center">{role.label}</span>
-                  <span className={`text-[9px] font-display tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
+                  <span className="text-xl mb-0.5">{role.icon}</span>
+                  <span className="font-bold text-[10px] leading-tight text-center">{role.label}</span>
+                  <span className={`text-[8px] font-display tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
                     {role.labelEn}
                   </span>
                 </motion.button>
@@ -303,30 +300,30 @@ export default function Login() {
             })}
           </div>
 
-          {/* Combobox — employees or tables */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-              {isTableRole ? "اختر الطاولة" : "اسم الموظف"}
-            </label>
-            <Combobox
-              items={comboItems}
-              value={selection}
-              onChange={(v) => { setSelection(v); setError(""); }}
-              disabled={!selectedRole}
-              placeholder={isTableRole ? "اختر الطاولة..." : "اختر الاسم..."}
-              isTable={isTableRole}
-            />
-          </div>
-
-          {/* PIN field */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">الرقم السري</label>
-            <PinInput
-              value={pin}
-              onFocus={() => { setPinFocused(true); setError(""); }}
-              showPin={showPin}
-              onToggleShow={() => setShowPin((v) => !v)}
-            />
+          {/* Combobox + PIN side by side */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">
+                {isTableRole ? "اختر الطاولة" : "اسم الموظف"}
+              </label>
+              <Combobox
+                items={comboItems}
+                value={selection}
+                onChange={(v) => { setSelection(v); setError(""); }}
+                disabled={!selectedRole}
+                placeholder={isTableRole ? "اختر الطاولة..." : "اختر الاسم..."}
+                isTable={isTableRole}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">الرقم السري</label>
+              <PinInput
+                value={pin}
+                onFocus={() => setError("")}
+                showPin={showPin}
+                onToggleShow={() => setShowPin((v) => !v)}
+              />
+            </div>
           </div>
 
           {/* Error */}
@@ -337,7 +334,7 @@ export default function Login() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="text-destructive text-xs bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20"
+                className="text-destructive text-xs bg-destructive/10 px-3 py-1.5 rounded-lg border border-destructive/20"
               >
                 ⚠️ {error}
               </motion.div>
@@ -346,64 +343,49 @@ export default function Login() {
 
           {/* Login button */}
           <Button
-            className="w-full h-11"
+            className="w-full h-10 text-sm"
             onClick={handleLogin}
             disabled={!selectedRole || !selection || !pin}
           >
             تسجيل الدخول
           </Button>
-
-          <p className="text-center text-[10px] text-muted-foreground font-display">
-            الرقم السري الافتراضي: <span className="text-primary font-bold tracking-widest">1234</span>
-          </p>
         </div>
       </div>
 
-      {/* ── BOTTOM: Virtual Keyboard — only when PIN focused ── */}
-      <AnimatePresence>
-        {pinFocused && (
-          <motion.div
-            key="keyboard"
-            initial={{ y: "100%", opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: "100%", opacity: 0 }}
-            transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            className="border-t border-border/50 bg-[#12141a] flex-shrink-0"
-          >
-            <div className="max-w-4xl mx-auto w-full px-4 py-3">
-              {/* PIN display strip */}
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs font-semibold text-muted-foreground">الرقم السري</span>
-                <div className="flex items-center gap-2.5 min-h-[28px]" dir="ltr">
-                  {pin.length === 0
-                    ? <span className="text-muted-foreground text-xs italic">أدخل الرقم...</span>
-                    : Array.from({ length: pin.length }).map((_, i) =>
-                        showPin
-                          ? <span key={i} className="font-display text-xl font-bold text-primary w-6 text-center">{pin[i]}</span>
-                          : <span key={i} className="w-3.5 h-3.5 rounded-full bg-primary inline-block shadow-md" />
-                      )
-                  }
-                </div>
-                <div className="flex gap-3 items-center">
-                  <button onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
-                    {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  </button>
-                  <button onClick={() => setPinFocused(false)} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
-                    إغلاق ✕
-                  </button>
-                </div>
-              </div>
-
-              <VirtualKeyboard
-                value={pin}
-                onChange={(v) => { setPin(v); setError(""); }}
-                onEnter={handleLogin}
-                label=""
-              />
+      {/* ── BOTTOM: Virtual Keyboard — always visible ── */}
+      <div className="border-t border-border/50 bg-[#12141a] flex-1 min-h-0 flex flex-col">
+        <div className="w-full h-full px-4 pt-2 pb-2 flex flex-col">
+          {/* PIN strip above keyboard */}
+          <div className="flex items-center justify-between mb-2 px-1 flex-shrink-0">
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] font-semibold text-muted-foreground">الرقم السري:</span>
+              <span className="text-[10px] text-muted-foreground/60 font-display">الافتراضي 1234</span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="flex items-center gap-2" dir="ltr">
+              {pin.length === 0
+                ? <span className="text-muted-foreground text-xs italic">أدخل الرقم من الكيبورد...</span>
+                : Array.from({ length: pin.length }).map((_, i) =>
+                    showPin
+                      ? <span key={i} className="font-display text-lg font-bold text-primary w-5 text-center">{pin[i]}</span>
+                      : <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block shadow-md" />
+                  )
+              }
+            </div>
+            <button onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
+              {showPin ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0">
+            <VirtualKeyboard
+              value={pin}
+              onChange={(v) => { setPin(v); setError(""); }}
+              onEnter={handleLogin}
+              label=""
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
