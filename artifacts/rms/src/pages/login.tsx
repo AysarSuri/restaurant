@@ -52,17 +52,17 @@ function Combobox({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
-        className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 transition-all text-sm
+        className={`w-full h-14 px-4 rounded-xl border-2 flex items-center gap-2 transition-all text-base
           ${disabled
             ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
             : "cursor-pointer border-border hover:border-primary/50 bg-secondary/40"}
           ${open ? "border-primary bg-primary/5" : ""}`}
       >
         {isTable
-          ? <Grid3x3 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          : <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          ? <Grid3x3 className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+          : <User className="w-5 h-5 text-muted-foreground flex-shrink-0" />
         }
-        <span className={`flex-1 text-right truncate font-semibold ${value ? "text-foreground" : "text-muted-foreground"}`}>
+        <span className={`flex-1 text-right truncate font-semibold text-base ${value ? "text-foreground" : "text-muted-foreground"}`}>
           {value || placeholder || (disabled ? "اختر الدور أولاً..." : "اختر...")}
         </span>
         {active && isTable && (
@@ -156,13 +156,13 @@ function PinInput({
   return (
     <div
       onClick={onFocus}
-      className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 cursor-default transition-all
+      className={`w-full h-14 px-4 rounded-xl border-2 flex items-center gap-2 cursor-default transition-all
         ${value.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40 hover:border-primary/50"}`}
     >
-      <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
       <div className="flex-1 flex items-center gap-2 justify-end" dir="ltr">
         {value.length === 0 ? (
-          <span className="text-muted-foreground text-sm w-full text-left">أدخل الرقم السري...</span>
+          <span className="text-muted-foreground text-base w-full text-left">أدخل الرقم السري...</span>
         ) : (
           Array.from({ length: value.length }).map((_, i) =>
             showPin
