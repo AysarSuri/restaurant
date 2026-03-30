@@ -81,11 +81,11 @@ function Combobox({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scaleY: 0.95 }}
+            initial={{ opacity: 0, y: 6, scaleY: 0.95 }}
             animate={{ opacity: 1, y: 0, scaleY: 1 }}
-            exit={{ opacity: 0, y: -6, scaleY: 0.95 }}
-            style={{ originY: 0 }}
-            className="absolute top-full mt-1 w-full bg-card border border-border rounded-xl shadow-2xl z-[100] overflow-hidden max-h-52 overflow-y-auto"
+            exit={{ opacity: 0, y: 6, scaleY: 0.95 }}
+            style={{ originY: 1 }}
+            className="absolute bottom-full mb-1 w-full bg-card border border-border rounded-xl shadow-2xl z-[200] overflow-hidden max-h-72 overflow-y-auto"
           >
             {items.length === 0 ? (
               <div className="px-4 py-4 text-sm text-muted-foreground text-center">
@@ -121,16 +121,16 @@ function Combobox({
                     key={item.id}
                     type="button"
                     onClick={() => { onChange(item.label); setOpen(false); }}
-                    className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm hover:bg-secondary/60 transition-colors text-right
+                    className={`w-full px-5 py-4 flex items-center gap-4 hover:bg-secondary/60 transition-colors text-right
                       ${value === item.label ? "bg-primary/10 text-primary" : "text-foreground"}`}
                   >
-                    <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-base font-bold flex-shrink-0">
                       {item.label.charAt(0)}
                     </div>
                     <div className="flex-1 text-right">
-                      <div className="font-semibold text-sm">{item.label}</div>
+                      <div className="font-bold text-lg">{item.label}</div>
                       {item.sublabel && (
-                        <div className="text-[10px] text-muted-foreground">{item.sublabel}</div>
+                        <div className="text-sm text-muted-foreground mt-0.5">{item.sublabel}</div>
                       )}
                     </div>
                   </button>
