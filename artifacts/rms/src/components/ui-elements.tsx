@@ -136,9 +136,10 @@ export function Dialog({ isOpen, onClose, title, children, maxWidth = "max-w-lg"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 p-4 sm:p-0 pointer-events-none"
+            className="fixed left-[50%] top-[50%] z-[60] grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 p-4 sm:p-0"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className={cn("mx-auto w-full glass-panel rounded-2xl p-6 pointer-events-auto", maxWidth)}>
+            <div className={cn("mx-auto w-full glass-panel rounded-2xl p-6", maxWidth)}>
               <div className="flex flex-col space-y-1.5 text-center sm:text-left mb-6">
                 <div className="flex justify-between items-center">
                   <h2 className="text-2xl font-bold leading-none tracking-tight">{title}</h2>

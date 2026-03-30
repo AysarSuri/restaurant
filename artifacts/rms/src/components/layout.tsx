@@ -29,10 +29,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
-    localStorage.clear();
+    localStorage.removeItem("theme");
     sessionStorage.clear();
-    window.location.href = "/";
-    setTimeout(() => window.location.reload(), 100);
+    window.location.reload();
   };
 
   // Hide sidebar completely on POS and KDS for maximum screen space
