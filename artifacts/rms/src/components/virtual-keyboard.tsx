@@ -32,14 +32,14 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
   const space = () => onChange(value + " ");
 
   return (
-    <div className="w-full bg-[#16181f] rounded-2xl border border-white/10 shadow-xl select-none" dir="ltr">
+    <div className="w-full bg-card rounded-2xl border border-border shadow-xl select-none" dir="ltr">
       {label && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white/8">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
           <span className="text-xs text-muted-foreground">{label}</span>
           <button
             onClick={() => setShift(s => !s)}
             className={`text-xs font-bold px-3 py-1 rounded-lg transition-colors ${
-              shift ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-white/8"
+              shift ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-muted"
             }`}
           >
             Shift ⇧
@@ -56,7 +56,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setShift(s => !s)}
                 className={`rounded-xl text-base font-bold transition-colors flex-shrink-0 flex items-center justify-center
-                  ${shift ? "bg-primary text-primary-foreground" : "bg-white/8 hover:bg-white/15 border border-white/10 text-muted-foreground"}`}
+                  ${shift ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70 border border-border text-muted-foreground"}`}
                 style={{ height: "65px", width: "110px" }}
               >
                 ⇧
@@ -68,8 +68,8 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 key={key}
                 whileTap={{ scale: 0.82 }}
                 onClick={() => press(key)}
-                className="rounded-xl bg-white/8 hover:bg-white/18 active:bg-white/28
-                           border border-white/10 text-foreground font-bold text-base transition-colors
+                className="rounded-xl bg-muted hover:bg-muted/70 active:bg-accent
+                           border border-border text-foreground font-bold text-base transition-colors
                            flex items-center justify-center shadow-sm flex-shrink-0"
                 style={{ height: "65px", width: "80px" }}
               >
@@ -82,8 +82,8 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={backspace}
-                className="rounded-xl bg-[#7c1d1d]/80 hover:bg-[#a02020] border border-red-900/40
-                           text-red-300 transition-colors flex-shrink-0 flex items-center justify-center"
+                className="rounded-xl bg-destructive/20 hover:bg-destructive/40 border border-destructive/30
+                           text-destructive transition-colors flex-shrink-0 flex items-center justify-center"
                 style={{ height: "65px", width: "110px" }}
               >
                 <Delete className="w-5 h-5" />
@@ -97,7 +97,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={space}
-            className="flex-1 rounded-xl bg-white/8 hover:bg-white/15 border border-white/10
+            className="flex-1 rounded-xl bg-muted hover:bg-muted/70 border border-border
                        text-muted-foreground text-sm font-semibold transition-colors"
             style={{ height: "65px" }}
           >
