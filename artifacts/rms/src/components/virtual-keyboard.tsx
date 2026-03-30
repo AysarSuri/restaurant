@@ -55,7 +55,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setShift(s => !s)}
-                className={`rounded-xl text-base font-bold transition-colors flex-shrink-0 flex items-center justify-center
+                className={`rounded-xl text-xl font-bold transition-colors flex-shrink-0 flex items-center justify-center
                   ${shift ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70 border border-border text-muted-foreground"}`}
                 style={{ height: "65px", width: "110px" }}
               >
@@ -69,7 +69,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 whileTap={{ scale: 0.82 }}
                 onClick={() => press(key)}
                 className="rounded-xl bg-muted hover:bg-muted/70 active:bg-accent
-                           border border-border text-foreground font-bold text-base transition-colors
+                           border border-border text-foreground font-bold text-xl transition-colors
                            flex items-center justify-center shadow-sm flex-shrink-0"
                 style={{ height: "65px", width: "80px" }}
               >
@@ -98,7 +98,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
             whileTap={{ scale: 0.97 }}
             onClick={space}
             className="flex-1 rounded-xl bg-muted hover:bg-muted/70 border border-border
-                       text-muted-foreground text-sm font-semibold transition-colors"
+                       text-muted-foreground text-lg font-semibold transition-colors"
             style={{ height: "65px" }}
           >
             Space
@@ -108,7 +108,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
               whileTap={{ scale: 0.95 }}
               onClick={onEnter}
               className="w-[30%] rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground
-                         font-bold text-base transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/25 flex-shrink-0"
+                         font-bold text-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/25 flex-shrink-0"
               style={{ height: "65px" }}
             >
               <CornerDownLeft className="w-5 h-5" />
