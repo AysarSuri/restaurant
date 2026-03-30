@@ -57,7 +57,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 onClick={() => setShift(s => !s)}
                 className={`rounded-xl text-base font-bold transition-colors flex-shrink-0 flex items-center justify-center
                   ${shift ? "bg-primary text-primary-foreground" : "bg-white/8 hover:bg-white/15 border border-white/10 text-muted-foreground"}`}
-                style={{ height: "60px", width: "65px" }}
+                style={{ height: "65px", width: "80px" }}
               >
                 ⇧
               </motion.button>
@@ -71,7 +71,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 className="rounded-xl bg-white/8 hover:bg-white/18 active:bg-white/28
                            border border-white/10 text-foreground font-bold text-base transition-colors
                            flex items-center justify-center shadow-sm flex-shrink-0"
-                style={{ height: "60px", width: "65px" }}
+                style={{ height: "65px", width: "80px" }}
               >
                 {key}
               </motion.button>
@@ -84,7 +84,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
                 onClick={backspace}
                 className="rounded-xl bg-[#7c1d1d]/80 hover:bg-[#a02020] border border-red-900/40
                            text-red-300 transition-colors flex-shrink-0 flex items-center justify-center"
-                style={{ height: "60px", width: "65px" }}
+                style={{ height: "65px", width: "80px" }}
               >
                 <Delete className="w-5 h-5" />
               </motion.button>
