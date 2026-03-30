@@ -367,14 +367,6 @@ export default function Login() {
             )}
           </AnimatePresence>
 
-          {/* Login button */}
-          <Button
-            className="w-full h-10 text-sm"
-            onClick={handleLogin}
-            disabled={!selectedRole || !selection || !pin}
-          >
-            تسجيل الدخول
-          </Button>
         </div>
       </div>
 
