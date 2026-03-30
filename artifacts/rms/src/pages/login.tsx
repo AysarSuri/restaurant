@@ -263,7 +263,7 @@ export default function Login() {
       <div className="flex overflow-hidden min-h-0" style={{ height: "42%" }}>
 
         {/* ── RIGHT: Logo + Branding ── */}
-        <div className="w-[38%] flex flex-col items-center justify-center px-6 py-3 relative border-l border-border/30 flex-shrink-0">
+        <div className="w-[24%] flex flex-col items-center justify-center px-4 py-3 relative border-l border-border/30 flex-shrink-0">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
