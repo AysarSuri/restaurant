@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3 } from "lucide-react";
+import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon } from "lucide-react";
 import { useGetEmployees, useGetTables } from "@workspace/api-client-react";
 import { Button } from "@/components/ui-elements";
 import VirtualKeyboard from "@/components/virtual-keyboard";
-import { useAuth } from "@/App";
+import { useAuth, useTheme } from "@/App";
 import { useLocation } from "wouter";
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -186,6 +186,7 @@ function PinInput({
 export default function Login() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
+  const { theme, toggleTheme } = useTheme();
   const { data: allEmployees = [] } = useGetEmployees();
   const { data: allTables = [] } = useGetTables();
 
@@ -232,6 +233,31 @@ export default function Login() {
       {/* Background glows */}
       <div className="fixed top-0 right-0 w-[400px] h-[400px] bg-primary/8 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-0 left-0 w-[250px] h-[250px] bg-blue-500/5 rounded-full blur-[80px] pointer-events-none" />
+
+      {/* ── Theme toggle — top left corner ── */}
+      <button
+        onClick={toggleTheme}
+        title={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+        className="fixed top-3 left-3 z-50 flex items-center h-9 px-1 rounded-full bg-secondary border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden"
+        style={{ width: "5rem" }}
+      >
+        <motion.span
+          layout
+          transition={{ type: "spring", stiffness: 400, damping: 28 }}
+          className={`absolute top-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center z-10
+            ${theme === "dark"
+              ? "bg-gradient-to-br from-slate-700 to-slate-900 right-1"
+              : "bg-gradient-to-br from-amber-300 to-amber-500 left-1"
+            }`}
+        >
+          {theme === "dark"
+            ? <Moon className="w-3.5 h-3.5 text-blue-300" />
+            : <Sun  className="w-3.5 h-3.5 text-white" />
+          }
+        </motion.span>
+        <Sun  className="w-3.5 h-3.5 text-amber-400 ms-1.5 opacity-60" />
+        <Moon className="w-3.5 h-3.5 text-slate-400 me-1.5 ms-auto opacity-60" />
+      </button>
 
       {/* ── TOP: Logo (right) + Form (left) — compact ── */}
       <div className="flex overflow-hidden min-h-0" style={{ height: "42%" }}>

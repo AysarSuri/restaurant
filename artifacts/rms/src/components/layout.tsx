@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   LayoutDashboard, ShoppingCart, ChefHat, MenuSquare, 
   Grid, ClipboardList, Package, Users, UsersRound, 
@@ -156,12 +156,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute:'2-digit' })}
               </div>
             </div>
+            {/* ── Theme toggle pill ── */}
             <button
               onClick={toggleTheme}
               title={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
-              className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors"
+              className="relative flex items-center gap-1 h-9 px-1 rounded-full bg-secondary border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden"
+              style={{ width: "5rem" }}
             >
-              {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {/* sliding indicator */}
+              <motion.span
+                layout
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                className={`absolute top-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center z-10
+                  ${theme === "dark"
+                    ? "bg-gradient-to-br from-slate-700 to-slate-900 right-1"
+                    : "bg-gradient-to-br from-amber-300 to-amber-500 left-1"
+                  }`}
+              >
+                {theme === "dark"
+                  ? <Moon className="w-3.5 h-3.5 text-blue-300" />
+                  : <Sun className="w-3.5 h-3.5 text-white" />
+                }
+              </motion.span>
+              {/* icons background */}
+              <Sun  className="w-3.5 h-3.5 text-amber-400 ms-1.5 opacity-60" />
+              <Moon className="w-3.5 h-3.5 text-slate-400 me-1.5 ms-auto opacity-60" />
             </button>
             <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors relative">
               <Bell className="w-5 h-5" />
