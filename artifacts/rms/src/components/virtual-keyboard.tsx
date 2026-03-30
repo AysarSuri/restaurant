@@ -97,8 +97,9 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={space}
-            className="flex-1 h-12 rounded-xl bg-white/8 hover:bg-white/15 border border-white/10
+            className="flex-1 rounded-xl bg-white/8 hover:bg-white/15 border border-white/10
                        text-muted-foreground text-sm font-semibold transition-colors"
+            style={{ height: "65px" }}
           >
             Space
           </motion.button>
@@ -106,8 +107,9 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={onEnter}
-              className="w-[30%] h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground
+              className="w-[30%] rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground
                          font-bold text-base transition-colors flex items-center justify-center gap-2 shadow-lg shadow-primary/25 flex-shrink-0"
+              style={{ height: "65px" }}
             >
               <CornerDownLeft className="w-5 h-5" />
               تسجيل الدخول
