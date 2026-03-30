@@ -1,12 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { 
   LayoutDashboard, ShoppingCart, ChefHat, MenuSquare, 
   Grid, ClipboardList, Package, Users, UsersRound, 
-  Receipt, LineChart, LogOut, Bell, Sun, Moon
+  Receipt, LineChart, LogOut, Bell, Sun, Moon, AlertTriangle
 } from "lucide-react";
-import { cn } from "./ui-elements";
+import { cn, Dialog, Button } from "./ui-elements";
 import { useTheme } from "@/App";
 
 const NAV_ITEMS = [
@@ -26,6 +26,14 @@ const NAV_ITEMS = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
+  const handleLogout = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = "/";
+    setTimeout(() => window.location.reload(), 100);
+  };
 
   // Hide sidebar completely on POS and KDS for maximum screen space
   const isFullscreen = location === "/pos" || location === "/kds";
@@ -79,12 +87,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-4 border-t border-border/50">
-          <div className="flex items-center px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors">
-            <LogOut className="w-5 h-5 me-3" />
+          <button
+            onClick={() => setLogoutOpen(true)}
+            className="w-full flex items-center px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group"
+          >
+            <LogOut className="w-5 h-5 me-3 group-hover:scale-110 transition-transform" />
             <div className="font-semibold text-sm">تسجيل الخروج</div>
-          </div>
+          </button>
         </div>
       </aside>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} title="تسجيل الخروج">
+        <div className="text-center py-2 space-y-5">
+          <div className="w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mx-auto">
+            <LogOut className="w-8 h-8 text-destructive" />
+          </div>
+          <div>
+            <p className="font-bold text-lg">هل تريد تسجيل الخروج؟</p>
+            <p className="text-muted-foreground text-sm mt-1">سيتم إغلاق جلستك الحالية.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setLogoutOpen(false)}>
+              إلغاء
+            </Button>
+            <Button variant="destructive" className="flex-1 gap-2" onClick={handleLogout}>
+              <LogOut className="w-4 h-4" />
+              تسجيل الخروج
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
