@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User } from "lucide-react";
-import { useGetEmployees } from "@workspace/api-client-react";
+import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3 } from "lucide-react";
+import { useGetEmployees, useGetTables } from "@workspace/api-client-react";
 import { Button } from "@/components/ui-elements";
 import VirtualKeyboard from "@/components/virtual-keyboard";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
 
-type Employee = { id: number; name: string; role: string; isActive: boolean };
+/* ─── Types ─────────────────────────────────────────────────── */
+type ComboItem = { id: number; label: string; sublabel?: string; icon?: string };
 
 /* ─── Role configuration ─────────────────────────────────────── */
 const ROLES = [
@@ -19,17 +20,18 @@ const ROLES = [
 ] as const;
 
 export type RoleType = (typeof ROLES)[number]["value"];
+const DEMO_PIN = "1234";
 
-const DEMO_PIN = "1234"; // default PIN for all employees
-
-/* ─── Combobox component ─────────────────────────────────────── */
-function EmployeeCombobox({
-  employees, value, onChange, disabled,
+/* ─── Generic Combobox ───────────────────────────────────────── */
+function Combobox({
+  items, value, onChange, disabled, placeholder, isTable,
 }: {
-  employees: Employee[];
+  items: ComboItem[];
   value: string;
-  onChange: (name: string) => void;
+  onChange: (label: string) => void;
   disabled: boolean;
+  placeholder?: string;
+  isTable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -42,28 +44,38 @@ function EmployeeCombobox({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const active = employees.find((e) => e.name === value);
+  const active = items.find((i) => i.label === value);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative z-30">
       <button
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
         className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 transition-all text-sm
-          ${disabled ? "opacity-40 cursor-not-allowed border-border bg-secondary/30" : "cursor-pointer border-border hover:border-primary/50 bg-secondary/40"}
+          ${disabled
+            ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
+            : "cursor-pointer border-border hover:border-primary/50 bg-secondary/40"}
           ${open ? "border-primary bg-primary/5" : ""}`}
       >
-        <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        {isTable
+          ? <Grid3x3 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          : <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        }
         <span className={`flex-1 text-right truncate font-semibold ${value ? "text-foreground" : "text-muted-foreground"}`}>
-          {value || (disabled ? "اختر الدور أولاً..." : "اختر الاسم...")}
+          {value || placeholder || (disabled ? "اختر الدور أولاً..." : "اختر...")}
         </span>
-        {active && (
+        {active && isTable && (
+          <span className="text-xs text-muted-foreground bg-secondary/60 px-2 py-0.5 rounded-lg flex-shrink-0">
+            {active.sublabel}
+          </span>
+        )}
+        {active && !isTable && (
           <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-            {active.name.charAt(0)}
+            {active.label.charAt(0)}
           </div>
         )}
-        <ChevronDown className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
 
       <AnimatePresence>
@@ -73,30 +85,57 @@ function EmployeeCombobox({
             animate={{ opacity: 1, y: 0, scaleY: 1 }}
             exit={{ opacity: 0, y: -6, scaleY: 0.95 }}
             style={{ originY: 0 }}
-            className="absolute top-full mt-1 w-full bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden"
+            className="absolute top-full mt-1 w-full bg-card border border-border rounded-xl shadow-2xl z-[100] overflow-hidden max-h-52 overflow-y-auto"
           >
-            {employees.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-muted-foreground text-center">
-                لا يوجد موظفون لهذا الدور
+            {items.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-muted-foreground text-center">
+                {isTable ? "لا توجد طاولات مسجلة" : "لا يوجد موظفون لهذا الدور"}
               </div>
             ) : (
-              employees.map((emp) => (
-                <button
-                  key={emp.id}
-                  type="button"
-                  onClick={() => { onChange(emp.name); setOpen(false); }}
-                  className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm hover:bg-secondary/60 transition-colors text-right
-                    ${value === emp.name ? "bg-primary/10 text-primary" : "text-foreground"}`}
-                >
-                  <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {emp.name.charAt(0)}
-                  </div>
-                  <span className="font-semibold flex-1">{emp.name}</span>
-                  {!emp.isActive && (
-                    <span className="text-[10px] text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">موقوف</span>
-                  )}
-                </button>
-              ))
+              isTable ? (
+                /* ── Table grid layout ── */
+                <div className="p-3 grid grid-cols-4 gap-2">
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { onChange(item.label); setOpen(false); }}
+                      className={`flex flex-col items-center p-2.5 rounded-xl border-2 transition-all text-center
+                        ${value === item.label
+                          ? "bg-green-600/20 border-green-500 text-green-400"
+                          : "border-border bg-secondary/40 hover:border-green-500/50 hover:bg-green-500/10 text-foreground"
+                        }`}
+                    >
+                      <span className="text-lg mb-0.5">🍽️</span>
+                      <span className="font-bold text-xs">{item.label}</span>
+                      {item.sublabel && (
+                        <span className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.sublabel}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                /* ── Employee list layout ── */
+                items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { onChange(item.label); setOpen(false); }}
+                    className={`w-full px-4 py-2.5 flex items-center gap-3 text-sm hover:bg-secondary/60 transition-colors text-right
+                      ${value === item.label ? "bg-primary/10 text-primary" : "text-foreground"}`}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {item.label.charAt(0)}
+                    </div>
+                    <div className="flex-1 text-right">
+                      <div className="font-semibold text-sm">{item.label}</div>
+                      {item.sublabel && (
+                        <div className="text-[10px] text-muted-foreground">{item.sublabel}</div>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )
             )}
           </motion.div>
         )}
@@ -115,34 +154,30 @@ function PinInput({
   onToggleShow: () => void;
 }) {
   return (
-    <div className="relative">
-      <div
-        onClick={onFocus}
-        className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 cursor-pointer transition-all
-          ${value.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40 hover:border-primary/50"}`}
-      >
-        <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-        <div className="flex-1 flex items-center gap-1.5 justify-end" dir="ltr">
-          {value.length === 0 ? (
-            <span className="text-muted-foreground text-sm font-semibold w-full text-left">أدخل الرقم السري...</span>
-          ) : (
-            Array.from({ length: value.length }).map((_, i) => (
-              showPin ? (
-                <span key={i} className="font-display font-bold text-base text-foreground">{value[i]}</span>
-              ) : (
-                <span key={i} className="w-2.5 h-2.5 rounded-full bg-primary inline-block" />
-              )
-            ))
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleShow(); }}
-          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-        >
-          {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-        </button>
+    <div
+      onClick={onFocus}
+      className={`w-full h-11 px-4 rounded-xl border-2 flex items-center gap-2 cursor-pointer transition-all
+        ${value.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40 hover:border-primary/50"}`}
+    >
+      <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+      <div className="flex-1 flex items-center gap-2 justify-end" dir="ltr">
+        {value.length === 0 ? (
+          <span className="text-muted-foreground text-sm w-full text-left">أدخل الرقم السري...</span>
+        ) : (
+          Array.from({ length: value.length }).map((_, i) =>
+            showPin
+              ? <span key={i} className="font-display font-bold text-lg text-foreground">{value[i]}</span>
+              : <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block" />
+          )
+        )}
       </div>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggleShow(); }}
+        className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+      >
+        {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+      </button>
     </div>
   );
 }
@@ -152,36 +187,45 @@ export default function Login() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
   const { data: allEmployees = [] } = useGetEmployees();
+  const { data: allTables = [] } = useGetTables();
 
   const [selectedRole, setSelectedRole] = useState<RoleType | null>(null);
-  const [employeeName, setEmployeeName] = useState("");
-  const [pin, setPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
-  const [pinFocused, setPinFocused] = useState(false);
-  const [error, setError] = useState("");
+  const [selection, setSelection]     = useState(""); // employee name OR table label
+  const [pin, setPin]                 = useState("");
+  const [showPin, setShowPin]         = useState(false);
+  const [pinFocused, setPinFocused]   = useState(false);
+  const [error, setError]             = useState("");
 
   const roleConfig = ROLES.find((r) => r.value === selectedRole);
+  const isTableRole = selectedRole === "table";
 
-  // Filter employees by selected role's empRole
-  const filteredEmployees = allEmployees.filter(
-    (e) => roleConfig && e.role === roleConfig.empRole && e.isActive
-  );
+  /* Build combobox items based on selected role */
+  const comboItems: ComboItem[] = isTableRole
+    ? allTables.map((t) => ({
+        id: t.id,
+        label: `طاولة ${t.number}`,
+        sublabel: `${t.location ?? ""} — سعة ${t.capacity}`,
+        icon: "🍽️",
+      }))
+    : allEmployees
+        .filter((e) => roleConfig && e.role === roleConfig.empRole && e.isActive)
+        .map((e) => ({ id: e.id, label: e.name, sublabel: e.phone ?? undefined }));
 
   const handleRoleSelect = (role: RoleType) => {
     setSelectedRole(role);
-    setEmployeeName("");
+    setSelection("");
     setPin("");
     setError("");
     setPinFocused(false);
   };
 
   const handleLogin = () => {
-    if (!selectedRole) { setError("اختر الدور أولاً"); return; }
-    if (!employeeName.trim()) { setError("اختر اسم الموظف"); return; }
-    if (!pin) { setError("أدخل الرقم السري"); return; }
+    if (!selectedRole)    { setError("اختر الدور أولاً"); return; }
+    if (!selection.trim()) { setError(isTableRole ? "اختر الطاولة" : "اختر اسم الموظف"); return; }
+    if (!pin)             { setError("أدخل الرقم السري"); return; }
     if (pin !== DEMO_PIN) { setError("الرقم السري غير صحيح — جرب: 1234"); return; }
 
-    login({ name: employeeName.trim(), role: selectedRole });
+    login({ name: selection.trim(), role: selectedRole });
     navigate(roleConfig!.redirect);
   };
 
@@ -191,7 +235,7 @@ export default function Login() {
       <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-primary/8 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* ── Top section: Logo (right) + Form (left) ── */}
+      {/* ── Main row: Logo (right) + Form (left) ── */}
       <div className="flex flex-1 overflow-hidden min-h-0">
 
         {/* ── RIGHT: Logo + Branding ── */}
@@ -199,36 +243,39 @@ export default function Login() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.45 }}
             className="text-center"
           >
-            <div className="w-28 h-28 bg-gradient-to-br from-primary to-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-primary/40">
+            <div className="w-28 h-28 bg-gradient-to-br from-primary to-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-primary/40">
               <ChefHat className="w-16 h-16 text-primary-foreground" />
             </div>
-            <h1 className="text-4xl font-bold leading-tight mb-2">المطعم الذكي</h1>
-            <p className="text-primary font-display tracking-[0.3em] text-sm uppercase mb-4">RMS 2026</p>
+            <h1 className="text-4xl font-bold leading-tight mb-1">المطعم الذكي</h1>
+            <p className="text-primary font-display tracking-[0.3em] text-sm uppercase mb-3">RMS 2026</p>
             <p className="text-muted-foreground text-sm max-w-[200px] mx-auto leading-relaxed">
               نظام إدارة المطاعم الذكي — سجل دخولك للمتابعة
             </p>
 
-            {selectedRole && roleConfig && (
-              <motion.div
-                key={selectedRole}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r ${roleConfig.color} text-white text-sm font-bold shadow-lg`}
-              >
-                <span>{ROLES.find(r => r.value === selectedRole)?.icon}</span>
-                {roleConfig.label}
-              </motion.div>
-            )}
+            <AnimatePresence mode="wait">
+              {selectedRole && roleConfig && (
+                <motion.div
+                  key={selectedRole}
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  className={`mt-5 inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r ${roleConfig.color} text-white text-sm font-bold shadow-xl`}
+                >
+                  <span className="text-base">{ROLES.find(r => r.value === selectedRole)?.icon}</span>
+                  {roleConfig.label}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </div>
 
         {/* ── LEFT: Form ── */}
-        <div className="flex-1 flex flex-col justify-center px-6 py-4 gap-3">
+        <div className="flex-1 flex flex-col justify-center px-7 py-4 gap-3.5">
           <div>
-            <h2 className="text-lg font-bold mb-1">تسجيل الدخول</h2>
+            <h2 className="text-xl font-bold mb-0.5">تسجيل الدخول</h2>
             <p className="text-xs text-muted-foreground">اختر دورك وأدخل بياناتك</p>
           </div>
 
@@ -239,13 +286,12 @@ export default function Login() {
               return (
                 <motion.button
                   key={role.value}
-                  whileTap={{ scale: 0.93 }}
+                  whileTap={{ scale: 0.92 }}
                   onClick={() => handleRoleSelect(role.value)}
-                  className={`flex flex-col items-center py-3 px-1 rounded-xl border-2 transition-all duration-150 relative
+                  className={`flex flex-col items-center py-3 px-1 rounded-xl border-2 transition-all duration-150
                     ${isActive
                       ? `bg-gradient-to-br ${role.color} ${role.ring} ring-2 shadow-lg text-white`
-                      : `bg-card/40 ${role.fade} text-foreground`
-                    }`}
+                      : `bg-card/40 ${role.fade} text-foreground`}`}
                 >
                   <span className="text-2xl mb-1">{role.icon}</span>
                   <span className="font-bold text-[11px] leading-tight text-center">{role.label}</span>
@@ -257,14 +303,18 @@ export default function Login() {
             })}
           </div>
 
-          {/* Employee combobox */}
+          {/* Combobox — employees or tables */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">اسم الموظف</label>
-            <EmployeeCombobox
-              employees={filteredEmployees}
-              value={employeeName}
-              onChange={(name) => { setEmployeeName(name); setError(""); }}
+            <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+              {isTableRole ? "اختر الطاولة" : "اسم الموظف"}
+            </label>
+            <Combobox
+              items={comboItems}
+              value={selection}
+              onChange={(v) => { setSelection(v); setError(""); }}
               disabled={!selectedRole}
+              placeholder={isTableRole ? "اختر الطاولة..." : "اختر الاسم..."}
+              isTable={isTableRole}
             />
           </div>
 
@@ -298,13 +348,13 @@ export default function Login() {
           <Button
             className="w-full h-11"
             onClick={handleLogin}
-            disabled={!selectedRole || !employeeName || !pin}
+            disabled={!selectedRole || !selection || !pin}
           >
             تسجيل الدخول
           </Button>
 
           <p className="text-center text-[10px] text-muted-foreground font-display">
-            الرقم السري الافتراضي: <span className="text-primary font-bold">1234</span>
+            الرقم السري الافتراضي: <span className="text-primary font-bold tracking-widest">1234</span>
           </p>
         </div>
       </div>
@@ -317,37 +367,28 @@ export default function Login() {
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
-            transition={{ type: "spring", stiffness: 350, damping: 35 }}
-            className="border-t border-border/50 bg-[#13151a] flex-shrink-0"
+            transition={{ type: "spring", stiffness: 380, damping: 38 }}
+            className="border-t border-border/50 bg-[#12141a] flex-shrink-0"
           >
             <div className="max-w-4xl mx-auto w-full px-4 py-3">
               {/* PIN display strip */}
               <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-xs text-muted-foreground font-display">الرقم السري</span>
-                <div className="flex items-center gap-2" dir="ltr">
-                  {pin.length === 0 ? (
-                    <span className="text-muted-foreground text-xs">أدخل الرقم السري...</span>
-                  ) : (
-                    Array.from({ length: pin.length }).map((_, i) => (
-                      showPin ? (
-                        <span key={i} className="font-display text-xl font-bold text-primary w-7 text-center">{pin[i]}</span>
-                      ) : (
-                        <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block" />
+                <span className="text-xs font-semibold text-muted-foreground">الرقم السري</span>
+                <div className="flex items-center gap-2.5 min-h-[28px]" dir="ltr">
+                  {pin.length === 0
+                    ? <span className="text-muted-foreground text-xs italic">أدخل الرقم...</span>
+                    : Array.from({ length: pin.length }).map((_, i) =>
+                        showPin
+                          ? <span key={i} className="font-display text-xl font-bold text-primary w-6 text-center">{pin[i]}</span>
+                          : <span key={i} className="w-3.5 h-3.5 rounded-full bg-primary inline-block shadow-md" />
                       )
-                    ))
-                  )}
+                  }
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowPin((v) => !v)}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                  >
+                <div className="flex gap-3 items-center">
+                  <button onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
                     {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   </button>
-                  <button
-                    onClick={() => setPinFocused(false)}
-                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                  >
+                  <button onClick={() => setPinFocused(false)} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
                     إغلاق ✕
                   </button>
                 </div>
