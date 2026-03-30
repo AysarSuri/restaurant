@@ -8,7 +8,7 @@ import {
   customersTable,
   employeesTable,
 } from "@workspace/db/schema";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -83,7 +83,14 @@ router.get("/", async (req, res) => {
   const { status, type, date, limit = "50" } = req.query;
 
   const conditions = [];
-  if (status) conditions.push(eq(ordersTable.status, status as string));
+  if (status) {
+    const statusList = (status as string).split(",").map(s => s.trim()).filter(Boolean);
+    if (statusList.length === 1) {
+      conditions.push(eq(ordersTable.status, statusList[0]));
+    } else if (statusList.length > 1) {
+      conditions.push(inArray(ordersTable.status, statusList));
+    }
+  }
   if (type) conditions.push(eq(ordersTable.type, type as string));
   if (date) {
     const d = new Date(date as string);
