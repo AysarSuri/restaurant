@@ -1,0 +1,317 @@
+import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useGetOrders, useUpdateOrderStatus } from "@workspace/api-client-react";
+import { Button, Badge, Dialog } from "@/components/ui-elements";
+import {
+  Clock, CheckCircle2, CreditCard, Banknote,
+  Phone, ChefHat, RefreshCw, ShoppingBag, Table2, LogOut,
+} from "lucide-react";
+import { useAuth } from "@/App";
+import { useLocation } from "wouter";
+
+const formatIQD = (v: number | string) =>
+  new Intl.NumberFormat("en-IQ").format(Math.round(Number(v)));
+
+const elapsed = (dateStr: string) => {
+  const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+  if (mins < 60) return `${mins} د`;
+  return `${Math.floor(mins / 60)} س ${mins % 60} د`;
+};
+
+export default function Cashier() {
+  const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
+
+  const { data: pendingOrders, refetch: refetchPending } = useGetOrders({ status: "pending" } as any);
+  const { data: todayPaidOrders, refetch: refetchPaid } = useGetOrders({
+    status: "paid",
+    date: new Date().toISOString().slice(0, 10),
+  } as any);
+
+  const { mutate: updateStatus, isPending: isUpdating } = useUpdateOrderStatus();
+
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [paymentDialog, setPaymentDialog] = useState<any | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => { refetchPending(); refetchPaid(); }, 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  const sendToKitchen = (order: any, paymentMethod: "cash" | "card" | "transfer") => {
+    updateStatus(
+      { id: order.id, data: { status: "preparing", paymentMethod } as any },
+      {
+        onSuccess: () => {
+          setPaymentDialog(null);
+          setSelectedOrder(null);
+          refetchPending();
+          refetchPaid();
+        },
+      }
+    );
+  };
+
+  const orderTypeLabel = (type: string, tableId?: number | null) => {
+    if (type === "dine_in") return tableId ? `طاولة ${tableId}` : "داخلي";
+    if (type === "takeaway") return "سفري";
+    return "توصيل";
+  };
+
+  const urgencyColor = (createdAt: string) => {
+    const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    if (mins > 15) return "border-red-500/60 bg-red-500/5";
+    if (mins > 8) return "border-amber-500/60 bg-amber-500/5";
+    return "border-border/50 bg-card/50";
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Header */}
+      <header className="p-4 bg-card/80 backdrop-blur-md border-b border-border/50 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
+            <ShoppingBag className="w-5 h-5 text-amber-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">شاشة الكاشير</h1>
+            <p className="text-xs text-primary font-display uppercase tracking-widest">
+              {user?.name} — Cashier
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { refetchPending(); refetchPaid(); }}
+            className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center hover:bg-secondary/70 transition-colors"
+            title="تحديث"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => { logout(); navigate("/login"); }}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive px-3 py-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            خروج
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 flex overflow-hidden">
+        {/* ── Pending Orders (main) ── */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-border/50 flex items-center justify-between">
+            <h2 className="font-bold text-lg flex items-center gap-2">
+              <Clock className="w-5 h-5 text-amber-400" />
+              طلبات تنتظر المراجعة
+              {pendingOrders && pendingOrders.length > 0 && (
+                <span className="bg-amber-500/20 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {pendingOrders.length}
+                </span>
+              )}
+            </h2>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
+            {!pendingOrders || pendingOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 py-16">
+                <CheckCircle2 className="w-16 h-16 mb-4 text-green-500/50" />
+                <p className="text-lg font-semibold">لا توجد طلبات جديدة</p>
+                <p className="text-sm">جميع الطلبات تمت معالجتها</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence>
+                  {pendingOrders.map((order) => (
+                    <motion.div
+                      key={order.id}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className={`rounded-2xl border-2 overflow-hidden transition-all cursor-pointer hover:shadow-xl hover:shadow-primary/10 ${urgencyColor(order.createdAt)}`}
+                      onClick={() => setSelectedOrder(order)}
+                    >
+                      {/* Card Header */}
+                      <div className="p-4 bg-black/20 flex justify-between items-start">
+                        <div>
+                          <h3 className="font-bold text-xl font-display">#{order.orderNumber?.slice(-4)}</h3>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {order.type === "dine_in" ? (
+                              <Table2 className="w-3.5 h-3.5 text-primary" />
+                            ) : (
+                              <ShoppingBag className="w-3.5 h-3.5 text-primary" />
+                            )}
+                            <span className="text-sm text-primary font-semibold">
+                              {orderTypeLabel(order.type, order.tableId)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-left">
+                          <div className="flex items-center gap-1 text-sm font-display text-amber-400">
+                            <Clock className="w-3.5 h-3.5" />
+                            {elapsed(order.createdAt)}
+                          </div>
+                          <div className="text-lg font-bold text-primary font-display mt-1">
+                            {formatIQD(order.total ?? 0)} د.ع
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Items Preview */}
+                      <div className="p-4 space-y-1.5">
+                        {(order.items ?? []).slice(0, 3).map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{item.menuItem?.nameAr || "صنف"}</span>
+                            <span className="font-bold">×{item.quantity}</span>
+                          </div>
+                        ))}
+                        {(order.items ?? []).length > 3 && (
+                          <p className="text-xs text-muted-foreground">
+                            +{(order.items ?? []).length - 3} أصناف أخرى...
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Action Button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPaymentDialog(order); }}
+                        className="w-full p-3 bg-primary/90 hover:bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <ChefHat className="w-4 h-4" />
+                        إرسال للمطبخ
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Today's Paid Orders (sidebar) ── */}
+        <div className="w-72 border-r border-border/50 flex flex-col bg-card/20 hidden lg:flex">
+          <div className="p-4 border-b border-border/50">
+            <h3 className="font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+              مدفوعة اليوم
+              {todayPaidOrders && (
+                <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {todayPaidOrders.length}
+                </span>
+              )}
+            </h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {todayPaidOrders?.map((order) => (
+              <div key={order.id} className="bg-card/50 rounded-xl p-3 border border-border/30">
+                <div className="flex justify-between items-center">
+                  <span className="font-display font-bold text-sm">#{order.orderNumber?.slice(-4)}</span>
+                  <span className="text-xs text-green-400 font-semibold">مدفوع ✓</span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs text-muted-foreground">{orderTypeLabel(order.type, order.tableId)}</span>
+                  <span className="text-primary font-display text-sm font-bold">
+                    {formatIQD(order.total ?? 0)}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {(!todayPaidOrders || todayPaidOrders.length === 0) && (
+              <p className="text-center text-xs text-muted-foreground py-8 opacity-50">لا يوجد مدفوعات اليوم</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Order Detail Dialog ── */}
+      <Dialog
+        isOpen={!!selectedOrder && !paymentDialog}
+        onClose={() => setSelectedOrder(null)}
+        title={`طلب #${selectedOrder?.orderNumber?.slice(-4)}`}
+      >
+        {selectedOrder && (
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <Badge variant="outline">
+                {orderTypeLabel(selectedOrder.type, selectedOrder.tableId)}
+              </Badge>
+              <Badge variant="warning">
+                <Clock className="w-3 h-3 me-1" />
+                {elapsed(selectedOrder.createdAt)}
+              </Badge>
+            </div>
+
+            <div className="space-y-2 bg-secondary/30 rounded-xl p-4">
+              {(selectedOrder.items ?? []).map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between text-sm border-b border-border/30 pb-2 last:border-0 last:pb-0">
+                  <span>{item.menuItem?.nameAr}</span>
+                  <div className="flex gap-4">
+                    <span className="text-muted-foreground">×{item.quantity}</span>
+                    <span className="font-display font-bold text-primary">
+                      {formatIQD((item.price ?? item.menuItem?.price ?? 0) * item.quantity)} د.ع
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between font-bold text-xl border-t border-border/50 pt-3">
+              <span>الإجمالي</span>
+              <span className="text-primary font-display">{formatIQD(selectedOrder.total ?? 0)} د.ع</span>
+            </div>
+
+            <Button className="w-full h-12 gap-2" onClick={() => setPaymentDialog(selectedOrder)}>
+              <ChefHat className="w-5 h-5" />
+              إرسال للمطبخ
+            </Button>
+          </div>
+        )}
+      </Dialog>
+
+      {/* ── Payment Method Dialog ── */}
+      <Dialog
+        isOpen={!!paymentDialog}
+        onClose={() => setPaymentDialog(null)}
+        title="اختر طريقة الدفع"
+      >
+        {paymentDialog && (
+          <div className="space-y-4">
+            <div className="bg-secondary/50 rounded-xl p-4 text-center">
+              <p className="text-sm text-muted-foreground mb-1">
+                طلب #{paymentDialog.orderNumber?.slice(-4)} — {orderTypeLabel(paymentDialog.type, paymentDialog.tableId)}
+              </p>
+              <p className="text-3xl font-bold text-primary font-display">
+                {formatIQD(paymentDialog.total ?? 0)} د.ع
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { method: "cash" as const, label: "كاش", icon: Banknote, color: "text-green-500" },
+                { method: "card" as const, label: "بطاقة", icon: CreditCard, color: "text-blue-500" },
+                { method: "transfer" as const, label: "تحويل", icon: Phone, color: "text-purple-500" },
+              ].map(({ method, label, icon: Icon, color }) => (
+                <Button
+                  key={method}
+                  variant="outline"
+                  className="h-24 flex flex-col gap-2"
+                  isLoading={isUpdating}
+                  onClick={() => sendToKitchen(paymentDialog, method)}
+                >
+                  <Icon className={`w-8 h-8 ${color}`} />
+                  <span>{label}</span>
+                </Button>
+              ))}
+            </div>
+
+            <p className="text-xs text-center text-muted-foreground">
+              سيتم إرسال الطلب للمطبخ فور تأكيد الدفع
+            </p>
+          </div>
+        )}
+      </Dialog>
+    </div>
+  );
+}

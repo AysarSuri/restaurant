@@ -4,10 +4,10 @@ import { motion } from "framer-motion";
 import { 
   LayoutDashboard, ShoppingCart, ChefHat, MenuSquare, 
   Grid, ClipboardList, Package, Users, UsersRound, 
-  Receipt, LineChart, LogOut, Bell, Sun, Moon, AlertTriangle
+  Receipt, LineChart, LogOut, Bell, Sun, Moon
 } from "lucide-react";
 import { cn, Dialog, Button } from "./ui-elements";
-import { useTheme } from "@/App";
+import { useTheme, useAuth } from "@/App";
 
 const NAV_ITEMS = [
   { href: "/", label: "لوحة القيادة", labelEn: "Dashboard", icon: LayoutDashboard },
@@ -23,15 +23,23 @@ const NAV_ITEMS = [
   { href: "/reports", label: "التقارير", labelEn: "Reports", icon: LineChart },
 ];
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: "مدير النظام",
+  manager: "مدير",
+  cashier: "كاشير",
+  kitchen: "مطبخ",
+  table: "نادل",
+};
+
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
-    localStorage.removeItem("theme");
-    sessionStorage.clear();
-    window.location.reload();
+    logout();
+    navigate("/login");
   };
 
   // Hide sidebar completely on POS and KDS for maximum screen space
@@ -85,10 +93,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-4 border-t border-border/50">
+        <div className="p-4 border-t border-border/50 space-y-2">
+          {/* User info card */}
+          {user && (
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center text-primary-foreground font-bold text-base flex-shrink-0">
+                {user.name.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{user.name}</p>
+                <p className="text-[11px] text-primary font-display">{ROLE_LABELS[user.role] ?? user.role}</p>
+              </div>
+            </div>
+          )}
           <button
             onClick={() => setLogoutOpen(true)}
-            className="w-full flex items-center px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group"
+            className="w-full flex items-center px-4 py-2.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group"
           >
             <LogOut className="w-5 h-5 me-3 group-hover:scale-110 transition-transform" />
             <div className="font-semibold text-sm">تسجيل الخروج</div>
@@ -147,8 +167,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Bell className="w-5 h-5" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full"></span>
             </button>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-secondary to-muted border-2 border-border flex items-center justify-center font-bold text-sm">
-              م
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-amber-600 border-2 border-primary/30 flex items-center justify-center font-bold text-sm text-primary-foreground">
+              {user?.name?.charAt(0) ?? "م"}
             </div>
           </div>
         </header>
