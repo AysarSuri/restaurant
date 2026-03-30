@@ -373,26 +373,6 @@ export default function Login() {
       {/* ── BOTTOM: Virtual Keyboard — always visible ── */}
       <div className="border-t border-border/50 bg-[#12141a] flex-1 min-h-0 flex flex-col">
         <div className="w-full h-full px-4 pt-2 pb-2 flex flex-col">
-          {/* PIN strip above keyboard */}
-          <div className="flex items-center justify-between mb-2 px-1 flex-shrink-0">
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-semibold text-muted-foreground">الرقم السري:</span>
-              <span className="text-[10px] text-muted-foreground/60 font-display">الافتراضي 1234</span>
-            </div>
-            <div className="flex items-center gap-2" dir="ltr">
-              {pin.length === 0
-                ? <span className="text-muted-foreground text-xs italic">أدخل الرقم من الكيبورد...</span>
-                : Array.from({ length: pin.length }).map((_, i) =>
-                    showPin
-                      ? <span key={i} className="font-display text-lg font-bold text-primary w-5 text-center">{pin[i]}</span>
-                      : <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block shadow-md" />
-                  )
-              }
-            </div>
-            <button onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
-              {showPin ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            </button>
-          </div>
 
           <div className="flex-1 min-h-0">
             <VirtualKeyboard
