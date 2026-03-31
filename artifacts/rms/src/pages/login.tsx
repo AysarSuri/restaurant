@@ -34,24 +34,36 @@ function Combobox({
   isTable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropRect, setDropRect] = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const inBtn = ref.current?.contains(e.target as Node);
+      const inDrop = dropRef.current?.contains(e.target as Node);
+      if (!inBtn && !inDrop) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const handleOpen = () => {
+    if (disabled) return;
+    if (!open && btnRef.current) setDropRect(btnRef.current.getBoundingClientRect());
+    setOpen((o) => !o);
+  };
 
   const active = items.find((i) => i.label === value);
 
   return (
     <div ref={ref} className="relative z-30">
       <button
+        ref={btnRef}
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={handleOpen}
         className={`w-full h-14 px-4 rounded-xl border-2 flex items-center gap-2 transition-all text-base
           ${disabled
             ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
@@ -79,13 +91,21 @@ function Combobox({
       </button>
 
       <AnimatePresence>
-        {open && (
+        {open && dropRect && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scaleY: 0.95 }}
-            animate={{ opacity: 1, y: 0, scaleY: 1 }}
-            exit={{ opacity: 0, y: 6, scaleY: 0.95 }}
-            style={{ originY: 1 }}
-            className="absolute bottom-full mb-1 w-full bg-card border border-border rounded-xl shadow-2xl z-[200] overflow-hidden max-h-72 overflow-y-auto"
+            ref={dropRef}
+            initial={{ opacity: 0, scaleY: 0.95 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            exit={{ opacity: 0, scaleY: 0.95 }}
+            style={{
+              position: "fixed",
+              top: dropRect.bottom + 6,
+              left: dropRect.left,
+              width: dropRect.width,
+              transformOrigin: "top",
+              zIndex: 9999,
+            }}
+            className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto"
           >
             {items.length === 0 ? (
               <div className="px-4 py-4 text-sm text-muted-foreground text-center">
