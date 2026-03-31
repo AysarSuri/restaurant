@@ -67,6 +67,8 @@ export type UserRole = "admin" | "manager" | "cashier" | "kitchen" | "table";
 export interface AuthUser {
   name: string;
   role: UserRole;
+  tableId?: number;
+  tableNumber?: number;
 }
 
 interface AuthContextType {

@@ -244,7 +244,18 @@ export default function Login() {
     if (!pin)             { setError("أدخل الرقم السري"); return; }
     if (pin !== DEMO_PIN) { setError("الرقم السري غير صحيح — جرب: 1234"); return; }
 
-    login({ name: selection.trim(), role: selectedRole });
+    if (isTableRole) {
+      const selectedTableItem = comboItems.find(i => i.label === selection.trim());
+      const table = allTables.find(t => t.id === selectedTableItem?.id);
+      login({
+        name: selection.trim(),
+        role: selectedRole,
+        tableId: selectedTableItem?.id,
+        tableNumber: table?.number,
+      });
+    } else {
+      login({ name: selection.trim(), role: selectedRole });
+    }
     navigate(roleConfig!.redirect);
   };
 
