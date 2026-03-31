@@ -100,7 +100,7 @@ export default function TableOrder() {
           </div>
           <div>
             <h1 className="text-xl font-bold leading-tight">
-              طاولة {tableNumber ?? "—"}
+              طلب طاولة {tableNumber ?? "—"}
             </h1>
             <p className="text-xs text-muted-foreground">
               {tableInfo?.location ?? ""} — سعة {tableInfo?.capacity ?? "—"} أشخاص
@@ -350,7 +350,7 @@ export default function TableOrder() {
           </motion.div>
 
           <div className="bg-card/60 rounded-2xl p-5 border border-border/50 w-full max-w-sm text-right space-y-2">
-            <p className="text-sm font-bold text-muted-foreground mb-3">تفاصيل الطلب — طاولة {tableNumber}</p>
+            <p className="text-sm font-bold text-muted-foreground mb-3">تفاصيل الطلب — طلب طاولة {tableNumber}</p>
             {cart.map((i) => (
               <div key={i.id} className="flex justify-between text-sm">
                 <span className="text-primary font-display">{formatIQD(i.price * i.cartQuantity)} د.ع</span>
