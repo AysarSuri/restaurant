@@ -131,7 +131,7 @@ export default function Employees() {
     setForm((prev) => ({ ...prev, [field]: val }));
 
   return (
-    <div className="p-6 h-full flex flex-col gap-6">
+    <div className="h-full flex flex-col gap-4 md:gap-6">
       {/* Header Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -164,23 +164,67 @@ export default function Employees() {
             <h2 className="text-xl font-bold">إدارة الموظفين</h2>
             <p className="text-xs text-primary font-display tracking-widest uppercase">Employees Management</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative w-64">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[160px] max-w-xs">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="بحث بالاسم أو المنصب..."
-                className="pr-10 h-10 rounded-full bg-secondary/50 border-transparent"
+                className="pr-10 h-9 rounded-full bg-secondary/50 border-transparent text-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button onClick={openAdd} className="rounded-full h-10 gap-2">
-              <Plus className="w-4 h-4" /> إضافة موظف
+            <Button onClick={openAdd} className="rounded-full h-9 gap-1.5 text-sm flex-shrink-0">
+              <Plus className="w-4 h-4" /> إضافة
             </Button>
           </div>
         </div>
 
-        <div className="overflow-auto flex-1">
+        {/* ── MOBILE cards ── */}
+        <div className="md:hidden divide-y divide-border/30 overflow-auto flex-1">
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">لا يوجد موظفون</div>
+          ) : filtered.map((emp) => {
+            const role = roleInfo(emp.role);
+            return (
+              <div key={emp.id} className="p-4 flex flex-col gap-2 hover:bg-secondary/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
+                    {emp.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{emp.name}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${role.color}`}>{role.label}</span>
+                  </div>
+                  <Badge variant={emp.isActive ? "success" : "destructive"}>
+                    {emp.isActive ? "نشط" : "موقوف"}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <div><span className="text-muted-foreground text-xs">الهاتف: </span><span dir="ltr">{emp.phone || "—"}</span></div>
+                  <div><span className="text-muted-foreground text-xs">الراتب: </span><span className="text-green-400 font-bold">{formatIQD(emp.salary)}</span></div>
+                  <div><span className="text-muted-foreground text-xs">التعيين: </span>{emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-IQ") : "—"}</div>
+                  <div className="truncate"><span className="text-muted-foreground text-xs">البريد: </span><span dir="ltr" className="text-xs">{emp.email || "—"}</span></div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5" onClick={() => openEdit(emp)}>
+                    <Edit className="w-3.5 h-3.5" /> تعديل
+                  </Button>
+                  <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(emp)}>
+                    <Trash2 className="w-3.5 h-3.5" /> حذف
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── DESKTOP table ── */}
+        <div className="hidden md:block overflow-auto flex-1">
           <Table>
             <TableHeader>
               <TableRow className="border-border/50">

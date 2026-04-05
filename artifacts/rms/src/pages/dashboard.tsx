@@ -80,7 +80,7 @@ export default function Dashboard() {
             <h3 className="text-lg font-bold">المبيعات (اليوم)</h3>
             <p className="text-sm text-muted-foreground">Today's Sales Trend</p>
           </div>
-          <div className="h-80 w-full" dir="ltr">
+          <div className="h-52 md:h-80 w-full" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={mockChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>

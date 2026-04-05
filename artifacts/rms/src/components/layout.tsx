@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   LayoutDashboard, ShoppingCart, ChefHat, MenuSquare, 
   Grid, ClipboardList, Package, Users, UsersRound, 
-  Receipt, LineChart, LogOut, Bell, Sun, Moon
+  Receipt, LineChart, LogOut, Bell, Sun, Moon, Menu, X
 } from "lucide-react";
 import { cn, Dialog, Button } from "./ui-elements";
 import { useTheme, useAuth } from "@/App";
@@ -36,87 +36,141 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => { setSidebarOpen(false); }, [location]);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  // Hide sidebar completely on POS and KDS for maximum screen space
   const isFullscreen = location === "/pos" || location === "/kds";
 
   if (isFullscreen) {
     return <div className="min-h-screen bg-background">{children}</div>;
   }
 
+  const SidebarContent = () => (
+    <>
+      {/* Logo */}
+      <div className="p-5 flex items-center gap-3 border-b border-border/30">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center shadow-lg shadow-primary/20 flex-shrink-0">
+          <ChefHat className="w-6 h-6 text-primary-foreground" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold text-foreground leading-none mb-0.5 truncate">المطعم الذكي</h1>
+          <p className="text-[10px] text-primary font-medium tracking-widest font-display uppercase">RMS 2026</p>
+        </div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="lg:hidden mr-auto w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+        {NAV_ITEMS.map((item) => {
+          const isActive = location === item.href;
+          return (
+            <Link key={item.href} href={item.href}>
+              <div
+                className={cn(
+                  "flex items-center px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group relative overflow-hidden",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeNav"
+                    className="absolute inset-0 bg-primary/10 border-r-4 border-primary rounded-xl"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+                <item.icon
+                  className={cn(
+                    "w-5 h-5 me-3 relative z-10 flex-shrink-0",
+                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  )}
+                />
+                <div className="relative z-10 min-w-0">
+                  <div className="font-semibold text-sm truncate">{item.label}</div>
+                  <div className="text-[10px] opacity-70 font-display tracking-wide uppercase">{item.labelEn}</div>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-3 border-t border-border/50 space-y-2">
+        {user && (
+          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center text-primary-foreground font-bold text-base flex-shrink-0">
+              {user.name.charAt(0)}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">{user.name}</p>
+              <p className="text-[11px] text-primary font-display">{ROLE_LABELS[user.role] ?? user.role}</p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={() => setLogoutOpen(true)}
+          className="w-full flex items-center px-4 py-2.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group"
+        >
+          <LogOut className="w-5 h-5 me-3 group-hover:scale-110 transition-transform flex-shrink-0" />
+          <div className="font-semibold text-sm">تسجيل الخروج</div>
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className="flex min-h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-72 glass-panel border-r-0 border-l flex flex-col z-20 sticky top-0 h-screen">
-        <div className="p-6 flex items-center space-x-4 space-x-reverse">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center shadow-lg shadow-primary/20">
-            <ChefHat className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground leading-none mb-1">المطعم الذكي</h1>
-            <p className="text-xs text-primary font-medium tracking-widest font-display uppercase">RMS 2026</p>
-          </div>
-        </div>
 
-        <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link key={item.href} href={item.href}>
-                <div
-                  className={cn(
-                    "flex items-center px-4 py-3 rounded-xl cursor-pointer transition-all duration-300 group relative overflow-hidden",
-                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeNav"
-                      className="absolute inset-0 bg-primary/10 border-l-4 border-primary rounded-xl"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
-                  )}
-                  <item.icon className={cn("w-5 h-5 me-3 relative z-10", isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
-                  <div className="relative z-10">
-                    <div className="font-semibold text-sm">{item.label}</div>
-                    <div className="text-[10px] opacity-70 font-display tracking-wide uppercase">{item.labelEn}</div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-border/50 space-y-2">
-          {/* User info card */}
-          {user && (
-            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center text-primary-foreground font-bold text-base flex-shrink-0">
-                {user.name.charAt(0)}
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">{user.name}</p>
-                <p className="text-[11px] text-primary font-display">{ROLE_LABELS[user.role] ?? user.role}</p>
-              </div>
-            </div>
-          )}
-          <button
-            onClick={() => setLogoutOpen(true)}
-            className="w-full flex items-center px-4 py-2.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group"
-          >
-            <LogOut className="w-5 h-5 me-3 group-hover:scale-110 transition-transform" />
-            <div className="font-semibold text-sm">تسجيل الخروج</div>
-          </button>
-        </div>
+      {/* ── DESKTOP Sidebar (always visible ≥ lg) ── */}
+      <aside className="hidden lg:flex w-64 xl:w-72 glass-panel border-r-0 border-l flex-col z-20 sticky top-0 h-screen flex-shrink-0">
+        <SidebarContent />
       </aside>
 
-      {/* Logout Confirmation Dialog */}
+      {/* ── MOBILE Sidebar Overlay ── */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden fixed inset-0 bg-black/60 z-30"
+            />
+            {/* Drawer */}
+            <motion.aside
+              key="drawer"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="lg:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] glass-panel border-l border-border/50 flex flex-col z-40 overflow-hidden"
+            >
+              <SidebarContent />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Logout Dialog */}
       <Dialog isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} title="تسجيل الخروج">
         <div className="text-center py-2 space-y-5">
           <div className="w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mx-auto">
@@ -127,43 +181,50 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-muted-foreground text-sm mt-1">سيتم إغلاق جلستك الحالية.</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setLogoutOpen(false)}>
-              إلغاء
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setLogoutOpen(false)}>إلغاء</Button>
             <Button variant="destructive" className="flex-1 gap-2" onClick={handleLogout}>
-              <LogOut className="w-4 h-4" />
-              تسجيل الخروج
+              <LogOut className="w-4 h-4" /> تسجيل الخروج
             </Button>
           </div>
         </div>
       </Dialog>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Top Header */}
-        <header className="h-20 glass-panel border-b-0 border-x-0 rounded-none px-8 flex items-center justify-between z-10">
-          <div className="flex items-center">
-            <h2 className="text-2xl font-bold text-foreground">
+      {/* ── Main Content ── */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
+
+        {/* Header */}
+        <header className="h-14 md:h-20 glass-panel border-b-0 border-x-0 rounded-none px-4 md:px-8 flex items-center justify-between z-10 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h2 className="text-lg md:text-2xl font-bold text-foreground truncate">
               {NAV_ITEMS.find(i => i.href === location)?.label || "النظام"}
             </h2>
           </div>
-          <div className="flex items-center space-x-4 space-x-reverse">
-            <div className="text-right me-4">
-              <div className="text-sm font-semibold text-foreground">
+
+          <div className="flex items-center gap-2 md:gap-3">
+            {/* Date — hidden on small mobile */}
+            <div className="hidden sm:block text-right me-1 md:me-4">
+              <div className="text-xs md:text-sm font-semibold text-foreground">
                 {new Date().toLocaleDateString('ar-IQ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
-              <div className="text-xs text-primary font-display">
-                {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute:'2-digit' })}
+              <div className="text-[10px] md:text-xs text-primary font-display">
+                {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
-            {/* ── Theme toggle pill ── */}
+
+            {/* Theme toggle */}
             <button
               onClick={toggleTheme}
-              title={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+              title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}
               className="relative flex items-center gap-1 h-9 px-1 rounded-full bg-secondary border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden"
               style={{ width: "5rem" }}
             >
-              {/* sliding indicator */}
               <motion.span
                 layout
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
@@ -178,23 +239,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   : <Sun className="w-3.5 h-3.5 text-white" />
                 }
               </motion.span>
-              {/* icons background */}
               <Sun  className="w-3.5 h-3.5 text-amber-400 ms-1.5 opacity-60" />
               <Moon className="w-3.5 h-3.5 text-slate-400 me-1.5 ms-auto opacity-60" />
             </button>
-            <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full"></span>
+
+            <button className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors relative">
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
             </button>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-amber-600 border-2 border-primary/30 flex items-center justify-center font-bold text-sm text-primary-foreground">
+
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 border-2 border-primary/30 flex items-center justify-center font-bold text-sm text-primary-foreground flex-shrink-0">
               {user?.name?.charAt(0) ?? "م"}
             </div>
           </div>
         </header>
 
-        {/* Scrollable Page Content */}
-        <div className="flex-1 overflow-y-auto p-8 relative">
-          {/* Subtle background glow */}
+        {/* Page Content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
           <div className="relative z-10">
             {children}
