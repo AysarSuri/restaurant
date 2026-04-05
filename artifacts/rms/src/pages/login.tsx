@@ -265,54 +265,56 @@ export default function Login() {
         <Moon className="w-4 h-4 text-slate-400 me-2 ms-auto opacity-60" />
       </button>
 
-      {/* ══ MOBILE LAYOUT (< lg) ══════════════════════════════════ */}
-      <div className="flex lg:hidden flex-col flex-1 overflow-y-auto">
+      {/* ══ MOBILE LAYOUT (< lg) — fixed full-screen, no scroll ══ */}
+      <div className="flex lg:hidden flex-col h-screen overflow-hidden">
 
-        {/* Logo strip */}
-        <div className="flex items-center gap-3 px-4 pt-14 pb-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 flex-shrink-0">
-            <ChefHat className="w-7 h-7 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold leading-tight">المطعم الذكي</h1>
-            <p className="text-primary text-xs font-bold tracking-widest">RMS 2026</p>
-          </div>
-          <AnimatePresence mode="wait">
-            {selectedRole && roleConfig && (
-              <motion.div key={selectedRole} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                className={`mr-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r ${roleConfig.color} text-white text-xs font-bold shadow`}>
-                {ROLES.find(r => r.value === selectedRole)?.icon} {roleConfig.label}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        {/* ── TOP: Logo + Form fields ── */}
+        <div className="flex-1 flex flex-col overflow-hidden px-4 pt-12 pb-2 gap-3">
 
-        {/* Form card */}
-        <div className="mx-4 mb-4 bg-card/60 backdrop-blur-sm border border-border/50 rounded-2xl p-4 space-y-4">
-          <div>
-            <h2 className="text-base font-bold">تسجيل الدخول</h2>
-            <p className="text-xs text-muted-foreground">اختر دورك وأدخل بياناتك</p>
+          {/* Logo row */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="w-11 h-11 bg-gradient-to-br from-primary to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 flex-shrink-0">
+              <ChefHat className="w-6 h-6 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold leading-tight">المطعم الذكي</h1>
+              <p className="text-primary text-[10px] font-bold tracking-widest">RMS 2026</p>
+            </div>
+            <AnimatePresence mode="wait">
+              {selectedRole && roleConfig && (
+                <motion.div key={selectedRole} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                  className={`mr-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r ${roleConfig.color} text-white text-[11px] font-bold shadow`}>
+                  {ROLES.find(r => r.value === selectedRole)?.icon} {roleConfig.label}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Role buttons — 2 rows of 3+2 */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* Title */}
+          <div className="flex-shrink-0">
+            <h2 className="text-sm font-bold">تسجيل الدخول</h2>
+            <p className="text-[11px] text-muted-foreground">اختر دورك وأدخل بياناتك</p>
+          </div>
+
+          {/* Role buttons — 5 in a row */}
+          <div className="grid grid-cols-5 gap-1.5 flex-shrink-0">
             {ROLES.map(role => {
               const isActive = selectedRole === role.value;
               return (
                 <motion.button key={role.value} whileTap={{ scale: 0.92 }} onClick={() => handleRoleSelect(role.value)}
-                  className={`flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all
-                    ${isActive ? `bg-gradient-to-br ${role.color} ${role.ring} ring-2 shadow-lg text-white` : `bg-background/50 ${role.fade} text-foreground`}`}>
-                  <span className="text-2xl mb-1">{role.icon}</span>
-                  <span className="font-bold text-xs leading-tight text-center">{role.label}</span>
-                  <span className={`text-[9px] tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>{role.labelEn}</span>
+                  className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all
+                    ${isActive ? `bg-gradient-to-br ${role.color} ${role.ring} ring-2 shadow-lg text-white` : `bg-card/40 ${role.fade} text-foreground`}`}>
+                  <span className="text-lg mb-0.5">{role.icon}</span>
+                  <span className="font-bold text-[9px] leading-tight text-center">{role.label}</span>
+                  <span className={`text-[8px] tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>{role.labelEn}</span>
                 </motion.button>
               );
             })}
           </div>
 
-          {/* Name / Table */}
-          <div>
-            <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
+          {/* Name combobox */}
+          <div className="flex-shrink-0">
+            <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
               {isTableRole ? "اختر الطاولة" : "اسم الموظف"}
             </label>
             <Combobox items={comboItems} value={selection} onChange={v => { setSelection(v); setError(""); }}
@@ -320,21 +322,22 @@ export default function Login() {
           </div>
 
           {/* PIN display */}
-          <div>
-            <label className="text-xs font-bold text-muted-foreground mb-1.5 block">الرقم السري</label>
-            <div className="w-full h-12 px-4 rounded-xl border-2 flex items-center gap-2 border-border bg-secondary/40">
+          <div className="flex-shrink-0">
+            <label className="text-[11px] font-bold text-muted-foreground mb-1 block">الرقم السري</label>
+            <div className={`w-full h-12 px-4 rounded-xl border-2 flex items-center gap-2 transition-all
+              ${pin.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40"}`}>
               <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <div className="flex-1 flex items-center gap-2 justify-center" dir="ltr">
                 {pin.length === 0
                   ? <span className="text-muted-foreground text-sm">أدخل الرقم السري...</span>
                   : Array.from({ length: pin.length }).map((_, i) =>
                       showPin
-                        ? <span key={i} className="font-bold text-lg text-foreground">{pin[i]}</span>
+                        ? <span key={i} className="font-bold text-xl text-foreground">{pin[i]}</span>
                         : <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block" />
                     )
                 }
               </div>
-              <button type="button" onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <button type="button" onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
                 {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               </button>
             </div>
@@ -344,13 +347,15 @@ export default function Login() {
           <AnimatePresence>
             {error && (
               <motion.div key="err" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                className="text-destructive text-xs bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20">
+                className="flex-shrink-0 text-destructive text-xs bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20">
                 ⚠️ {error}
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
 
-          {/* Numeric PIN pad */}
+        {/* ── BOTTOM: PIN Pad — always visible, never hidden ── */}
+        <div className="flex-shrink-0 border-t border-border/50 bg-secondary px-4 pt-3 pb-4">
           <PinPad value={pin} onChange={v => { setPin(v); setError(""); }} onEnter={handleLogin} />
         </div>
       </div>
