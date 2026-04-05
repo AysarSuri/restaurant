@@ -256,7 +256,7 @@ export default function Login() {
   const [selectedRole, setSelectedRole] = useState<RoleType | null>(null);
   const [selection, setSelection] = useState("");
   const [pin, setPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
+  const [showPin, setShowPin] = useState(true);
   const [error, setError] = useState("");
 
   const roleConfig = ROLES.find(r => r.value === selectedRole);
