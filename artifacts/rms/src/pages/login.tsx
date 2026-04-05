@@ -112,33 +112,74 @@ function Combobox({ items, value, onChange, disabled, placeholder, isTable }: {
   );
 }
 
-/* ─── Numeric PIN Pad (mobile-friendly) ──────────────────── */
-function PinPad({ value, onChange, onEnter }: { value: string; onChange: (v: string) => void; onEnter: () => void; }) {
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+/* ─── Mobile QWERTY Keyboard ─────────────────────────────── */
+function MobileKeyboard({ value, onChange, onEnter }: { value: string; onChange: (v: string) => void; onEnter: () => void; }) {
+  const [shifted, setShifted] = useState(false);
+
+  const rows = [
+    ["1","2","3","4","5","6","7","8","9","0"],
+    ["q","w","e","r","t","y","u","i","o","p"],
+    ["a","s","d","f","g","h","j","k","l"],
+    ["z","x","c","v","b","n","m"],
+  ];
+
+  const press = (k: string) => {
+    onChange(value + (shifted ? k.toUpperCase() : k));
+    if (shifted) setShifted(false);
+  };
+
+  const Key = ({ k, wide = false }: { k: string; wide?: boolean }) => (
+    <motion.button
+      type="button" whileTap={{ scale: 0.85 }}
+      onClick={() => press(k)}
+      className={`flex-1 ${wide ? "flex-[1.5]" : ""} h-11 rounded-lg bg-card border border-border text-foreground font-bold text-base flex items-center justify-center transition-colors hover:bg-muted active:bg-primary/20`}
+    >
+      {shifted ? k.toUpperCase() : k}
+    </motion.button>
+  );
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {keys.map((k, i) => {
-        if (k === "") return <div key={i} />;
-        if (k === "⌫") return (
-          <motion.button key={i} type="button" whileTap={{ scale: 0.9 }}
-            onClick={() => onChange(value.slice(0, -1))}
-            className="h-14 rounded-xl bg-destructive/15 border border-destructive/20 flex items-center justify-center text-destructive hover:bg-destructive/25 transition-colors">
-            <Delete className="w-5 h-5" />
-          </motion.button>
-        );
-        return (
-          <motion.button key={i} type="button" whileTap={{ scale: 0.9 }}
-            onClick={() => onChange(value.length < 8 ? value + k : value)}
-            className="h-14 rounded-xl bg-secondary border border-border hover:bg-secondary/60 hover:border-primary/40 transition-colors text-xl font-bold">
-            {k}
-          </motion.button>
-        );
-      })}
-      <motion.button type="button" whileTap={{ scale: 0.97 }}
-        onClick={onEnter}
-        className="col-span-3 h-14 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-bold transition-colors shadow-lg shadow-primary/25 flex items-center justify-center gap-2">
-        تسجيل الدخول ↵
-      </motion.button>
+    <div className="flex flex-col gap-1.5 select-none" dir="ltr">
+      {/* Numbers row */}
+      <div className="flex gap-1">
+        {rows[0].map(k => <Key key={k} k={k} />)}
+      </div>
+      {/* QWERTY row */}
+      <div className="flex gap-1">
+        {rows[1].map(k => <Key key={k} k={k} />)}
+      </div>
+      {/* ASDF row */}
+      <div className="flex gap-1 px-3">
+        {rows[2].map(k => <Key key={k} k={k} />)}
+      </div>
+      {/* ZXCV row with Shift + Backspace */}
+      <div className="flex gap-1">
+        <motion.button type="button" whileTap={{ scale: 0.85 }}
+          onClick={() => setShifted(s => !s)}
+          className={`flex-[1.3] h-11 rounded-lg border font-bold text-sm flex items-center justify-center transition-colors
+            ${shifted ? "bg-primary/30 border-primary text-primary" : "bg-secondary border-border text-foreground hover:bg-muted"}`}>
+          ⇧
+        </motion.button>
+        {rows[3].map(k => <Key key={k} k={k} />)}
+        <motion.button type="button" whileTap={{ scale: 0.85 }}
+          onClick={() => onChange(value.slice(0, -1))}
+          className="flex-[1.3] h-11 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive flex items-center justify-center hover:bg-destructive/25 transition-colors">
+          <Delete className="w-4 h-4" />
+        </motion.button>
+      </div>
+      {/* Space + Login */}
+      <div className="flex gap-1">
+        <motion.button type="button" whileTap={{ scale: 0.97 }}
+          onClick={() => onChange(value + " ")}
+          className="flex-1 h-11 rounded-lg bg-card border border-border text-muted-foreground font-bold text-sm flex items-center justify-center hover:bg-muted transition-colors">
+          Space
+        </motion.button>
+        <motion.button type="button" whileTap={{ scale: 0.97 }}
+          onClick={onEnter}
+          className="flex-[1.8] h-11 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-1.5 shadow-md shadow-primary/25 transition-colors">
+          تسجيل الدخول ↵
+        </motion.button>
+      </div>
     </div>
   );
 }
@@ -356,7 +397,7 @@ export default function Login() {
 
         {/* ── BOTTOM: PIN Pad — always visible, never hidden ── */}
         <div className="flex-shrink-0 border-t border-border/50 bg-secondary px-4 pt-3 pb-4">
-          <PinPad value={pin} onChange={v => { setPin(v); setError(""); }} onEnter={handleLogin} />
+          <MobileKeyboard value={pin} onChange={v => { setPin(v); setError(""); }} onEnter={handleLogin} />
         </div>
       </div>
 
