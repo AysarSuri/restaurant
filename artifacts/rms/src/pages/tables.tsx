@@ -1,15 +1,26 @@
 import React, { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useGetTables, useUpdateTable } from "@workspace/api-client-react";
-import { Button, Dialog, Select } from "@/components/ui-elements";
+import {
+  useGetTables,
+  useUpdateTable,
+  useCreateTable,
+  type RestaurantTableStatus,
+} from "@workspace/api-client-react";
+import { Button, Dialog, Select, Input } from "@/components/ui-elements";
 import {
   Users,
   MapPin,
   Sparkles,
   Armchair,
+  Plus,
 } from "lucide-react";
-import { RestaurantTableStatus } from "@workspace/api-client-react";
 import { DiningTableIcon } from "@/components/dining-table-icon";
+
+const EMPTY_TABLE_FORM = {
+  number: "",
+  capacity: "4",
+  location: "",
+};
 
 const STATUS_META: Record<
   string,
@@ -69,9 +80,13 @@ const STATUS_META: Record<
 export default function Tables() {
   const { data: tables, isLoading, refetch } = useGetTables();
   const { mutate: updateTable, isPending } = useUpdateTable();
+  const { mutate: createTable, isPending: isCreating } = useCreateTable();
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [status, setStatus] = useState<RestaurantTableStatus>("available");
   const [filter, setFilter] = useState<"all" | RestaurantTableStatus>("all");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState(EMPTY_TABLE_FORM);
+  const [addError, setAddError] = useState("");
 
   const counts = useMemo(() => {
     const base = { all: 0, available: 0, occupied: 0, reserved: 0, cleaning: 0 };
@@ -87,6 +102,57 @@ export default function Tables() {
     if (filter === "all") return tables;
     return tables.filter((t) => t.status === filter);
   }, [tables, filter]);
+
+  const nextTableNumber = useMemo(() => {
+    const nums = (tables ?? [])
+      .map((t) => parseInt(String(t.number), 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const max = nums.length ? Math.max(...nums) : 0;
+    return String(max + 1);
+  }, [tables]);
+
+  const openAdd = () => {
+    setAddForm({ number: nextTableNumber, capacity: "4", location: "" });
+    setAddError("");
+    setAddOpen(true);
+  };
+
+  const handleCreateTable = () => {
+    const number = addForm.number.trim();
+    const capacity = Number(addForm.capacity);
+    if (!number) {
+      setAddError("رقم الطاولة مطلوب");
+      return;
+    }
+    if (!capacity || capacity < 1) {
+      setAddError("السعة يجب أن تكون رقمًا أكبر من صفر");
+      return;
+    }
+    if (tables?.some((t) => t.number === number)) {
+      setAddError("رقم الطاولة مستخدم مسبقًا");
+      return;
+    }
+    setAddError("");
+    createTable(
+      {
+        data: {
+          number,
+          capacity,
+          location: addForm.location.trim() || undefined,
+          status: "available",
+        },
+      },
+      {
+        onSuccess: () => {
+          setAddOpen(false);
+          refetch();
+        },
+        onError: (err: any) => {
+          setAddError(err?.data?.message || err?.message || "تعذر إضافة الطاولة");
+        },
+      }
+    );
+  };
 
   const handleUpdateStatus = () => {
     if (!selectedTable) return;
@@ -113,7 +179,12 @@ export default function Tables() {
           <p className="text-sm text-muted-foreground mt-1">عرض أنيق لحالة الصالة وتحديث سريع لكل طاولة</p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col items-stretch sm:items-end gap-3">
+          <Button onClick={openAdd} className="rounded-full h-10 gap-1.5 self-start sm:self-auto">
+            <Plus className="w-4 h-4" />
+            إضافة طاولة
+          </Button>
+          <div className="flex flex-wrap gap-2">
           {(
             [
               ["all", "الكل", counts.all],
@@ -151,6 +222,7 @@ export default function Tables() {
               </button>
             );
           })}
+          </div>
         </div>
       </div>
 
@@ -162,6 +234,12 @@ export default function Tables() {
         <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-20 text-center text-muted-foreground">
           <Armchair className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p className="font-bold">لا توجد طاولات في هذا التصنيف</p>
+          {filter === "all" && (
+            <Button onClick={openAdd} className="rounded-full mt-4">
+              <Plus className="w-4 h-4 me-1.5" />
+              إضافة طاولة
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
@@ -224,6 +302,72 @@ export default function Tables() {
           })}
         </div>
       )}
+
+      <Dialog
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="إضافة طاولة"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-amber-500/5 to-transparent p-4 flex items-center gap-3">
+            <DiningTableIcon className="w-16 h-auto flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="font-bold text-foreground">طاولة جديدة</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                أدخل الرقم والسعة والموقع (اختياري)
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">رقم الطاولة</label>
+            <Input
+              value={addForm.number}
+              readOnly
+              disabled
+              dir="ltr"
+              className="opacity-80 cursor-not-allowed font-display font-bold"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              يزداد تلقائياً ولا يمكن تعديله
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">
+              السعة (مقاعد) <span className="text-destructive">*</span>
+            </label>
+            <Input
+              type="number"
+              min={1}
+              value={addForm.capacity}
+              onChange={(e) => setAddForm((f) => ({ ...f, capacity: e.target.value }))}
+              dir="ltr"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">الموقع</label>
+            <Input
+              value={addForm.location}
+              onChange={(e) => setAddForm((f) => ({ ...f, location: e.target.value }))}
+              placeholder="صالة رئيسية / شرفة..."
+            />
+          </div>
+
+          {addError && <p className="text-sm font-semibold text-destructive">{addError}</p>}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>
+              إلغاء
+            </Button>
+            <Button onClick={handleCreateTable} isLoading={isCreating}>
+              <Plus className="w-4 h-4 me-1" />
+              حفظ الطاولة
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <Dialog
         isOpen={!!selectedTable}

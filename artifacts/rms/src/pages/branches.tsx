@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBranches,
   useCreateBranch,
   useUpdateBranch,
   useDeleteBranch,
+  getGetBranchesQueryKey,
   type Branch,
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog, Card } from "@/components/ui-elements";
-import { motion } from "framer-motion";
 import {
   Plus,
   Edit,
@@ -38,10 +39,23 @@ const EMPTY_FORM = {
 type FormData = typeof EMPTY_FORM;
 
 export default function Branches() {
-  const { data: branches, isLoading, refetch } = useGetBranches();
+  const queryClient = useQueryClient();
+  const { data: branches, isLoading } = useGetBranches({
+    query: {
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+      refetchOnMount: false,
+    },
+  });
   const { mutate: createBranch, isPending: isCreating } = useCreateBranch();
   const { mutate: updateBranch, isPending: isUpdating } = useUpdateBranch();
   const { mutate: deleteBranch, isPending: isDeleting } = useDeleteBranch();
+
+  const syncBranches = (next: Branch[]) => {
+    queryClient.setQueryData<Branch[]>(getGetBranchesQueryKey(), next);
+  };
+
+  const showLoader = isLoading && !branches;
 
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
@@ -114,9 +128,11 @@ export default function Branches() {
       updateBranch(
         { id: editTarget.id, data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (updated) => {
+            syncBranches(
+              (branches ?? []).map((b) => (b.id === updated.id ? updated : b))
+            );
             setFormOpen(false);
-            refetch();
           },
           onError: (err: any) => {
             setSubmitError(err?.message || "تعذر حفظ التعديلات");
@@ -131,9 +147,9 @@ export default function Branches() {
       createBranch(
         { data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (created) => {
+            syncBranches([created, ...(branches ?? [])]);
             setFormOpen(false);
-            refetch();
           },
           onError: (err: any) => {
             setSubmitError(err?.data?.message || err?.message || "تعذر إضافة الفرع");
@@ -149,8 +165,8 @@ export default function Branches() {
       { id: deleteTarget.id },
       {
         onSuccess: () => {
+          syncBranches((branches ?? []).filter((b) => b.id !== deleteTarget.id));
           setDeleteTarget(null);
-          refetch();
         },
       }
     );
@@ -226,7 +242,7 @@ export default function Branches() {
       )}
 
       {/* Cards grid */}
-      {isLoading ? (
+      {showLoader ? (
         <div className="flex justify-center py-20">
           <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full" />
         </div>
@@ -242,97 +258,93 @@ export default function Branches() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-          {branches!.map((branch, idx) => (
-            <motion.div
+          {branches!.map((branch) => (
+            <Card
               key={branch.id}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(idx * 0.05, 0.3) }}
+              className="relative overflow-hidden border border-border/60 h-full flex flex-col"
             >
-              <Card className="relative overflow-hidden border border-border/60 h-full flex flex-col">
-                <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/20 via-amber-500/10 to-transparent" />
-                <div className="relative p-5 flex flex-col gap-4 flex-1">
-                  <div className="flex items-start gap-3">
-                    <div className="w-14 h-14 rounded-2xl border border-border/60 bg-background/80 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm">
-                      {branch.logoUrl ? (
-                        <img
-                          src={branch.logoUrl}
-                          alt={branch.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <Building2 className="w-6 h-6 text-primary" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-extrabold text-lg text-foreground truncate">
-                          {branch.name}
-                        </h3>
-                        <Badge variant={branch.isActive ? "success" : "destructive"}>
-                          {branch.isActive ? "نشط" : "موقوف"}
-                        </Badge>
-                      </div>
-                      {branch.address && (
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 truncate">
-                          <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-primary/80" />
-                          {branch.address}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 rounded-xl bg-secondary/50 px-3 py-2">
-                      <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                      <span className="text-muted-foreground text-xs">موبايل 1</span>
-                      <span className="ms-auto font-display font-semibold" dir="ltr">
-                        {branch.mobile1}
-                      </span>
-                    </div>
-                    {branch.mobile2 && (
-                      <div className="flex items-center gap-2 rounded-xl bg-secondary/50 px-3 py-2">
-                        <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                        <span className="text-muted-foreground text-xs">موبايل 2</span>
-                        <span className="ms-auto font-display font-semibold" dir="ltr">
-                          {branch.mobile2}
-                        </span>
-                      </div>
-                    )}
-                    {branch.note && (
-                      <div className="rounded-xl border border-border/50 bg-background/40 px-3 py-2">
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mb-1">
-                          <StickyNote className="w-3.5 h-3.5" /> ملاحظة
-                        </p>
-                        <p className="text-sm text-foreground/90 line-clamp-3">{branch.note}</p>
-                      </div>
+              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/20 via-amber-500/10 to-transparent" />
+              <div className="relative p-5 flex flex-col gap-4 flex-1">
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-2xl border border-border/60 bg-background/80 overflow-hidden flex items-center justify-center flex-shrink-0 shadow-sm">
+                    {branch.logoUrl ? (
+                      <img
+                        src={branch.logoUrl}
+                        alt={branch.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <Building2 className="w-6 h-6 text-primary" />
                     )}
                   </div>
-
-                  <div className="mt-auto flex gap-2 pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 h-9 text-xs gap-1.5"
-                      onClick={() => openEdit(branch)}
-                    >
-                      <Edit className="w-3.5 h-3.5" /> تعديل
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 h-9 text-xs gap-1.5 text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeleteTarget(branch)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> حذف
-                    </Button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-extrabold text-lg text-foreground truncate">
+                        {branch.name}
+                      </h3>
+                      <Badge variant={branch.isActive ? "success" : "destructive"}>
+                        {branch.isActive ? "نشط" : "موقوف"}
+                      </Badge>
+                    </div>
+                    {branch.address && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 truncate">
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-primary/80" />
+                        {branch.address}
+                      </p>
+                    )}
                   </div>
                 </div>
-              </Card>
-            </motion.div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 rounded-xl bg-secondary/50 px-3 py-2">
+                    <Phone className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span className="text-muted-foreground text-xs">موبايل 1</span>
+                    <span className="ms-auto font-display font-semibold" dir="ltr">
+                      {branch.mobile1}
+                    </span>
+                  </div>
+                  {branch.mobile2 && (
+                    <div className="flex items-center gap-2 rounded-xl bg-secondary/50 px-3 py-2">
+                      <Phone className="w-4 h-4 text-primary flex-shrink-0" />
+                      <span className="text-muted-foreground text-xs">موبايل 2</span>
+                      <span className="ms-auto font-display font-semibold" dir="ltr">
+                        {branch.mobile2}
+                      </span>
+                    </div>
+                  )}
+                  {branch.note && (
+                    <div className="rounded-xl border border-border/50 bg-background/40 px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1 mb-1">
+                        <StickyNote className="w-3.5 h-3.5" /> ملاحظة
+                      </p>
+                      <p className="text-sm text-foreground/90 line-clamp-3">{branch.note}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-auto flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-9 text-xs gap-1.5"
+                    onClick={() => openEdit(branch)}
+                  >
+                    <Edit className="w-3.5 h-3.5" /> تعديل
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1 h-9 text-xs gap-1.5 text-destructive hover:bg-destructive/10"
+                    onClick={() => setDeleteTarget(branch)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> حذف
+                  </Button>
+                </div>
+              </div>
+            </Card>
           ))}
         </div>
       )}

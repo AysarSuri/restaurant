@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ShoppingCart,
@@ -18,6 +19,7 @@ import {
   Building2,
   type LucideIcon,
 } from "lucide-react";
+import { getGetBranchesQueryOptions } from "@workspace/api-client-react";
 import { useAuth, type UserRole } from "@/App";
 import { Dialog, Button } from "@/components/ui-elements";
 
@@ -53,13 +55,28 @@ function canAccess(role: UserRole | undefined, item: HomeItem) {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const items = HOME_ITEMS.filter((item) => canAccess(user?.role, item));
 
+  // Prefetch branches so CRUD opens instantly
+  useEffect(() => {
+    if (canAccess(user?.role, { href: "/branches", label: "الفروع", icon: Building2, roles: ["admin", "manager"] })) {
+      void queryClient.prefetchQuery(getGetBranchesQueryOptions());
+    }
+  }, [queryClient, user?.role]);
+
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const goTo = (href: string) => {
+    if (href === "/branches") {
+      void queryClient.prefetchQuery(getGetBranchesQueryOptions());
+    }
+    navigate(href);
   };
 
   return (
@@ -109,7 +126,12 @@ export default function Dashboard() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(idx * 0.03, 0.35) }}
-              onClick={() => navigate(item.href)}
+              onClick={() => goTo(item.href)}
+              onPointerEnter={() => {
+                if (item.href === "/branches") {
+                  void queryClient.prefetchQuery(getGetBranchesQueryOptions());
+                }
+              }}
               className="
                 group relative flex flex-col items-center justify-center gap-3
                 min-h-[132px] sm:min-h-[150px] rounded-2xl border px-3 py-4

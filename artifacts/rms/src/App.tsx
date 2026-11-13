@@ -22,7 +22,15 @@ import Login from "@/pages/login";
 import Cashier from "@/pages/cashier";
 import TableOrder from "@/pages/table-order";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // ─── Theme ───────────────────────────────────────────────
 type Theme = "dark" | "light";
