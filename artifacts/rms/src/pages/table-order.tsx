@@ -8,7 +8,7 @@ import {
   ShoppingCart, Search, Plus, Minus, Trash2,
   CheckCircle2, RefreshCw, LogOut, Table2, ChefHat, X,
 } from "lucide-react";
-import type { MenuItem } from "@workspace/api-client-react/src/generated/api.schemas";
+import type { MenuItem } from "@workspace/api-client-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
 

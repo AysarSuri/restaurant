@@ -2,7 +2,7 @@ import React from "react";
 import { useGetInventoryItems } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
 import { Badge } from "@/components/ui-elements";
-import { InventoryItem } from "@workspace/api-client-react/src/generated/api.schemas";
+import { InventoryItem } from "@workspace/api-client-react";
 
 export default function Inventory() {
   const { data: items, isLoading } = useGetInventoryItems();

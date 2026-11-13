@@ -124,7 +124,7 @@ export default function Dashboard() {
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-primary font-display">{formatIQD(order.total)}</p>
-                  <Badge variant={order.status === 'completed' ? 'success' : 'warning'} className="text-[10px] py-0 mt-1">
+                  <Badge variant={order.status === 'paid' ? 'success' : 'warning'} className="text-[10px] py-0 mt-1">
                     {order.status}
                   </Badge>
                 </div>

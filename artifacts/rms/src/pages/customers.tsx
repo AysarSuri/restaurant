@@ -1,7 +1,7 @@
 import React from "react";
 import { useGetCustomers } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
-import { Customer } from "@workspace/api-client-react/src/generated/api.schemas";
+import { Customer } from "@workspace/api-client-react";
 
 export default function Customers() {
   const { data: customers, isLoading } = useGetCustomers();

@@ -83,15 +83,20 @@ router.get("/", async (req, res) => {
   const { status, type, date, limit = "50" } = req.query;
 
   const conditions = [];
+  type OrderStatus = typeof ordersTable.status.enumValues[number];
+  type OrderType = typeof ordersTable.type.enumValues[number];
   if (status) {
-    const statusList = (status as string).split(",").map(s => s.trim()).filter(Boolean);
+    const statusList = (status as string)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) as OrderStatus[];
     if (statusList.length === 1) {
       conditions.push(eq(ordersTable.status, statusList[0]));
     } else if (statusList.length > 1) {
       conditions.push(inArray(ordersTable.status, statusList));
     }
   }
-  if (type) conditions.push(eq(ordersTable.type, type as string));
+  if (type) conditions.push(eq(ordersTable.type, type as OrderType));
   if (date) {
     const d = new Date(date as string);
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -166,7 +171,10 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   const order = await getOrderWithDetails(id);
-  if (!order) return res.status(404).json({ error: "Order not found" });
+  if (!order) {
+    res.status(404).json({ error: "Order not found" });
+    return;
+  }
   res.json(order);
 });
 
@@ -291,7 +299,10 @@ router.post("/:id/pay", async (req, res) => {
   const { paymentMethod, discount } = req.body;
 
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
-  if (!order) return res.status(404).json({ error: "Not found" });
+  if (!order) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const discountAmt = discount !== undefined ? parseFloat(discount) : parseFloat(order.discount ?? "0");
   const subtotal = parseFloat(order.subtotal);

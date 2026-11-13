@@ -15,7 +15,7 @@ import {
   Phone, Mail, Briefcase, CalendarDays, BadgeDollarSign,
   ToggleLeft, ToggleRight, AlertTriangle,
 } from "lucide-react";
-import type { Employee } from "@workspace/api-client-react/src/generated/api.schemas";
+import type { Employee } from "@workspace/api-client-react";
 
 const ROLES: { value: string; label: string; color: string }[] = [
   { value: "admin",   label: "مدير النظام",   color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },

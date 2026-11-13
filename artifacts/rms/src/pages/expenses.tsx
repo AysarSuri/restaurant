@@ -1,7 +1,7 @@
 import React from "react";
 import { useGetExpenses } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
-import { Expense } from "@workspace/api-client-react/src/generated/api.schemas";
+import { Expense } from "@workspace/api-client-react";
 
 export default function Expenses() {
   const { data: expenses, isLoading } = useGetExpenses();

@@ -68,7 +68,7 @@ export interface AuthUser {
   name: string;
   role: UserRole;
   tableId?: number;
-  tableNumber?: number;
+  tableNumber?: string;
 }
 
 interface AuthContextType {

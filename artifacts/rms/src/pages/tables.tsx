@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useGetTables, useUpdateTable } from "@workspace/api-client-react";
 import { Card, Badge, Dialog, Button, Select } from "@/components/ui-elements";
 import { Grid, Users, LayoutDashboard } from "lucide-react";
-import { RestaurantTableStatus } from "@workspace/api-client-react/src/generated/api.schemas";
+import { RestaurantTableStatus } from "@workspace/api-client-react";
 
 export default function Tables() {
   const { data: tables, isLoading, refetch } = useGetTables();

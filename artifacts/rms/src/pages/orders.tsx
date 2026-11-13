@@ -2,7 +2,7 @@ import React from "react";
 import { useGetOrders } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
 import { Badge } from "@/components/ui-elements";
-import { Order } from "@workspace/api-client-react/src/generated/api.schemas";
+import { Order } from "@workspace/api-client-react";
 
 export default function Orders() {
   const { data: orders, isLoading } = useGetOrders();

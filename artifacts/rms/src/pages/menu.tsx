@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useGetMenuItems, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem, useGetMenuCategories } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
 import { Dialog, Input, Button, Select } from "@/components/ui-elements";
-import { MenuItem } from "@workspace/api-client-react/src/generated/api.schemas";
+import { MenuItem } from "@workspace/api-client-react";
 
 export default function Menu() {
   const { data: items, isLoading, refetch } = useGetMenuItems();
@@ -51,7 +51,7 @@ export default function Menu() {
 
   return (
     <>
-      <CrudTable 
+      <CrudTable<MenuItem>
         title="إدارة المنيو" 
         titleEn="Menu Management" 
         data={items} 

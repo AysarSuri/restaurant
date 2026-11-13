@@ -206,15 +206,15 @@ router.get("/top-items", async (req, res) => {
       name: menuItemsTable.name,
       nameAr: menuItemsTable.nameAr,
       imageUrl: menuItemsTable.imageUrl,
-      totalQuantity: sql<number>`coalesce(sum(oi.quantity), 0)`,
-      totalRevenue: sql<number>`coalesce(sum(oi.total_price::numeric), 0)`,
+      totalQuantity: sql<number>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
+      totalRevenue: sql<number>`coalesce(sum(${orderItemsTable.totalPrice}::numeric), 0)`,
     })
-    .from(orderItemsTable.as("oi"))
+    .from(orderItemsTable)
     .leftJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
     .leftJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
     .where(and(gte(ordersTable.createdAt, start), eq(ordersTable.status, "paid")))
     .groupBy(orderItemsTable.menuItemId, menuItemsTable.name, menuItemsTable.nameAr, menuItemsTable.imageUrl)
-    .orderBy(sql`sum(oi.quantity) desc`)
+    .orderBy(sql`sum(${orderItemsTable.quantity}) desc`)
     .limit(parseInt(limit as string));
 
   res.json(rows.map(r => ({

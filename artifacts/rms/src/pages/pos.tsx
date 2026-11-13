@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw
 } from "lucide-react";
-import type { MenuItem } from "@workspace/api-client-react/src/generated/api.schemas";
+import type { MenuItem } from "@workspace/api-client-react";
 
 interface CartItem extends MenuItem {
   cartQuantity: number;
