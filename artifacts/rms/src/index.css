@@ -136,13 +136,25 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary;
     direction: rtl;
     font-family: 'Tajawal', sans-serif;
     font-weight: 700;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    padding:
+      env(safe-area-inset-top, 0)
+      env(safe-area-inset-right, 0)
+      env(safe-area-inset-bottom, 0)
+      env(safe-area-inset-left, 0);
   }
-  
+
   /* Custom Scrollbar for a premium feel */
   ::-webkit-scrollbar {
     width: 6px;
@@ -154,6 +166,45 @@
   ::-webkit-scrollbar-thumb {
     @apply bg-secondary rounded-full hover:bg-muted-foreground transition-colors;
   }
+
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  .h-app {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .min-h-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .page-shell {
+    width: 100%;
+    max-width: 1920px;
+    margin-inline: auto;
+  }
+  .touch-target {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .safe-pb {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* Glassmorphism utilities */
@@ -163,4 +214,35 @@
 
 .text-gradient {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-amber-200;
+}
+
+/*
+  Compact / POS portrait shells:
+  - phones, small tablets
+  - portrait terminals up to ~1080px wide (e.g. Gasan POS)
+*/
+@media (max-width: 1199px), ((orientation: portrait) and (max-width: 1400px)) {
+  .rms-stack-portrait {
+    flex-direction: column !important;
+  }
+  .rms-hide-on-compact {
+    display: none !important;
+  }
+  .rms-show-on-compact {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 1200px) and (orientation: landscape) {
+  .rms-show-on-compact {
+    display: none !important;
+  }
+}
+
+/* Fluid type scale for 320px → 1920px */
+@media (min-width: 320px) {
+  :root {
+    --rms-title: clamp(1.125rem, 0.9rem + 1.2vw, 1.75rem);
+    --rms-body: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  }
 }

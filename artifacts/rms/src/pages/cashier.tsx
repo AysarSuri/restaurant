@@ -68,16 +68,16 @@ export default function Cashier() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="h-app min-h-app bg-background text-foreground flex flex-col overflow-hidden page-shell">
       {/* Header */}
-      <header className="p-4 bg-card/80 backdrop-blur-md border-b border-border/50 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
+      <header className="p-3 sm:p-4 bg-card/80 backdrop-blur-md border-b border-border/50 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
             <ShoppingBag className="w-5 h-5 text-amber-400" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold">شاشة الكاشير</h1>
-            <p className="text-xs text-primary font-display uppercase tracking-widest">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold truncate">شاشة الكاشير</h1>
+            <p className="text-[10px] sm:text-xs text-primary font-display uppercase tracking-widest truncate">
               {user?.name} — Cashier
             </p>
           </div>
@@ -156,11 +156,11 @@ export default function Cashier() {
         );
       })()}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0 rms-stack-portrait">
         {/* ── Pending Orders (main) ── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-border/50 flex items-center justify-between">
-            <h2 className="font-bold text-lg flex items-center gap-2">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
+          <div className="p-3 sm:p-4 border-b border-border/50 flex items-center justify-between">
+            <h2 className="font-bold text-base sm:text-lg flex items-center gap-2 flex-wrap">
               <Clock className="w-5 h-5 text-amber-400" />
               طلبات تنتظر المراجعة
               {pendingOrders && pendingOrders.length > 0 && (
@@ -171,7 +171,7 @@ export default function Cashier() {
             </h2>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 safe-pb">
             {!pendingOrders || pendingOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 py-16">
                 <CheckCircle2 className="w-16 h-16 mb-4 text-green-500/50" />
@@ -179,7 +179,7 @@ export default function Cashier() {
                 <p className="text-sm">جميع الطلبات تمت معالجتها</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
                 <AnimatePresence>
                   {pendingOrders.map((order) => (
                     <motion.div
@@ -249,9 +249,9 @@ export default function Cashier() {
         </div>
 
         {/* ── Today's Paid Orders (sidebar) ── */}
-        <div className="w-72 border-r border-border/50 flex flex-col bg-card/20 hidden lg:flex">
-          <div className="p-4 border-b border-border/50">
-            <h3 className="font-bold flex items-center gap-2">
+        <div className="w-full lg:w-72 xl:w-80 border-t lg:border-t-0 border-r border-border/50 flex flex-col bg-card/20 rms-hide-on-compact max-h-48 lg:max-h-none">
+          <div className="p-3 sm:p-4 border-b border-border/50">
+            <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
               مدفوعة اليوم
               {todayPaidOrders && (

@@ -49,7 +49,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isFullscreen = location === "/pos" || location === "/kds";
 
   if (isFullscreen) {
-    return <div className="min-h-screen bg-background">{children}</div>;
+    return <div className="min-h-app bg-background page-shell">{children}</div>;
   }
 
   const SidebarContent = () => (
@@ -135,10 +135,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-screen bg-background overflow-hidden">
+    <div className="flex min-h-app bg-background overflow-hidden page-shell">
 
       {/* ── DESKTOP Sidebar (always visible ≥ lg) ── */}
-      <aside className="hidden lg:flex w-64 xl:w-72 glass-panel border-r-0 border-l flex-col z-20 sticky top-0 h-screen flex-shrink-0">
+      <aside className="hidden lg:flex w-64 xl:w-72 2xl:w-80 glass-panel border-r-0 border-l flex-col z-20 sticky top-0 h-app flex-shrink-0">
         <SidebarContent />
       </aside>
 
@@ -190,19 +190,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </Dialog>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
+      <main className="flex-1 flex flex-col h-app overflow-hidden relative min-w-0">
 
         {/* Header */}
-        <header className="h-14 md:h-20 glass-panel border-b-0 border-x-0 rounded-none px-4 md:px-8 flex items-center justify-between z-10 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            {/* Hamburger — mobile only */}
+        <header className="h-14 md:h-16 xl:h-20 glass-panel border-b-0 border-x-0 rounded-none px-3 sm:px-4 md:px-6 xl:px-8 flex items-center justify-between z-10 flex-shrink-0 safe-pb">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Hamburger — mobile / compact only */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden w-9 h-9 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors"
+              className="lg:hidden touch-target w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors flex-shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h2 className="text-lg md:text-2xl font-bold text-foreground truncate">
+            <h2 className="text-base sm:text-lg md:text-2xl font-bold text-foreground truncate" style={{ fontSize: "var(--rms-title)" }}>
               {NAV_ITEMS.find(i => i.href === location)?.label || "النظام"}
             </h2>
           </div>
@@ -255,9 +255,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 xl:p-8 relative safe-pb">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10">
+          <div className="relative z-10 w-full max-w-[1920px] mx-auto">
             {children}
           </div>
         </div>

@@ -186,7 +186,7 @@ export default function TableOrder() {
   );
 
   return (
-    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
+    <div className="h-app bg-background text-foreground flex flex-col overflow-hidden page-shell">
 
       {/* ── Header ── */}
       <header className="flex-shrink-0 bg-card/90 backdrop-blur-md border-b border-border/50 flex items-center justify-between px-4 py-3">

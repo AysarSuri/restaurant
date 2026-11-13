@@ -39,26 +39,26 @@ export default function KDS() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col text-foreground p-4">
-      <header className="flex justify-between items-center mb-6 glass-panel p-4 rounded-2xl border border-white/5">
-        <div className="flex items-center gap-4">
+    <div className="min-h-app h-app bg-background flex flex-col text-foreground p-3 sm:p-4 overflow-hidden page-shell">
+      <header className="flex flex-wrap justify-between items-center gap-3 mb-4 sm:mb-6 glass-panel p-3 sm:p-4 rounded-2xl border border-white/5 flex-shrink-0">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <Link href="/">
-            <Button variant="outline" size="icon" className="rounded-full"><ArrowLeft /></Button>
+            <Button variant="outline" size="icon" className="rounded-full touch-target"><ArrowLeft /></Button>
           </Link>
-          <div className="w-12 h-12 bg-primary/20 text-primary rounded-xl flex items-center justify-center">
-            <ChefHat className="w-7 h-7" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/20 text-primary rounded-xl flex items-center justify-center flex-shrink-0">
+            <ChefHat className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-200">شاشة المطبخ (KDS)</h1>
-            <p className="text-muted-foreground font-display text-sm tracking-widest uppercase">Kitchen Display System</p>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-200 truncate">شاشة المطبخ (KDS)</h1>
+            <p className="text-muted-foreground font-display text-xs sm:text-sm tracking-widest uppercase">Kitchen Display System</p>
           </div>
         </div>
-        <div className="text-xl font-display font-bold px-6 py-2 bg-secondary rounded-xl border border-white/5">
+        <div className="text-base sm:text-xl font-display font-bold px-4 sm:px-6 py-2 bg-secondary rounded-xl border border-white/5">
           {new Date().toLocaleTimeString()}
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 auto-rows-max">
+      <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 auto-rows-max content-start safe-pb">
         <AnimatePresence>
           {activeOrders.map(order => (
             <motion.div
@@ -94,7 +94,7 @@ export default function KDS() {
 
               <button 
                 onClick={() => handleNextStatus(order.id, order.status)}
-                className="p-4 font-bold text-lg flex items-center justify-center gap-2 hover:brightness-125 transition-all bg-black/20"
+                className="p-4 font-bold text-base sm:text-lg flex items-center justify-center gap-2 hover:brightness-125 transition-all bg-black/20 touch-target min-h-14"
               >
                 {order.status === 'pending' ? 'بدء التحضير' : order.status === 'preparing' ? 'جاهز للتقديم' : 'تم التقديم'}
                 <CheckCircle2 className="w-6 h-6" />

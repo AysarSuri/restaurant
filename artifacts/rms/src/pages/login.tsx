@@ -250,8 +250,10 @@ export default function Login() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const { data: allEmployees = [] } = useGetEmployees();
-  const { data: allTables = [] } = useGetTables();
+  const employeesQuery = useGetEmployees();
+  const tablesQuery = useGetTables();
+  const allEmployees = Array.isArray(employeesQuery.data) ? employeesQuery.data : [];
+  const allTables = Array.isArray(tablesQuery.data) ? tablesQuery.data : [];
 
   const [selectedRole, setSelectedRole] = useState<RoleType | null>(null);
   const [selection, setSelection] = useState("");
@@ -264,8 +266,9 @@ export default function Login() {
 
   const comboItems: ComboItem[] = isTableRole
     ? allTables.map(t => ({ id: t.id, label: `طاولة ${t.number}`, sublabel: `${t.location ?? ""} — سعة ${t.capacity}`, icon: "🍽️" }))
-    : allEmployees.filter(e => roleConfig && e.role === roleConfig.empRole && e.isActive)
-        .map(e => ({ id: e.id, label: e.name, sublabel: e.phone ?? undefined }));
+    : allEmployees
+        .filter((e) => Boolean(roleConfig && e.role === roleConfig.empRole && e.isActive))
+        .map((e) => ({ id: e.id, label: e.name, sublabel: e.phone ?? undefined }));
 
   const handleRoleSelect = (role: RoleType) => {
     setSelectedRole(role); setSelection(""); setPin(""); setError("");
@@ -288,7 +291,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col overflow-hidden">
+    <div className="min-h-app h-app bg-background text-foreground flex flex-col overflow-hidden page-shell">
       {/* Background glows */}
       <div className="fixed top-0 right-0 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] bg-primary/8 rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-0 left-0 w-[200px] h-[200px] sm:w-[250px] sm:h-[250px] bg-blue-500/5 rounded-full blur-[80px] pointer-events-none" />
