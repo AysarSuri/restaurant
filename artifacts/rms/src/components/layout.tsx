@@ -1,27 +1,34 @@
-import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LayoutDashboard, ShoppingCart, ChefHat, MenuSquare, 
-  Grid, ClipboardList, Package, Users, UsersRound, 
-  Receipt, LineChart, LogOut, Bell, Sun, Moon, Menu, X
+import React, { useState } from "react";
+import { useLocation } from "wouter";
+import { motion } from "framer-motion";
+import {
+  ChefHat,
+  LogOut,
+  Bell,
+  Sun,
+  Moon,
+  Home,
+  ArrowRight,
 } from "lucide-react";
-import { cn, Dialog, Button } from "./ui-elements";
+import { Dialog, Button } from "./ui-elements";
 import { useTheme, useAuth } from "@/App";
 
-const NAV_ITEMS = [
-  { href: "/", label: "لوحة القيادة", labelEn: "Dashboard", icon: LayoutDashboard },
-  { href: "/pos", label: "نقطة البيع", labelEn: "POS", icon: ShoppingCart },
-  { href: "/kds", label: "شاشة المطبخ", labelEn: "KDS", icon: ChefHat },
-  { href: "/orders", label: "الطلبات", labelEn: "Orders", icon: ClipboardList },
-  { href: "/tables", label: "الطاولات", labelEn: "Tables", icon: Grid },
-  { href: "/menu", label: "المنيو", labelEn: "Menu", icon: MenuSquare },
-  { href: "/inventory", label: "المخزون", labelEn: "Inventory", icon: Package },
-  { href: "/customers", label: "العملاء", labelEn: "Customers", icon: Users },
-  { href: "/employees", label: "الموظفين", labelEn: "Employees", icon: UsersRound },
-  { href: "/expenses", label: "المصاريف", labelEn: "Expenses", icon: Receipt },
-  { href: "/reports", label: "التقارير", labelEn: "Reports", icon: LineChart },
-];
+const PAGE_TITLES: Record<string, string> = {
+  "/": "الصفحة الرئيسية",
+  "/pos": "نقطة البيع",
+  "/kds": "شاشة المطبخ",
+  "/orders": "الطلبات",
+  "/tables": "الطاولات",
+  "/menu": "المنيو",
+  "/inventory": "المخزون",
+  "/customers": "العملاء",
+  "/employees": "الموظفين",
+  "/expenses": "المصاريف",
+  "/branches": "الفروع",
+  "/reports": "التقارير",
+  "/cashier": "شاشة الكاشير",
+  "/table-order": "طلب الطاولة",
+};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "مدير النظام",
@@ -36,10 +43,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [logoutOpen, setLogoutOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Close sidebar on route change (mobile)
-  useEffect(() => { setSidebarOpen(false); }, [location]);
 
   const handleLogout = () => {
     logout();
@@ -47,130 +50,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const isFullscreen = location === "/pos" || location === "/kds";
+  const isHome = location === "/";
+  const pageTitle = PAGE_TITLES[location] || "النظام";
 
   if (isFullscreen) {
     return <div className="min-h-app bg-background page-shell">{children}</div>;
   }
 
-  const SidebarContent = () => (
-    <>
-      {/* Logo */}
-      <div className="p-5 flex items-center gap-3 border-b border-border/30">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center shadow-lg shadow-primary/20 flex-shrink-0">
-          <ChefHat className="w-6 h-6 text-primary-foreground" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold text-foreground leading-none mb-0.5 truncate">المطعم الذكي</h1>
-          <p className="text-[10px] text-primary font-medium tracking-widest font-display uppercase">RMS 2026</p>
-        </div>
-        {/* Close button — mobile only */}
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="lg:hidden mr-auto w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-secondary transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-        {NAV_ITEMS.map((item) => {
-          const isActive = location === item.href;
-          return (
-            <Link key={item.href} href={item.href}>
-              <div
-                className={cn(
-                  "flex items-center px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group relative overflow-hidden",
-                  isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeNav"
-                    className="absolute inset-0 bg-primary/10 border-r-4 border-primary rounded-xl"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
-                )}
-                <item.icon
-                  className={cn(
-                    "w-5 h-5 me-3 relative z-10 flex-shrink-0",
-                    isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                  )}
-                />
-                <div className="relative z-10 min-w-0">
-                  <div className="font-semibold text-sm truncate">{item.label}</div>
-                  <div className="text-[10px] opacity-70 font-display tracking-wide uppercase">{item.labelEn}</div>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Footer */}
-      <div className="p-3 border-t border-border/50 space-y-2">
-        {user && (
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/50">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center text-primary-foreground font-bold text-base flex-shrink-0">
-              {user.name.charAt(0)}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{user.name}</p>
-              <p className="text-[11px] text-primary font-display">{ROLE_LABELS[user.role] ?? user.role}</p>
-            </div>
-          </div>
-        )}
-        <button
-          onClick={() => setLogoutOpen(true)}
-          className="w-full flex items-center px-4 py-2.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer transition-colors group"
-        >
-          <LogOut className="w-5 h-5 me-3 group-hover:scale-110 transition-transform flex-shrink-0" />
-          <div className="font-semibold text-sm">تسجيل الخروج</div>
-        </button>
-      </div>
-    </>
-  );
-
   return (
     <div className="flex min-h-app bg-background overflow-hidden page-shell">
-
-      {/* ── DESKTOP Sidebar (always visible ≥ lg) ── */}
-      <aside className="hidden lg:flex w-64 xl:w-72 2xl:w-80 glass-panel border-r-0 border-l flex-col z-20 sticky top-0 h-app flex-shrink-0">
-        <SidebarContent />
-      </aside>
-
-      {/* ── MOBILE Sidebar Overlay ── */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden fixed inset-0 bg-black/60 z-30"
-            />
-            {/* Drawer */}
-            <motion.aside
-              key="drawer"
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="lg:hidden fixed top-0 right-0 h-full w-72 max-w-[85vw] glass-panel border-l border-border/50 flex flex-col z-40 overflow-hidden"
-            >
-              <SidebarContent />
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Logout Dialog */}
       <Dialog isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} title="تسجيل الخروج">
         <div className="text-center py-2 space-y-5">
           <div className="w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mx-auto">
@@ -189,36 +77,57 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </Dialog>
 
-      {/* ── Main Content ── */}
       <main className="flex-1 flex flex-col h-app overflow-hidden relative min-w-0">
-
-        {/* Header */}
-        <header className="h-14 md:h-16 xl:h-20 glass-panel border-b-0 border-x-0 rounded-none px-3 sm:px-4 md:px-6 xl:px-8 flex items-center justify-between z-10 flex-shrink-0 safe-pb">
+        <header className="h-14 md:h-16 xl:h-18 glass-panel border-b-0 border-x-0 rounded-none px-3 sm:px-4 md:px-6 xl:px-8 flex items-center justify-between z-10 flex-shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {/* Hamburger — mobile / compact only */}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden touch-target w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/70 transition-colors flex-shrink-0"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <h2 className="text-base sm:text-lg md:text-2xl font-bold text-foreground truncate" style={{ fontSize: "var(--rms-title)" }}>
-              {NAV_ITEMS.find(i => i.href === location)?.label || "النظام"}
-            </h2>
+            {!isHome ? (
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="inline-flex items-center gap-2 h-10 px-3 sm:px-4 rounded-full border-2 border-primary/40 bg-primary/10 text-primary text-sm font-bold hover:bg-primary/20 transition-colors flex-shrink-0"
+              >
+                <Home className="w-4 h-4" />
+                <span className="hidden sm:inline">الصفحة الرئيسية</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="flex items-center gap-2 sm:gap-3 min-w-0"
+              >
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center shadow-lg shadow-primary/20 flex-shrink-0">
+                  <ChefHat className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+                </div>
+                <div className="min-w-0 text-right">
+                  <h1 className="text-base sm:text-lg font-bold text-foreground leading-none truncate">المطعم الذكي</h1>
+                  <p className="text-[10px] text-primary font-medium tracking-widest font-display uppercase">RMS 2026</p>
+                </div>
+              </button>
+            )}
+
+            {!isHome && (
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-foreground truncate me-2">
+                {pageTitle}
+              </h2>
+            )}
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Date — hidden on small mobile */}
-            <div className="hidden sm:block text-right me-1 md:me-4">
+            <div className="hidden sm:block text-right me-1 md:me-2">
               <div className="text-xs md:text-sm font-semibold text-foreground">
-                {new Date().toLocaleDateString('ar-IQ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {new Date().toLocaleDateString("ar-IQ", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
               </div>
               <div className="text-[10px] md:text-xs text-primary font-display">
-                {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                {user?.name ?? ""} · {ROLE_LABELS[user?.role ?? ""] ?? ""}
               </div>
             </div>
 
-            {/* Theme toggle */}
             <button
               onClick={toggleTheme}
               title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}
@@ -229,37 +138,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 layout
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 className={`absolute top-1 w-7 h-7 rounded-full shadow-md flex items-center justify-center z-10
-                  ${theme === "dark"
-                    ? "bg-gradient-to-br from-slate-700 to-slate-900 right-1"
-                    : "bg-gradient-to-br from-amber-300 to-amber-500 left-1"
+                  ${
+                    theme === "dark"
+                      ? "bg-gradient-to-br from-slate-700 to-slate-900 right-1"
+                      : "bg-gradient-to-br from-amber-300 to-amber-500 left-1"
                   }`}
               >
-                {theme === "dark"
-                  ? <Moon className="w-3.5 h-3.5 text-blue-300" />
-                  : <Sun className="w-3.5 h-3.5 text-white" />
-                }
+                {theme === "dark" ? (
+                  <Moon className="w-3.5 h-3.5 text-blue-300" />
+                ) : (
+                  <Sun className="w-3.5 h-3.5 text-white" />
+                )}
               </motion.span>
-              <Sun  className="w-3.5 h-3.5 text-amber-400 ms-1.5 opacity-60" />
+              <Sun className="w-3.5 h-3.5 text-amber-400 ms-1.5 opacity-60" />
               <Moon className="w-3.5 h-3.5 text-slate-400 me-1.5 ms-auto opacity-60" />
             </button>
 
             <button className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-foreground hover:bg-primary/20 hover:text-primary transition-colors relative">
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full"></span>
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
             </button>
 
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 border-2 border-primary/30 flex items-center justify-center font-bold text-sm text-primary-foreground flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setLogoutOpen(true)}
+              title="تسجيل الخروج"
+              className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 border-2 border-primary/30 flex items-center justify-center font-bold text-sm text-primary-foreground flex-shrink-0 hover:brightness-110 transition-all"
+            >
               {user?.name?.charAt(0) ?? "م"}
-            </div>
+            </button>
           </div>
         </header>
 
-        {/* Page Content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 xl:p-8 relative safe-pb">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 w-full max-w-[1920px] mx-auto">
-            {children}
-          </div>
+          <div className="relative z-10 w-full max-w-[1920px] mx-auto">{children}</div>
         </div>
       </main>
     </div>

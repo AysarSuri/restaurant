@@ -1,143 +1,170 @@
-import React from "react";
+import React, { useState } from "react";
+import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { useGetDashboardStats, useGetOrders } from "@workspace/api-client-react";
-import { Card, Badge } from "@/components/ui-elements";
-import { TrendingUp, Users, ShoppingBag, DollarSign, AlertCircle, Utensils } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  ShoppingCart,
+  ChefHat,
+  ClipboardList,
+  Grid,
+  MenuSquare,
+  Package,
+  Users,
+  UsersRound,
+  Receipt,
+  LineChart,
+  Table2,
+  Wallet,
+  LogOut,
+  Building2,
+  type LucideIcon,
+} from "lucide-react";
+import { useAuth, type UserRole } from "@/App";
+import { Dialog, Button } from "@/components/ui-elements";
 
-const mockChartData = [
-  { name: '08:00', revenue: 40000 },
-  { name: '10:00', revenue: 120000 },
-  { name: '12:00', revenue: 350000 },
-  { name: '14:00', revenue: 600000 },
-  { name: '16:00', revenue: 450000 },
-  { name: '18:00', revenue: 580000 },
-  { name: '20:00', revenue: 950000 },
-  { name: '22:00', revenue: 800000 },
+type HomeItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  roles?: UserRole[];
+};
+
+const HOME_ITEMS: HomeItem[] = [
+  { href: "/pos", label: "نقطة البيع", icon: ShoppingCart, roles: ["admin", "manager", "cashier"] },
+  { href: "/cashier", label: "شاشة الكاشير", icon: Wallet, roles: ["admin", "manager", "cashier"] },
+  { href: "/orders", label: "الطلبات", icon: ClipboardList, roles: ["admin", "manager", "cashier"] },
+  { href: "/tables", label: "الطاولات", icon: Grid, roles: ["admin", "manager"] },
+  { href: "/table-order", label: "طلب الطاولة", icon: Table2, roles: ["admin", "manager", "table"] },
+  { href: "/kds", label: "شاشة المطبخ", icon: ChefHat, roles: ["admin", "manager", "kitchen"] },
+  { href: "/customers", label: "العملاء", icon: Users, roles: ["admin", "manager"] },
+  { href: "/menu", label: "المنيو", icon: MenuSquare, roles: ["admin", "manager"] },
+  { href: "/inventory", label: "المخزون", icon: Package, roles: ["admin", "manager"] },
+  { href: "/employees", label: "الموظفين", icon: UsersRound, roles: ["admin", "manager"] },
+  { href: "/expenses", label: "المصاريف", icon: Receipt, roles: ["admin", "manager"] },
+  { href: "/branches", label: "الفروع", icon: Building2, roles: ["admin", "manager"] },
+  { href: "/reports", label: "التقارير", icon: LineChart, roles: ["admin", "manager"] },
 ];
 
+function canAccess(role: UserRole | undefined, item: HomeItem) {
+  if (!item.roles || item.roles.length === 0) return true;
+  if (!role) return false;
+  return item.roles.includes(role);
+}
+
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
-  const { data: orders, isLoading: ordersLoading } = useGetOrders({ limit: 5 });
+  const [, navigate] = useLocation();
+  const { user, logout } = useAuth();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
-  const formatIQD = (val?: number) => val ? new Intl.NumberFormat('en-IQ').format(val) + " د.ع" : "0 د.ع";
+  const items = HOME_ITEMS.filter((item) => canAccess(user?.role, item));
 
-  if (statsLoading || ordersLoading) {
-    return <div className="flex items-center justify-center h-full"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
-  }
-
-  const defaultStats = stats || {
-    todayRevenue: 1250000, todayOrders: 84, activeOrders: 12, 
-    availableTables: 8, totalTables: 20, lowStockItems: 3,
-    revenueGrowth: 15.4
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
-  const statCards = [
-    { label: "مبيعات اليوم", labelEn: "Today's Revenue", value: formatIQD(defaultStats.todayRevenue), icon: DollarSign, trend: `+${defaultStats.revenueGrowth}%` },
-    { label: "طلبات اليوم", labelEn: "Today's Orders", value: defaultStats.todayOrders.toString(), icon: ShoppingBag, trend: "+5%" },
-    { label: "الطلبات النشطة", labelEn: "Active Orders", value: defaultStats.activeOrders.toString(), icon: Utensils, highlight: true },
-    { label: "تنبيهات المخزون", labelEn: "Low Stock", value: defaultStats.lowStockItems.toString(), icon: AlertCircle, destructive: defaultStats.lowStockItems > 0 },
-  ];
-
   return (
-    <div className="space-y-4 sm:space-y-6 md:space-y-8">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        {statCards.map((stat, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-          >
-            <Card className="p-6 relative overflow-hidden group">
-              <div className="flex justify-between items-start relative z-10">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                  <p className="text-[10px] font-display uppercase tracking-wider text-muted-foreground/70 mb-2">{stat.labelEn}</p>
-                  <h3 className="text-3xl font-bold text-foreground">{stat.value}</h3>
-                  {stat.trend && (
-                    <div className="flex items-center mt-2 text-success text-sm font-medium">
-                      <TrendingUp className="w-4 h-4 me-1" />
-                      {stat.trend} من الأمس
-                    </div>
-                  )}
-                </div>
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${stat.highlight ? 'bg-primary text-primary-foreground' : stat.destructive ? 'bg-destructive/20 text-destructive' : 'bg-secondary text-primary'}`}>
-                  <stat.icon className="w-6 h-6" />
-                </div>
-              </div>
-              <div className={`absolute -right-6 -bottom-6 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-opacity duration-500 group-hover:opacity-40 ${stat.highlight ? 'bg-primary' : stat.destructive ? 'bg-destructive' : 'bg-white'}`} />
-            </Card>
-          </motion.div>
-        ))}
+    <div className="w-full">
+      <Dialog isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} title="تسجيل الخروج">
+        <div className="text-center py-2 space-y-5">
+          <div className="w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mx-auto">
+            <LogOut className="w-8 h-8 text-destructive" />
+          </div>
+          <div>
+            <p className="font-bold text-lg">هل تريد تسجيل الخروج؟</p>
+            <p className="text-muted-foreground text-sm mt-1">سيتم إغلاق جلستك الحالية.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setLogoutOpen(false)}>
+              إلغاء
+            </Button>
+            <Button variant="destructive" className="flex-1 gap-2" onClick={handleLogout}>
+              <LogOut className="w-4 h-4" /> تسجيل الخروج
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <div className="mb-4 sm:mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">الصفحة الرئيسية</h1>
+          <p className="text-sm text-muted-foreground mt-1">اختر القسم للبدء</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setLogoutOpen(true)}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-colors flex-shrink-0"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>تسجيل الخروج</span>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart */}
-        <Card className="lg:col-span-2 p-6">
-          <div className="mb-6">
-            <h3 className="text-lg font-bold">المبيعات (اليوم)</h3>
-            <p className="text-sm text-muted-foreground">Today's Sales Trend</p>
-          </div>
-          <div className="h-52 md:h-80 w-full" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `${val / 1000}k`} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px' }}
-                  itemStyle={{ color: 'hsl(var(--foreground))' }}
-                  formatter={(value: number) => [formatIQD(value), 'Revenue']}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4">
+        {items.map((item, idx) => {
+          const Icon = item.icon;
+          return (
+            <motion.button
+              key={`${item.href}-${item.label}`}
+              type="button"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(idx * 0.03, 0.35) }}
+              onClick={() => navigate(item.href)}
+              className="
+                group relative flex flex-col items-center justify-center gap-3
+                min-h-[132px] sm:min-h-[150px] rounded-2xl border px-3 py-4
+                bg-secondary/60 border-border/60 text-foreground
+                transition-all duration-200 ease-out
+                hover:-translate-y-1 hover:shadow-lg hover:border-primary/40 hover:bg-secondary
+                active:scale-[0.97]
+              "
+            >
+              <span
+                className="
+                  w-14 h-14 sm:w-16 sm:h-16 rounded-2xl
+                  bg-primary text-primary-foreground
+                  flex items-center justify-center shadow-md shadow-primary/25
+                  transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-3
+                "
+              >
+                <Icon className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.25} />
+              </span>
+              <span className="text-[13px] sm:text-[15px] font-extrabold text-center leading-snug line-clamp-2">
+                {item.label}
+              </span>
+            </motion.button>
+          );
+        })}
 
-        {/* Recent Orders */}
-        <Card className="p-6 flex flex-col">
-          <div className="mb-6 flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-bold">أحدث الطلبات</h3>
-              <p className="text-sm text-muted-foreground">Recent Orders</p>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-4">
-            {(orders || []).slice(0, 5).map((order) => (
-              <div key={order.id} className="flex justify-between items-center p-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                    #{order.orderNumber.slice(-4)}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">{order.type === 'dine_in' ? `طاولة ${order.tableId}` : order.type === 'takeaway' ? 'سفري' : 'توصيل'}</p>
-                    <p className="text-xs text-muted-foreground font-display">{new Date(order.createdAt).toLocaleTimeString()}</p>
-                  </div>
-                </div>
-                <div className="text-left">
-                  <p className="font-bold text-primary font-display">{formatIQD(order.total)}</p>
-                  <Badge variant={order.status === 'paid' ? 'success' : 'warning'} className="text-[10px] py-0 mt-1">
-                    {order.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-            {(!orders || orders.length === 0) && (
-              <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 py-10">
-                <ShoppingBag className="w-12 h-12 mb-2" />
-                <p>لا توجد طلبات حديثة</p>
-              </div>
-            )}
-          </div>
-        </Card>
+        <motion.button
+          type="button"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: Math.min(items.length * 0.03, 0.35) }}
+          onClick={() => setLogoutOpen(true)}
+          className="
+            group relative flex flex-col items-center justify-center gap-3
+            min-h-[132px] sm:min-h-[150px] rounded-2xl border px-3 py-4
+            bg-secondary/60 border-border/60 text-foreground
+            transition-all duration-200 ease-out
+            hover:-translate-y-1 hover:shadow-lg hover:border-destructive/40 hover:bg-destructive/5
+            active:scale-[0.97]
+          "
+        >
+          <span
+            className="
+              w-14 h-14 sm:w-16 sm:h-16 rounded-2xl
+              bg-primary text-primary-foreground
+              flex items-center justify-center shadow-md shadow-primary/25
+              transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-3
+            "
+          >
+            <LogOut className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.25} />
+          </span>
+          <span className="text-[13px] sm:text-[15px] font-extrabold text-center leading-snug line-clamp-2">
+            تسجيل الخروج
+          </span>
+        </motion.button>
       </div>
     </div>
   );

@@ -18,10 +18,12 @@ interface CrudTableProps<T> {
   onDelete?: (item: T) => void;
   searchKey?: keyof T;
   isLoading?: boolean;
+  /** Extra header actions (rendered before the main Add button) */
+  headerActions?: React.ReactNode;
 }
 
 export function CrudTable<T extends { id: number }>({
-  title, titleEn, data, columns, onAdd, onEdit, onDelete, searchKey, isLoading
+  title, titleEn, data, columns, onAdd, onEdit, onDelete, searchKey, isLoading, headerActions
 }: CrudTableProps<T>) {
   const [search, setSearch] = useState("");
 
@@ -54,6 +56,7 @@ export function CrudTable<T extends { id: number }>({
               />
             </div>
           )}
+          {headerActions}
           {onAdd && (
             <Button onClick={onAdd} className="rounded-full h-9 text-sm flex-shrink-0">
               <Plus className="w-4 h-4 me-1.5" /> إضافة

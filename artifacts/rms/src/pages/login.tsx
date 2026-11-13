@@ -10,9 +10,9 @@ type ComboItem = { id: number; label: string; sublabel?: string; icon?: string }
 const ROLES = [
   { value: "admin",   label: "مدير النظام", labelEn: "Admin",   icon: "🛡️", empRole: "admin",   color: "from-purple-600 to-purple-700", ring: "ring-purple-500/40 border-purple-400", fade: "border-border hover:border-purple-400/60", redirect: "/" },
   { value: "manager", label: "مدير",         labelEn: "Manager", icon: "👔", empRole: "manager", color: "from-blue-600 to-blue-700",     ring: "ring-blue-500/40 border-blue-400",     fade: "border-border hover:border-blue-400/60",   redirect: "/" },
-  { value: "cashier", label: "كاشير",        labelEn: "Cashier", icon: "💰", empRole: "cashier", color: "from-amber-500 to-amber-700",   ring: "ring-amber-500/40 border-amber-400",   fade: "border-border hover:border-amber-400/60", redirect: "/cashier" },
-  { value: "kitchen", label: "مطبخ",         labelEn: "Kitchen", icon: "👨‍🍳", empRole: "kitchen", color: "from-red-600 to-red-700",       ring: "ring-red-500/40 border-red-400",       fade: "border-border hover:border-red-400/60",   redirect: "/kds" },
-  { value: "table",   label: "طاولة / نادل", labelEn: "Waiter",  icon: "🍽️", empRole: "waiter",  color: "from-green-600 to-green-700",   ring: "ring-green-500/40 border-green-400",   fade: "border-border hover:border-green-400/60", redirect: "/table-order" },
+  { value: "cashier", label: "كاشير",        labelEn: "Cashier", icon: "💰", empRole: "cashier", color: "from-amber-500 to-amber-700",   ring: "ring-amber-500/40 border-amber-400",   fade: "border-border hover:border-amber-400/60", redirect: "/" },
+  { value: "kitchen", label: "مطبخ",         labelEn: "Kitchen", icon: "👨‍🍳", empRole: "kitchen", color: "from-red-600 to-red-700",       ring: "ring-red-500/40 border-red-400",       fade: "border-border hover:border-red-400/60",   redirect: "/" },
+  { value: "table",   label: "طاولة / نادل", labelEn: "Waiter",  icon: "🍽️", empRole: "waiter",  color: "from-green-600 to-green-700",   ring: "ring-green-500/40 border-green-400",   fade: "border-border hover:border-green-400/60", redirect: "/" },
 ] as const;
 
 export type RoleType = (typeof ROLES)[number]["value"];

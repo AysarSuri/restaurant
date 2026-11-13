@@ -27,6 +27,8 @@ tags:
     description: Delivery management
   - name: expenses
     description: Expense management
+  - name: branches
+    description: Branch management
 
 paths:
   /healthz:
@@ -716,6 +718,87 @@ paths:
       operationId: deleteExpense
       tags: [expenses]
       summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ---- BRANCHES ----
+  /branches:
+    get:
+      operationId: getBranches
+      tags: [branches]
+      summary: Get all branches
+      responses:
+        "200":
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Branch"
+    post:
+      operationId: createBranch
+      tags: [branches]
+      summary: Create a branch (max 3)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBranchBody"
+      responses:
+        "201":
+          description: Created branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branch"
+        "400":
+          description: Validation or max branches reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /branches/{id}:
+    put:
+      operationId: updateBranch
+      tags: [branches]
+      summary: Update a branch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBranchBody"
+      responses:
+        "200":
+          description: Updated branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branch"
+    delete:
+      operationId: deleteBranch
+      tags: [branches]
+      summary: Delete a branch
       parameters:
         - name: id
           in: path
@@ -1481,3 +1564,57 @@ components:
         - nameAr
         - totalQuantity
         - totalRevenue
+
+    # BRANCHES
+    Branch:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        mobile1:
+          type: string
+        mobile2:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        logoUrl:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - mobile1
+        - isActive
+
+    CreateBranchBody:
+      type: object
+      properties:
+        name:
+          type: string
+        mobile1:
+          type: string
+        mobile2:
+          type: string
+        address:
+          type: string
+        logoUrl:
+          type: string
+        isActive:
+          type: boolean
+        note:
+          type: string
+      required:
+        - name
+        - mobile1

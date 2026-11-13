@@ -16,6 +16,7 @@ import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Employees from "@/pages/employees";
 import Expenses from "@/pages/expenses";
+import Branches from "@/pages/branches";
 import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import Cashier from "@/pages/cashier";
@@ -118,9 +119,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 const ROLE_DEFAULT_PATH: Record<UserRole, string> = {
   admin: "/",
   manager: "/",
-  cashier: "/cashier",
-  kitchen: "/kds",
-  table: "/table-order",
+  cashier: "/",
+  kitchen: "/",
+  table: "/",
 };
 
 // Pages that bypass Layout (standalone fullscreen)
@@ -128,7 +129,7 @@ const STANDALONE_PATHS = ["/login", "/table-order", "/cashier", "/kds", "/pos"];
 
 // Pages only accessible by certain roles
 const ROLE_ALLOWED: Record<string, UserRole[]> = {
-  "/": ["admin", "manager"],
+  "/": ["admin", "manager", "cashier", "kitchen", "table"],
   "/pos": ["admin", "manager", "cashier"],
   "/kds": ["admin", "manager", "kitchen"],
   "/cashier": ["admin", "manager", "cashier"],
@@ -140,6 +141,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/customers": ["admin", "manager"],
   "/employees": ["admin", "manager"],
   "/expenses": ["admin", "manager"],
+  "/branches": ["admin", "manager"],
   "/reports": ["admin", "manager"],
 };
 
@@ -190,6 +192,7 @@ function Router() {
       <Route path="/customers" component={Customers} />
       <Route path="/employees" component={Employees} />
       <Route path="/expenses" component={Expenses} />
+      <Route path="/branches" component={Branches} />
       <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
