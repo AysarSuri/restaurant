@@ -20,6 +20,7 @@ export interface MenuCategory {
   nameAr: string;
   nameKu?: string;
   icon?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
   createdAt?: string;
 }
@@ -29,6 +30,7 @@ export interface CreateMenuCategoryBody {
   nameAr: string;
   nameKu?: string;
   icon?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
 }
 

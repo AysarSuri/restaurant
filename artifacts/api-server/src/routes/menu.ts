@@ -7,6 +7,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, asc, inArray } from "drizzle-orm";
 import { parseBranchScope } from "../lib/branch-scope";
+import { persistCategoryImageDataUrl } from "../lib/category-image";
 
 const router: IRouter = Router();
 
@@ -58,18 +59,67 @@ router.get("/categories", async (_req, res) => {
 
 // POST /menu/categories
 router.post("/categories", async (req, res) => {
-  const { name, nameAr, nameKu, icon, sortOrder } = req.body;
-  const [cat] = await db.insert(menuCategoriesTable).values({ name, nameAr, nameKu, icon, sortOrder }).returning();
+  const { name, nameAr, nameKu, icon, imageUrl, sortOrder } = req.body;
+  let savedImage: string | null = null;
+  try {
+    savedImage = persistCategoryImageDataUrl(imageUrl);
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message || "تعذر حفظ صورة التصنيف" });
+    return;
+  }
+  const [cat] = await db
+    .insert(menuCategoriesTable)
+    .values({
+      name,
+      nameAr,
+      nameKu,
+      icon,
+      imageUrl: savedImage,
+      sortOrder,
+    })
+    .returning();
   res.status(201).json(cat);
 });
 
 // PUT /menu/categories/:id
 router.put("/categories/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, nameAr, nameKu, icon, sortOrder } = req.body;
+  const { name, nameAr, nameKu, icon, imageUrl, sortOrder } = req.body;
+
+  const [existing] = await db
+    .select()
+    .from(menuCategoriesTable)
+    .where(eq(menuCategoriesTable.id, id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "التصنيف غير موجود" });
+    return;
+  }
+
+  let nextImage = existing.imageUrl;
+  if (imageUrl !== undefined) {
+    try {
+      if (imageUrl === null || imageUrl === "") {
+        nextImage = null;
+      } else {
+        nextImage = persistCategoryImageDataUrl(imageUrl);
+      }
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || "تعذر حفظ صورة التصنيف" });
+      return;
+    }
+  }
+
   const [cat] = await db
     .update(menuCategoriesTable)
-    .set({ name, nameAr, nameKu, icon, sortOrder })
+    .set({
+      name,
+      nameAr,
+      nameKu,
+      icon,
+      imageUrl: nextImage,
+      sortOrder,
+    })
     .where(eq(menuCategoriesTable.id, id))
     .returning();
   res.json(cat);

@@ -3,8 +3,12 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { ensureCategoryUploadsDir, UPLOADS_ROOT } from "./lib/category-image";
 
 const app: Express = express();
+
+ensureCategoryUploadsDir();
+app.use("/uploads", express.static(UPLOADS_ROOT));
 
 app.use(
   pinoHttp({

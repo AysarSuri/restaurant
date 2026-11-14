@@ -610,8 +610,15 @@ export default function POS() {
               key={cat.id}
               variant={activeCategory === cat.id ? "default" : "secondary"}
               onClick={() => setActiveCategory(cat.id)}
-              className="rounded-full px-4 sm:px-6 whitespace-nowrap flex-shrink-0 touch-target"
+              className="rounded-full px-3 sm:px-5 whitespace-nowrap flex-shrink-0 touch-target gap-2"
             >
+              {cat.imageUrl ? (
+                <img
+                  src={cat.imageUrl}
+                  alt=""
+                  className="w-6 h-6 rounded-full object-cover border border-white/20"
+                />
+              ) : null}
               {cat.nameAr}
             </Button>
           ))}
