@@ -105,7 +105,7 @@ export default function POS() {
   }, [tables, selectedBranchId]);
 
   /** null = all, "favorites" = favorites only, number = category id */
-  const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>(null);
+  const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>("favorites");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<OrderType>("dine_in");
