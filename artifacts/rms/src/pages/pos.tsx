@@ -614,9 +614,7 @@ export default function POS() {
                 : "text-amber-700 dark:text-amber-400 border border-amber-500/30"
             }`}
           >
-            <Star
-              className={`w-4 h-4 ${activeCategory === "favorites" ? "fill-current" : ""}`}
-            />
+            <Star className="w-4 h-4 text-black fill-black" />
             مفضلة
           </Button>
           <Button
@@ -688,8 +686,8 @@ export default function POS() {
                       </div>
                     )}
                     {item.isFavorite && (
-                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-amber-500/90 text-white flex items-center justify-center z-10 shadow-md">
-                        <Star className="w-3.5 h-3.5 fill-current" />
+                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-amber-500/90 flex items-center justify-center z-10 shadow-md">
+                        <Star className="w-3.5 h-3.5 text-black fill-black" />
                       </div>
                     )}
                     <div className="w-full aspect-[4/3] sm:aspect-square rounded-xl bg-gradient-to-br from-secondary to-secondary/40 mb-2 sm:mb-3 flex items-center justify-center overflow-hidden">
