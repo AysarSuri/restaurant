@@ -13,7 +13,11 @@ const DEFAULT_SETTINGS = {
   currencySymbol: "د.ع",
   currencyName: "دينار عراقي",
   decimalPlaces: 0,
+  posSaveTarget: "cashier" as const,
+  cashierSendToKitchen: true,
 };
+
+const POS_SAVE_TARGETS = new Set(["cashier", "kitchen"]);
 
 const CURRENCY_PRESETS: Record<
   string,
@@ -36,6 +40,8 @@ async function getOrCreateSettings() {
       currencySymbol: DEFAULT_SETTINGS.currencySymbol,
       currencyName: DEFAULT_SETTINGS.currencyName,
       decimalPlaces: DEFAULT_SETTINGS.decimalPlaces,
+      posSaveTarget: DEFAULT_SETTINGS.posSaveTarget,
+      cashierSendToKitchen: DEFAULT_SETTINGS.cashierSendToKitchen,
     })
     .returning();
   return created;
@@ -53,6 +59,9 @@ function clampDecimals(value: unknown, fallback = 0) {
 }
 
 function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
+  const target = POS_SAVE_TARGETS.has(settings.posSaveTarget)
+    ? settings.posSaveTarget
+    : DEFAULT_SETTINGS.posSaveTarget;
   return {
     restaurantName: settings.restaurantName,
     themePrimary: settings.themePrimary,
@@ -60,6 +69,8 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     currencySymbol: settings.currencySymbol,
     currencyName: settings.currencyName,
     decimalPlaces: settings.decimalPlaces,
+    posSaveTarget: target as "cashier" | "kitchen",
+    cashierSendToKitchen: settings.cashierSendToKitchen !== false,
     updatedAt: settings.updatedAt,
   };
 }
@@ -78,6 +89,8 @@ router.put("/", async (req, res) => {
     currencySymbol,
     currencyName,
     decimalPlaces,
+    posSaveTarget,
+    cashierSendToKitchen,
   } = req.body ?? {};
 
   const nextName =
@@ -141,6 +154,25 @@ router.put("/", async (req, res) => {
     nextDecimals = clampDecimals(decimalPlaces, settings.decimalPlaces);
   }
 
+  let nextPosSaveTarget = settings.posSaveTarget || DEFAULT_SETTINGS.posSaveTarget;
+  if (posSaveTarget != null) {
+    const t = String(posSaveTarget).trim().toLowerCase();
+    if (!POS_SAVE_TARGETS.has(t)) {
+      res.status(400).json({
+        success: false,
+        message: "وجهة الحفظ غير صالحة (cashier أو kitchen)",
+      });
+      return;
+    }
+    nextPosSaveTarget = t;
+  }
+
+  let nextCashierSend =
+    settings.cashierSendToKitchen !== false ? true : false;
+  if (cashierSendToKitchen != null) {
+    nextCashierSend = Boolean(cashierSendToKitchen);
+  }
+
   const [updated] = await db
     .update(appSettingsTable)
     .set({
@@ -150,6 +182,8 @@ router.put("/", async (req, res) => {
       currencySymbol: nextCurrencySymbol,
       currencyName: nextCurrencyName,
       decimalPlaces: nextDecimals,
+      posSaveTarget: nextPosSaveTarget,
+      cashierSendToKitchen: nextCashierSend,
       updatedAt: new Date(),
     })
     .where(eq(appSettingsTable.id, settings.id))

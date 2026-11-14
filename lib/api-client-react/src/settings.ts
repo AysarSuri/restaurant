@@ -17,6 +17,8 @@ import {
 
 type RequestOpts = CustomFetchOptions;
 
+export type PosSaveTarget = "cashier" | "kitchen";
+
 export interface AppSettings {
   restaurantName: string;
   themePrimary: string;
@@ -24,6 +26,10 @@ export interface AppSettings {
   currencySymbol: string;
   currencyName: string;
   decimalPlaces: number;
+  /** POS/table save destination */
+  posSaveTarget: PosSaveTarget;
+  /** Cashier payment confirmation sends order to kitchen */
+  cashierSendToKitchen: boolean;
   updatedAt?: string;
 }
 
@@ -34,6 +40,8 @@ export interface UpdateAppSettingsBody {
   currencySymbol?: string;
   currencyName?: string;
   decimalPlaces?: number;
+  posSaveTarget?: PosSaveTarget;
+  cashierSendToKitchen?: boolean;
 }
 
 export interface DevicePrinter {

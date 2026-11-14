@@ -7,9 +7,18 @@ import {
   restaurantTablesTable,
   customersTable,
   employeesTable,
+  appSettingsTable,
 } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
+
+async function getSalesRoutingSettings() {
+  const [settings] = await db.select().from(appSettingsTable).limit(1);
+  const posSaveTarget =
+    settings?.posSaveTarget === "kitchen" ? "kitchen" : "cashier";
+  const cashierSendToKitchen = settings?.cashierSendToKitchen !== false;
+  return { posSaveTarget, cashierSendToKitchen };
+}
 
 const router: IRouter = Router();
 
@@ -198,6 +207,7 @@ router.post("/", async (req, res) => {
     deliveryAddress,
     deliveryPhone,
     branchId,
+    paymentMethod,
   } = req.body;
 
   const resolvedBranchId = resolveWriteBranchId(scope, branchId);
@@ -221,12 +231,19 @@ router.post("/", async (req, res) => {
   const tax = 0;
   const total = subtotal - discountAmt + tax;
 
+  const { posSaveTarget } = await getSalesRoutingSettings();
+  const initialStatus = posSaveTarget === "kitchen" ? "preparing" : "pending";
+  const validPay =
+    paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer"
+      ? paymentMethod
+      : undefined;
+
   const [order] = await db
     .insert(ordersTable)
     .values({
       orderNumber: generateOrderNumber(),
       type,
-      status: "pending",
+      status: initialStatus,
       branchId: resolvedBranchId,
       tableId: tableId ?? null,
       customerId: customerId ?? null,
@@ -238,6 +255,7 @@ router.post("/", async (req, res) => {
       notes,
       deliveryAddress,
       deliveryPhone,
+      paymentMethod: validPay,
     })
     .returning();
 
@@ -302,14 +320,19 @@ router.put("/:id", async (req, res) => {
 // PATCH /orders/:id/status
 router.patch("/:id/status", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { status } = req.body;
+  const { status, paymentMethod } = req.body;
 
-  await db.update(ordersTable).set({ status, updatedAt: new Date() }).where(eq(ordersTable.id, id));
+  const patch: Record<string, unknown> = { status, updatedAt: new Date() };
+  if (paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer") {
+    patch.paymentMethod = paymentMethod;
+  }
+
+  await db.update(ordersTable).set(patch).where(eq(ordersTable.id, id));
 
   // If served, free table
   if (status === "served" || status === "paid" || status === "cancelled") {
     const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
-    if (order.tableId) {
+    if (order?.tableId) {
       await db.update(restaurantTablesTable).set({ status: "available" }).where(eq(restaurantTablesTable.id, order.tableId));
     }
   }

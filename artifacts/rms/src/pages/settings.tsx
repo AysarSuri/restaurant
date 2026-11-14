@@ -47,12 +47,18 @@ import {
   AlertTriangle,
   RefreshCw,
   Coins,
+  ShoppingBag,
+  Wallet,
+  ChefHat,
+  ArrowLeftRight,
 } from "lucide-react";
+import type { PosSaveTarget } from "@workspace/api-client-react";
 
-type TabId = "restaurant" | "printers" | "themes" | "currency";
+type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
 
 const TABS: { id: TabId; label: string; icon: typeof Store; hint: string }[] = [
   { id: "restaurant", label: "اسم المطعم", icon: Store, hint: "الهوية الأساسية" },
+  { id: "sales", label: "البيع", icon: ShoppingBag, hint: "مسار الطلبات" },
   { id: "printers", label: "الطابعات", icon: Printer, hint: "80×80 لكل جهاز" },
   { id: "currency", label: "العملة", icon: Coins, hint: "د.ع / $ / €" },
   { id: "themes", label: "الثيمات", icon: Palette, hint: "لون المشروع" },
@@ -88,6 +94,8 @@ export default function SettingsPage() {
   const [currencySymbol, setCurrencySymbol] = useState(DEFAULT_CURRENCY.currencySymbol);
   const [currencyName, setCurrencyName] = useState(DEFAULT_CURRENCY.currencyName);
   const [decimalPlaces, setDecimalPlaces] = useState(DEFAULT_CURRENCY.decimalPlaces);
+  const [posSaveTarget, setPosSaveTarget] = useState<PosSaveTarget>("cashier");
+  const [cashierSendToKitchen, setCashierSendToKitchen] = useState(true);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
 
@@ -106,6 +114,8 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol || DEFAULT_CURRENCY.currencySymbol);
     setCurrencyName(settings.currencyName || DEFAULT_CURRENCY.currencyName);
     setDecimalPlaces(clampDecimalPlaces(settings.decimalPlaces, DEFAULT_CURRENCY.decimalPlaces));
+    setPosSaveTarget(settings.posSaveTarget === "kitchen" ? "kitchen" : "cashier");
+    setCashierSendToKitchen(settings.cashierSendToKitchen !== false);
   }, [settings]);
 
   useEffect(() => {
@@ -259,6 +269,28 @@ export default function SettingsPage() {
     );
   };
 
+  const handleSaveSales = () => {
+    setSaveMsg("");
+    setSaveErr("");
+    saveSettings(
+      {
+        data: {
+          posSaveTarget,
+          cashierSendToKitchen,
+        },
+      },
+      {
+        onSuccess: (res) => {
+          syncSettings(res);
+          setPosSaveTarget(res.posSaveTarget === "kitchen" ? "kitchen" : "cashier");
+          setCashierSendToKitchen(res.cashierSendToKitchen !== false);
+          setSaveMsg("تم حفظ إعدادات البيع");
+        },
+        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+      }
+    );
+  };
+
   const handleSaveTheme = (primary: string) => {
     setSaveMsg("");
     setSaveErr("");
@@ -355,12 +387,12 @@ export default function SettingsPage() {
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">الإعدادات</h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            اسم المطعم، طابعات 80×80 لكل جهاز/حاسوب، وثيم لون المشروع.
+            اسم المطعم، مسار البيع، طابعات 80×80 لكل جهاز، العملة، وثيم المشروع.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3">
         {TABS.map((t) => {
           const active = tab === t.id;
           const Icon = t.icon;
@@ -408,6 +440,200 @@ export default function SettingsPage() {
         >
           {saveErr ? <AlertTriangle className="w-4 h-4 mt-0.5" /> : <Check className="w-4 h-4 mt-0.5" />}
           <span>{saveErr || saveMsg}</span>
+        </div>
+      )}
+
+      {tab === "sales" && (
+        <div className="space-y-5 max-w-3xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-5">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                <ShoppingBag className="w-5 h-5" />
+              </span>
+              <div>
+                <h3 className="font-extrabold text-lg">عند الحفظ من نقطة البيع</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  اختر أين يذهب الطلب مباشرة بعد الضغط على الحفظ في شاشة البيع أو طلب الطاولة.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPosSaveTarget("cashier")}
+                className={`text-start rounded-2xl border-2 p-4 transition-all ${
+                  posSaveTarget === "cashier"
+                    ? "border-amber-500/70 bg-amber-500/10 shadow-lg shadow-amber-500/10"
+                    : "border-border/70 bg-card/50 hover:border-amber-500/35"
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <span
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      posSaveTarget === "cashier"
+                        ? "bg-amber-500 text-white"
+                        : "bg-secondary text-foreground"
+                    }`}
+                  >
+                    <Wallet className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-extrabold">إلى شاشة الكاشير</p>
+                    <p className="text-[11px] text-muted-foreground">الحالة: بانتظار الدفع</p>
+                  </div>
+                  {posSaveTarget === "cashier" && (
+                    <Check className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  يظهر الطلب في شاشة الكاشير أولاً لاستلام الدفع، ثم يمكن إرساله للمطبخ حسب الخيار أدناه.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPosSaveTarget("kitchen")}
+                className={`text-start rounded-2xl border-2 p-4 transition-all ${
+                  posSaveTarget === "kitchen"
+                    ? "border-orange-500/70 bg-orange-500/10 shadow-lg shadow-orange-500/10"
+                    : "border-border/70 bg-card/50 hover:border-orange-500/35"
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <span
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      posSaveTarget === "kitchen"
+                        ? "bg-orange-500 text-white"
+                        : "bg-secondary text-foreground"
+                    }`}
+                  >
+                    <ChefHat className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-extrabold">إلى شاشة المطبخ</p>
+                    <p className="text-[11px] text-muted-foreground">الحالة: قيد التحضير</p>
+                  </div>
+                  {posSaveTarget === "kitchen" && (
+                    <Check className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  يتخطى الطلب شاشة الكاشير ويظهر مباشرة في شاشة المطبخ للتحضير فوراً.
+                </p>
+              </button>
+            </div>
+          </Card>
+
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-5">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center flex-shrink-0">
+                <Wallet className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">عند الحفظ من شاشة الكاشير</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  بعد تأكيد الدفع في الكاشير: هل يُرسل الطلب إلى شاشة المطبخ؟
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCashierSendToKitchen((v) => !v)}
+              className={`w-full text-start rounded-2xl border-2 p-4 transition-all ${
+                cashierSendToKitchen
+                  ? "border-primary/60 bg-primary/10"
+                  : "border-border/70 bg-card/50 hover:border-primary/30"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    cashierSendToKitchen
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-foreground"
+                  }`}
+                >
+                  <ChefHat className="w-5 h-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-extrabold">إرسال للمطبخ عند حفظ الكاشير</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {cashierSendToKitchen
+                      ? "مفعّل — الطلب ينتقل للمطبخ بعد الدفع"
+                      : "معطّل — الطلب يُحفظ كمدفوع دون المطبخ"}
+                  </p>
+                </div>
+                <span
+                  className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors ${
+                    cashierSendToKitchen ? "bg-primary" : "bg-secondary"
+                  }`}
+                  aria-hidden
+                >
+                  <span
+                    className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                      cashierSendToKitchen ? "start-1" : "end-1"
+                    }`}
+                  />
+                </span>
+              </div>
+            </button>
+          </Card>
+
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
+            <div className="flex items-center gap-2">
+              <ArrowLeftRight className="w-4 h-4 text-primary" />
+              <h3 className="font-extrabold">معاينة المسار الحالي</h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/40 px-3 py-1.5 font-bold">
+                <ShoppingBag className="w-3.5 h-3.5" />
+                نقطة البيع
+              </span>
+              <span className="text-muted-foreground">←</span>
+              {posSaveTarget === "cashier" ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-bold text-amber-600 dark:text-amber-400">
+                    <Wallet className="w-3.5 h-3.5" />
+                    الكاشير
+                  </span>
+                  {cashierSendToKitchen && (
+                    <>
+                      <span className="text-muted-foreground">←</span>
+                      <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
+                        <ChefHat className="w-3.5 h-3.5" />
+                        المطبخ
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
+                  <ChefHat className="w-3.5 h-3.5" />
+                  المطبخ
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {posSaveTarget === "kitchen"
+                ? "الطلبات من نقطة البيع تذهب مباشرة لشاشة المطبخ."
+                : cashierSendToKitchen
+                  ? "الطلبات تمر بالكاشير أولاً، ثم تُرسل للمطبخ بعد تأكيد الدفع."
+                  : "الطلبات تظهر في الكاشير فقط، ولن تُرسل للمطبخ عند الحفظ."}
+            </p>
+          </Card>
+
+          <div className="flex justify-end">
+            <Button
+              className="gap-2 min-w-[10rem]"
+              isLoading={savingSettings}
+              onClick={handleSaveSales}
+            >
+              <Save className="w-4 h-4" />
+              حفظ إعدادات البيع
+            </Button>
+          </div>
         </div>
       )}
 

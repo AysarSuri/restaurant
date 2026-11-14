@@ -4,6 +4,7 @@ import {
   useGetMenuItems,
   useGetMenuCategories,
   useCreateOrder,
+  useGetSettings,
   useGetTables,
   lookupDeliveryPhone,
   upsertDeliveryContact,
@@ -12,13 +13,14 @@ import { Button, Card, Input, Badge, Dialog } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
-  Clock, CheckCircle2, XCircle,
+  Clock, CheckCircle2, XCircle, Percent,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useCurrency } from "@/hooks/use-currency";
 import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { NumericKeypad } from "@/components/numeric-keypad";
 
 const INVOICE_SEQ_KEY = "rms-invoice-seq";
 
@@ -81,7 +83,9 @@ export default function POS() {
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
   const { data: tables } = useGetTables();
+  const { data: appSettings } = useGetSettings();
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
+  const posSaveTarget = appSettings?.posSaveTarget === "kitchen" ? "kitchen" : "cashier";
 
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -96,13 +100,19 @@ export default function POS() {
   const [discount, setDiscount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
+  const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
   const [now, setNow] = useState(() => new Date());
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const { selectedBranchId, branchLabel } = useBranch();
-  const { format: formatMoneyAmount, formatValue, symbol: currencySymbol } = useCurrency();
+  const {
+    format: formatMoneyAmount,
+    formatValue,
+    symbol: currencySymbol,
+    decimalPlaces,
+  } = useCurrency();
   const isPortraitPos = !isCompactPos && isPortrait;
   const isWidePos = !isCompactPos && !isPortrait && width >= 1400;
   const needsBranchPick = selectedBranchId === "all";
@@ -407,21 +417,21 @@ export default function POS() {
                   <button
                     type="button"
                     onClick={() => updateQuantity(item.id, -1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-secondary transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-secondary transition-colors"
                     aria-label="إنقاص"
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-4.5 h-4.5" />
                   </button>
-                  <span className="min-w-[1.75rem] text-center font-display font-extrabold text-sm tabular-nums">
+                  <span className="min-w-[1.85rem] text-center font-display font-extrabold text-base tabular-nums">
                     {item.cartQuantity}
                   </span>
                   <button
                     type="button"
                     onClick={() => updateQuantity(item.id, 1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-primary/15 transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-primary hover:bg-primary/15 transition-colors"
                     aria-label="زيادة"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4.5 h-4.5" />
                   </button>
                 </div>
 
@@ -432,10 +442,10 @@ export default function POS() {
                 <button
                   type="button"
                   onClick={() => updateQuantity(item.id, -item.cartQuantity)}
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-destructive/25 text-destructive hover:bg-destructive/15 transition-colors"
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-destructive/25 text-destructive hover:bg-destructive/15 transition-colors"
                   aria-label="حذف"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4.5 h-4.5" />
                 </button>
               </motion.div>
             ))}
@@ -450,19 +460,23 @@ export default function POS() {
 
         {/* Summary & Checkout */}
         <div className="p-5 bg-card border-t border-border/50 space-y-4">
-          {/* Discount */}
-          <div className="flex items-center gap-2">
+          {/* Discount — opens numeric keypad */}
+          <button
+            type="button"
+            onClick={() => setIsDiscountPadOpen(true)}
+            className="w-full flex items-center gap-2.5 rounded-xl border border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-3 py-2 transition-colors text-start"
+          >
+            <span className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+              <Percent className="w-4 h-4" />
+            </span>
             <span className="text-sm text-muted-foreground whitespace-nowrap">خصم ({currencySymbol})</span>
-            <Input
-              type="number"
-              min={0}
-              value={discount || ""}
-              onChange={(e) => setDiscount(Number(e.target.value))}
-              placeholder="0"
-              className="text-sm h-8"
+            <span
+              className="ms-auto font-display text-sm font-extrabold tabular-nums text-foreground"
               dir="ltr"
-            />
-          </div>
+            >
+              {discount > 0 ? formatMoneyAmount(discount) : "0"}
+            </span>
+          </button>
 
           <div className="space-y-1 text-sm">
             <div className="flex justify-between text-muted-foreground">
@@ -733,7 +747,11 @@ export default function POS() {
         {orderSuccess ? (
           <div className="text-center py-4 space-y-4">
             <div className="text-6xl">🎉</div>
-            <p className="text-lg font-bold">تم إرسال الطلب للمطبخ!</p>
+            <p className="text-lg font-bold">
+              {posSaveTarget === "kitchen"
+                ? "تم إرسال الطلب لشاشة المطبخ!"
+                : "تم إرسال الطلب لشاشة الكاشير!"}
+            </p>
             <p className="text-sm text-muted-foreground font-display" dir="ltr">
               {invoiceNumber}
             </p>
@@ -793,6 +811,28 @@ export default function POS() {
             </div>
           </>
         )}
+      </Dialog>
+
+      <Dialog
+        isOpen={isDiscountPadOpen}
+        onClose={() => setIsDiscountPadOpen(false)}
+        title="خصم الفاتورة"
+        maxWidth="max-w-sm"
+        layer="overlay"
+      >
+        <NumericKeypad
+          value={discount}
+          suffix={currencySymbol}
+          allowDecimal={decimalPlaces > 0}
+          maxDecimalPlaces={decimalPlaces}
+          maxValue={subtotal > 0 ? subtotal : undefined}
+          label="أدخل مبلغ الخصم"
+          onCancel={() => setIsDiscountPadOpen(false)}
+          onConfirm={(v) => {
+            setDiscount(Math.max(0, Math.min(v, subtotal || v)));
+            setIsDiscountPadOpen(false);
+          }}
+        />
       </Dialog>
     </div>
   );

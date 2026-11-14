@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useGetOrders, useUpdateOrderStatus } from "@workspace/api-client-react";
+import {
+  useGetOrders,
+  useUpdateOrderStatus,
+  useGetSettings,
+} from "@workspace/api-client-react";
 import { Button, Badge, Dialog } from "@/components/ui-elements";
 import {
   Clock, CheckCircle2, CreditCard, Banknote,
@@ -29,6 +33,8 @@ export default function Cashier() {
   } as any);
 
   const { mutate: updateStatus, isPending: isUpdating } = useUpdateOrderStatus();
+  const { data: appSettings } = useGetSettings();
+  const cashierSendToKitchen = appSettings?.cashierSendToKitchen !== false;
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [paymentDialog, setPaymentDialog] = useState<any | null>(null);
@@ -40,9 +46,15 @@ export default function Cashier() {
     return () => clearInterval(t);
   }, []);
 
-  const sendToKitchen = (order: any, paymentMethod: "cash" | "card" | "transfer") => {
+  const confirmCashierSave = (order: any, paymentMethod: "cash" | "card" | "transfer") => {
     updateStatus(
-      { id: order.id, data: { status: "preparing", paymentMethod } as any },
+      {
+        id: order.id,
+        data: {
+          status: cashierSendToKitchen ? "preparing" : "paid",
+          paymentMethod,
+        } as any,
+      },
       {
         onSuccess: () => {
           setPaymentDialog(null);
@@ -321,8 +333,12 @@ export default function Cashier() {
             </div>
 
             <Button className="w-full h-12 gap-2" onClick={() => setPaymentDialog(selectedOrder)}>
-              <ChefHat className="w-5 h-5" />
-              إرسال للمطبخ
+              {cashierSendToKitchen ? (
+                <ChefHat className="w-5 h-5" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5" />
+              )}
+              {cashierSendToKitchen ? "تأكيد الدفع وإرسال للمطبخ" : "تأكيد الدفع والحفظ"}
             </Button>
           </div>
         )}
@@ -356,7 +372,7 @@ export default function Cashier() {
                   variant="outline"
                   className="h-24 flex flex-col gap-2"
                   isLoading={isUpdating}
-                  onClick={() => sendToKitchen(paymentDialog, method)}
+                  onClick={() => confirmCashierSave(paymentDialog, method)}
                 >
                   <Icon className={`w-8 h-8 ${color}`} />
                   <span>{label}</span>
@@ -365,7 +381,9 @@ export default function Cashier() {
             </div>
 
             <p className="text-xs text-center text-muted-foreground">
-              سيتم إرسال الطلب للمطبخ فور تأكيد الدفع
+              {cashierSendToKitchen
+                ? "سيتم إرسال الطلب لشاشة المطبخ فور تأكيد الدفع"
+                : "سيتم حفظ الطلب كمدفوع دون إرساله لشاشة المطبخ"}
             </p>
           </div>
         )}
