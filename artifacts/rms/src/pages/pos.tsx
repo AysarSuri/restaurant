@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   useGetMenuItems,
@@ -6,6 +6,7 @@ import {
   useCreateOrder,
   useGetSettings,
   useGetTables,
+  getGetTablesQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
 } from "@workspace/api-client-react";
@@ -13,7 +14,7 @@ import { Button, Card, Input, Badge, Dialog } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
-  Clock, CheckCircle2, XCircle, Percent,
+  Clock, CheckCircle2, XCircle, Percent, Users, Armchair,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
@@ -21,6 +22,9 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { NumericKeypad } from "@/components/numeric-keypad";
+import { MultilingualKeyboard } from "@/components/multilingual-keyboard";
+import { DiningTableIcon } from "@/components/dining-table-icon";
+import { TABLE_STATUS_META } from "@/lib/table-status";
 
 const INVOICE_SEQ_KEY = "rms-invoice-seq";
 
@@ -80,12 +84,25 @@ interface CartItem extends MenuItem {
 type OrderType = "dine_in" | "takeaway" | "delivery";
 
 export default function POS() {
+  const { selectedBranchId, branchLabel } = useBranch();
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
-  const { data: tables } = useGetTables();
+  const { data: tables } = useGetTables({
+    query: {
+      queryKey: [...getGetTablesQueryKey(), selectedBranchId],
+    },
+  });
   const { data: appSettings } = useGetSettings();
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const posSaveTarget = appSettings?.posSaveTarget === "kitchen" ? "kitchen" : "cashier";
+
+  const branchTables = useMemo(() => {
+    const list = tables ?? [];
+    if (selectedBranchId === "all") return [];
+    return list.filter(
+      (t) => t.branchId == null || t.branchId === selectedBranchId
+    );
+  }, [tables, selectedBranchId]);
 
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -101,12 +118,13 @@ export default function POS() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
   const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
+  const [isPhonePadOpen, setIsPhonePadOpen] = useState(false);
+  const [isAddressPadOpen, setIsAddressPadOpen] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
   const [now, setNow] = useState(() => new Date());
   const { isCompactPos, isPortrait, width } = useBreakpoint();
-  const { selectedBranchId, branchLabel } = useBranch();
   const {
     format: formatMoneyAmount,
     formatValue,
@@ -138,8 +156,13 @@ export default function POS() {
         item.nameAr.includes(search))
   );
 
-  const availableTables = tables?.filter((t) => t.status === "available");
-  const selectedTable = tables?.find((t) => t.id === selectedTableId);
+  const selectedTable = branchTables.find((t) => t.id === selectedTableId);
+
+  useEffect(() => {
+    if (selectedTableId != null && !branchTables.some((t) => t.id === selectedTableId)) {
+      setSelectedTableId(null);
+    }
+  }, [branchTables, selectedTableId]);
 
   const addToCart = (item: MenuItem) => {
     if (needsBranchPick) return;
@@ -244,20 +267,6 @@ export default function POS() {
     delivery: "توصيل",
   };
 
-  const statusColor = (status: string) => {
-    if (status === "available") return "bg-green-500/20 text-green-400 border-green-500/30";
-    if (status === "occupied") return "bg-red-500/20 text-red-400 border-red-500/30";
-    if (status === "reserved") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-    return "bg-muted text-muted-foreground border-border";
-  };
-
-  const statusLabel = (status: string) => {
-    if (status === "available") return "متاحة";
-    if (status === "occupied") return "مشغولة";
-    if (status === "reserved") return "محجوزة";
-    return "تنظيف";
-  };
-
   const cartPanel = (compact: boolean) => (
       <div
         className={`pos-order-pane ${
@@ -345,49 +354,69 @@ export default function POS() {
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-2"
               >
-                <div className="relative">
-                  <Phone
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                <button
+                  type="button"
+                  onClick={() => setIsPhonePadOpen(true)}
+                  className={`w-full flex items-center gap-2.5 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-3 py-2.5 transition-colors text-start ${
+                    phoneKnown === true
+                      ? "border-success/60"
+                      : phoneKnown === false
+                        ? "border-destructive/60"
+                        : "border-border/60 hover:border-primary/40"
+                  }`}
+                >
+                  <span
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       phoneKnown === true
-                        ? "text-success"
+                        ? "bg-success/15 text-success"
                         : phoneKnown === false
-                          ? "text-destructive"
-                          : "text-muted-foreground"
+                          ? "bg-destructive/15 text-destructive"
+                          : "bg-primary/15 text-primary"
                     }`}
-                  />
-                  <Input
-                    placeholder="رقم الهاتف"
-                    value={deliveryPhone}
-                    onChange={(e) => setDeliveryPhone(e.target.value)}
-                    className={`pr-10 pl-10 text-sm border-2 ${
-                      phoneKnown === true
-                        ? "border-success/60 focus-visible:border-success"
-                        : phoneKnown === false
-                          ? "border-destructive/60 focus-visible:border-destructive"
-                          : ""
-                    }`}
-                    dir="ltr"
-                  />
+                  >
+                    <Phone className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold text-muted-foreground">رقم الهاتف</p>
+                    <p
+                      className={`text-sm font-extrabold tabular-nums truncate ${
+                        deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
+                      }`}
+                      dir="ltr"
+                    >
+                      {deliveryPhone || "اضغط للإدخال"}
+                    </p>
+                  </div>
                   {phoneKnown === true ? (
-                    <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-success" />
+                    <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
                   ) : phoneKnown === false ? (
-                    <XCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-destructive" />
+                    <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                   ) : null}
-                </div>
+                </button>
                 {phoneKnown === true ? (
                   <p className="text-[11px] text-success font-semibold">رقم محفوظ — تم تعبئة العنوان تلقائياً</p>
                 ) : phoneKnown === false ? (
                   <p className="text-[11px] text-destructive font-semibold">رقم جديد — سيُحفظ مع الطلب</p>
                 ) : null}
-                <div className="relative">
-                  <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="عنوان التوصيل"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    className="pr-10 text-sm"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddressPadOpen(true)}
+                  className="w-full flex items-center gap-2.5 rounded-xl border-2 border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-3 py-2.5 transition-colors text-start"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold text-muted-foreground">عنوان التوصيل</p>
+                    <p
+                      className={`text-sm font-extrabold truncate ${
+                        deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
+                      }`}
+                    >
+                      {deliveryAddress || "اضغط للكتابة (عربي / English / کوردی)"}
+                    </p>
+                  </div>
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
@@ -694,42 +723,108 @@ export default function POS() {
         )}
       </AnimatePresence>
 
-      {/* ── Table Picker Dialog ── */}
+      {/* ── Table Picker Dialog (same design as Tables page) ── */}
       <Dialog
         isOpen={isTablePickerOpen}
         onClose={() => setIsTablePickerOpen(false)}
-        title="اختر الطاولة"
+        title="اختر رقم الطاولة"
+        maxWidth="max-w-5xl"
       >
-        <div className="mb-4 text-sm text-muted-foreground">
-          الطاولات المتاحة — انقر لاختيار الطاولة
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[50vh] overflow-y-auto">
-          {tables?.map((table) => (
-            <button
-              key={table.id}
-              disabled={table.status !== "available"}
-              onClick={() => {
-                setSelectedTableId(table.id);
-                setIsTablePickerOpen(false);
-              }}
-              className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl border-2 transition-all font-semibold touch-target
-                ${
-                  selectedTableId === table.id
-                    ? "border-primary bg-primary/10 text-primary"
-                    : table.status === "available"
-                    ? "border-border hover:border-primary/60 hover:bg-primary/5 cursor-pointer"
-                    : "border-border/30 opacity-40 cursor-not-allowed"
-                }
-              `}
-            >
-              <Table2 className="w-6 h-6 mb-1" />
-              <span className="text-base sm:text-lg">طاولة {table.number}</span>
-              <span className="text-xs mt-1 text-muted-foreground">{table.location}</span>
-              <span className={`text-[10px] mt-1 px-2 py-0.5 rounded-full border ${statusColor(table.status)}`}>
-                {statusLabel(table.status)}
-              </span>
-            </button>
-          ))}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-amber-500/5 to-transparent px-4 py-3 flex items-center gap-3">
+            <DiningTableIcon className="w-14 h-auto flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="font-extrabold text-sm sm:text-base">قاعة الطاولات</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {needsBranchPick
+                  ? "اختر فرعاً أولاً لعرض طاولات ذلك الفرع فقط"
+                  : `طاولات ${branchLabel} — اختر طاولة متاحة للطلب`}
+              </p>
+            </div>
+          </div>
+
+          {needsBranchPick ? (
+            <div className="rounded-3xl border border-dashed border-amber-500/40 bg-amber-500/10 py-14 text-center text-amber-700 dark:text-amber-300">
+              <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
+              <p className="font-bold">اختر فرعاً من أعلى الشاشة أولاً</p>
+              <p className="text-xs mt-1 opacity-80">حتى لا تظهر طاولات الفروع الأخرى مكررة</p>
+            </div>
+          ) : branchTables.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
+              <Armchair className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="font-bold">لا توجد طاولات لهذا الفرع</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain pe-1">
+              {branchTables.map((table, idx) => {
+                const meta = TABLE_STATUS_META[table.status] ?? TABLE_STATUS_META.available;
+                const isAvailable = table.status === "available";
+                const isSelected = selectedTableId === table.id;
+                return (
+                  <motion.button
+                    key={table.id}
+                    type="button"
+                    disabled={!isAvailable}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(idx * 0.03, 0.35) }}
+                    whileHover={isAvailable ? { y: -4 } : undefined}
+                    whileTap={isAvailable ? { scale: 0.97 } : undefined}
+                    onClick={() => {
+                      if (!isAvailable) return;
+                      setSelectedTableId(table.id);
+                      setIsTablePickerOpen(false);
+                    }}
+                    className={`
+                      group relative aspect-[4/5] rounded-[1.75rem] border-2 backdrop-blur-xl
+                      overflow-hidden text-center shadow-lg shadow-black/5
+                      ${meta.card} ${isSelected ? "ring-4 ring-primary/50 border-primary" : meta.ring}
+                      transition-shadow duration-300
+                      ${isAvailable ? "hover:shadow-xl cursor-pointer" : "opacity-45 cursor-not-allowed grayscale-[0.35]"}
+                    `}
+                  >
+                    <div className={`absolute inset-0 bg-gradient-to-br ${meta.glow}`} />
+
+                    <div className="relative z-10 h-full flex flex-col items-center justify-between p-3 sm:p-4">
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold ${meta.chip}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        {meta.label}
+                      </div>
+
+                      <div className="relative w-full max-w-[8.5rem] sm:max-w-[10rem] mx-auto group-hover:scale-105 transition-transform duration-300">
+                        <DiningTableIcon
+                          number={table.number}
+                          className="w-full h-auto drop-shadow-md"
+                        />
+                      </div>
+
+                      <div className="w-full space-y-1.5">
+                        <div className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold text-foreground">
+                          <Users className="w-3.5 h-3.5 text-primary" />
+                          <span className="font-display">{table.capacity}</span>
+                          <span className="text-muted-foreground font-medium">مقاعد</span>
+                        </div>
+                        {table.location && (
+                          <div className="flex items-center justify-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground">
+                            <MapPin className="w-3 h-3 text-primary/80" />
+                            <span className="truncate max-w-[8rem]">{table.location}</span>
+                          </div>
+                        )}
+                        {isSelected && (
+                          <div className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-extrabold">
+                            <CheckCircle2 className="w-3 h-3" />
+                            محددةارة
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </Dialog>
 
@@ -826,6 +921,47 @@ export default function POS() {
           onConfirm={(v) => {
             setDiscount(Math.max(0, Math.min(v, subtotal || v)));
             setIsDiscountPadOpen(false);
+          }}
+        />
+      </Dialog>
+
+      <Dialog
+        isOpen={isPhonePadOpen}
+        onClose={() => setIsPhonePadOpen(false)}
+        title="رقم هاتف التوصيل"
+        maxWidth="max-w-sm"
+        layer="overlay"
+      >
+        <NumericKeypad
+          mode="digits"
+          value={deliveryPhone}
+          label="أدخل رقم الهاتف"
+          allowPlus
+          maxLength={15}
+          onCancel={() => setIsPhonePadOpen(false)}
+          onConfirm={(v) => {
+            setDeliveryPhone(v);
+            setIsPhonePadOpen(false);
+          }}
+        />
+      </Dialog>
+
+      <Dialog
+        isOpen={isAddressPadOpen}
+        onClose={() => setIsAddressPadOpen(false)}
+        title="عنوان التوصيل"
+        maxWidth="max-w-3xl"
+        layer="overlay"
+      >
+        <MultilingualKeyboard
+          value={deliveryAddress}
+          label="اكتب عنوان التوصيل"
+          placeholder="مثال: شارع… / Street… / شەقام…"
+          defaultLang="ar"
+          onCancel={() => setIsAddressPadOpen(false)}
+          onConfirm={(v) => {
+            setDeliveryAddress(v);
+            setIsAddressPadOpen(false);
           }}
         />
       </Dialog>
