@@ -156,13 +156,9 @@ export default function POS() {
   const updateQuantity = (id: number, delta: number) => {
     setCart((prev) =>
       prev
-        .map((i) => {
-          if (i.id === id) {
-            const newQ = i.cartQuantity + delta;
-            return newQ > 0 ? { ...i, cartQuantity: newQ } : i;
-          }
-          return i;
-        })
+        .map((i) =>
+          i.id === id ? { ...i, cartQuantity: i.cartQuantity + delta } : i
+        )
         .filter((i) => i.cartQuantity > 0)
     );
   };
@@ -460,39 +456,38 @@ export default function POS() {
 
         {/* Summary & Checkout */}
         <div className="p-5 bg-card border-t border-border/50 space-y-4">
-          {/* Discount — opens numeric keypad */}
-          <button
-            type="button"
-            onClick={() => setIsDiscountPadOpen(true)}
-            className="w-full flex items-center gap-2.5 rounded-xl border border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-3 py-2 transition-colors text-start"
-          >
-            <span className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
-              <Percent className="w-4 h-4" />
-            </span>
-            <span className="text-sm text-muted-foreground whitespace-nowrap">خصم ({currencySymbol})</span>
-            <span
-              className="ms-auto font-display text-sm font-extrabold tabular-nums text-foreground"
-              dir="ltr"
+          {/* Discount + subtotal on one line */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsDiscountPadOpen(true)}
+              className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
             >
-              {discount > 0 ? formatMoneyAmount(discount) : "0"}
-            </span>
-          </button>
+              <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                <Percent className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">خصم</span>
+              <span
+                className={`ms-auto font-display text-xs sm:text-sm font-extrabold tabular-nums truncate ${
+                  discount > 0 ? "text-green-500" : "text-foreground"
+                }`}
+                dir="ltr"
+              >
+                {discount > 0 ? `- ${formatMoneyAmount(discount)}` : "0"}
+              </span>
+            </button>
 
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between text-muted-foreground">
-              <span>المجموع</span>
-              <span className="font-display">{formatMoneyAmount(subtotal)}</span>
+            <div className="min-w-0 flex-1 flex items-center justify-between gap-2 rounded-xl border border-border/50 bg-secondary/40 px-2.5 py-2">
+              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">المجموع</span>
+              <span className="font-display text-xs sm:text-sm font-extrabold tabular-nums truncate" dir="ltr">
+                {formatMoneyAmount(subtotal)}
+              </span>
             </div>
-            {discount > 0 && (
-              <div className="flex justify-between text-green-500">
-                <span>الخصم</span>
-                <span className="font-display">- {formatMoneyAmount(discount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-bold text-xl text-foreground pt-2 border-t border-border/50">
-              <span>الإجمالي</span>
-              <span className="text-primary font-display">{formatMoneyAmount(total)}</span>
-            </div>
+          </div>
+
+          <div className="flex justify-between font-bold text-xl text-foreground pt-1 border-t border-border/50">
+            <span>الإجمالي</span>
+            <span className="text-primary font-display">{formatMoneyAmount(total)}</span>
           </div>
 
           <Button
