@@ -1,15 +1,66 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGetMenuItems, useGetMenuCategories, useCreateOrder, useGetTables } from "@workspace/api-client-react";
 import { Button, Card, Input, Badge, Dialog } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
-  Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X
+  Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
+  Clock,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
+
+const INVOICE_SEQ_KEY = "rms-invoice-seq";
+
+function readInvoiceSeq(): number {
+  try {
+    const n = Number(localStorage.getItem(INVOICE_SEQ_KEY) || "1");
+    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function writeInvoiceSeq(n: number) {
+  try {
+    localStorage.setItem(INVOICE_SEQ_KEY, String(n));
+  } catch {
+    /* ignore */
+  }
+}
+
+function formatInvoice(n: number) {
+  return `INV-${n}`;
+}
+
+/** Current invoice without bumping (first list = INV-1). */
+function currentInvoiceNumber() {
+  return formatInvoice(readInvoiceSeq());
+}
+
+/** Next list after completing an order. */
+function nextInvoiceNumber() {
+  const next = readInvoiceSeq() + 1;
+  writeInvoiceSeq(next);
+  return formatInvoice(next);
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function formatClock(date: Date) {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+
+function formatDateAr(date: Date) {
+  const day = pad2(date.getDate());
+  const month = pad2(date.getMonth() + 1);
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
 
 interface CartItem extends MenuItem {
   cartQuantity: number;
@@ -36,14 +87,28 @@ export default function POS() {
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
+  const [now, setNow] = useState(() => new Date());
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const { selectedBranchId, branchLabel } = useBranch();
   const isPortraitPos = !isCompactPos && isPortrait;
   const isWidePos = !isCompactPos && !isPortrait && width >= 1400;
   const needsBranchPick = selectedBranchId === "all";
 
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const startNewOrderSession = () => {
+    setInvoiceNumber(nextInvoiceNumber());
+  };
+
   const formatIQD = (val: number) =>
     new Intl.NumberFormat("en-IQ").format(Math.round(val));
+
+  const liveClock = formatClock(now);
+  const liveDate = formatDateAr(now);
 
   const filteredItems = items?.filter(
     (item) =>
@@ -95,6 +160,7 @@ export default function POS() {
     setDiscount(0);
     setIsCheckoutOpen(false);
     setOrderSuccess(false);
+    startNewOrderSession();
   };
 
   const handleCheckout = (paymentMethod: "cash" | "card" | "transfer") => {
@@ -151,19 +217,28 @@ export default function POS() {
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-primary via-amber-400 to-transparent" />
         <div className={`border-b border-border/50 space-y-3 sm:space-y-4 ${isPortraitPos && !compact ? "p-5 xl:p-6" : "p-4 sm:p-5"}`}>
           <div className="flex items-center justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-display tracking-[0.2em] uppercase text-primary mb-0.5">
                 {isPortraitPos && !compact ? "Order Screen" : "Current Order"}
               </p>
-              <h2 className={`font-extrabold flex items-center ${isPortraitPos && !compact ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl"}`}>
-                <ShoppingCart className={`me-2 text-primary ${isPortraitPos && !compact ? "w-6 h-6" : "w-5 h-5"}`} />
-                {isPortraitPos && !compact ? "شاشة الطلب" : "الطلب الحالي"}
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className={`font-extrabold flex items-center min-w-0 ${isPortraitPos && !compact ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl"}`}>
+                  <ShoppingCart className={`me-2 text-primary flex-shrink-0 ${isPortraitPos && !compact ? "w-6 h-6" : "w-5 h-5"}`} />
+                  <span className="truncate">{isPortraitPos && !compact ? "شاشة الطلب" : "الطلب الحالي"}</span>
+                </h2>
+                <span
+                  className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-extrabold text-primary font-display tabular-nums"
+                  dir="ltr"
+                  title="رقم القائمة"
+                >
+                  {invoiceNumber}
+                </span>
+              </div>
             </div>
             {compact && (
               <button
                 onClick={() => setCartOpen(false)}
-                className="touch-target w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-secondary"
+                className="touch-target w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -255,49 +330,56 @@ export default function POS() {
           </AnimatePresence>
         </div>
 
-        {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Cart Items — single-row professional lines */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
           <AnimatePresence>
             {cart.map((item) => (
               <motion.div
                 key={item.id}
                 layout
-                initial={{ opacity: 0, x: 20 }}
+                initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="bg-secondary/50 border border-border/30 rounded-xl p-3 flex flex-col gap-3"
+                exit={{ opacity: 0, x: -16 }}
+                className="group flex items-center gap-2 sm:gap-2.5 rounded-2xl border border-border/50 bg-gradient-to-l from-secondary/70 via-card/80 to-card/90 px-2.5 py-2 shadow-[0_6px_18px_-14px_rgba(0,0,0,0.45)] hover:border-primary/35 transition-colors"
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-sm">{item.nameAr}</p>
-                    <p className="text-xs text-muted-foreground font-display">
-                      {formatIQD(item.price * item.cartQuantity)} د.ع
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => updateQuantity(item.id, -item.cartQuantity)}
-                    className="text-destructive hover:bg-destructive/20 p-1 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-extrabold leading-tight">{item.nameAr}</p>
                 </div>
-                <div className="flex items-center justify-between bg-background/50 rounded-lg p-1">
+
+                <span className="flex-shrink-0 font-display text-xs sm:text-sm font-bold text-primary tabular-nums whitespace-nowrap" dir="ltr">
+                  {formatIQD(item.price * item.cartQuantity)} د.ع
+                </span>
+
+                <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-background/70 p-0.5">
                   <button
+                    type="button"
                     onClick={() => updateQuantity(item.id, -1)}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-secondary rounded-md"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-foreground hover:bg-secondary transition-colors"
+                    aria-label="إنقاص"
                   >
-                    <Minus className="w-4 h-4" />
+                    <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span className="font-bold font-display w-8 text-center">
+                  <span className="min-w-[1.75rem] text-center font-display font-extrabold text-sm tabular-nums">
                     {item.cartQuantity}
                   </span>
                   <button
+                    type="button"
                     onClick={() => updateQuantity(item.id, 1)}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-secondary rounded-md text-primary"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-primary hover:bg-primary/15 transition-colors"
+                    aria-label="زيادة"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(item.id, -item.cartQuantity)}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-destructive/25 text-destructive hover:bg-destructive/15 transition-colors"
+                  aria-label="حذف"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </motion.div>
             ))}
           </AnimatePresence>
@@ -402,6 +484,12 @@ export default function POS() {
               </p>
             </div>
             <BranchSwitcher compact />
+            <div className="hidden md:flex flex-col items-end leading-tight ms-1 flex-shrink-0 rounded-xl border border-border/60 bg-secondary/50 px-3 py-1.5">
+              <span className="text-[10px] text-muted-foreground">{liveDate}</span>
+              <span className="font-display font-extrabold text-sm text-primary tabular-nums" dir="ltr">
+                {liveClock}
+              </span>
+            </div>
           </div>
           <div className={`relative w-full ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"}`}>
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -589,6 +677,9 @@ export default function POS() {
           <div className="text-center py-4 space-y-4">
             <div className="text-6xl">🎉</div>
             <p className="text-lg font-bold">تم إرسال الطلب للمطبخ!</p>
+            <p className="text-sm text-muted-foreground font-display" dir="ltr">
+              {invoiceNumber}
+            </p>
             {selectedTable && (
               <p className="text-muted-foreground">طاولة رقم {selectedTable.number}</p>
             )}
