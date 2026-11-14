@@ -44,6 +44,10 @@ export interface MenuItem {
   cost?: number;
   imageUrl?: string;
   isAvailable: boolean;
+  /** true = available in all branches */
+  allBranches?: boolean;
+  /** specific branch ids when allBranches is false */
+  branchIds?: number[];
   preparationTime?: number;
   calories?: number;
   sortOrder?: number;
@@ -62,6 +66,8 @@ export interface CreateMenuItemBody {
   cost?: number;
   imageUrl?: string;
   isAvailable?: boolean;
+  allBranches?: boolean;
+  branchIds?: number[];
   preparationTime?: number;
   calories?: number;
   sortOrder?: number;
@@ -83,6 +89,7 @@ export interface RestaurantTable {
   capacity: number;
   status: RestaurantTableStatus;
   location?: string;
+  branchId?: number | null;
   createdAt?: string;
 }
 
@@ -181,6 +188,7 @@ export interface Customer {
   totalOrders?: number;
   totalSpent?: number;
   notes?: string;
+  branchId?: number | null;
   createdAt?: string;
 }
 
@@ -189,6 +197,7 @@ export interface Order {
   orderNumber: string;
   type: OrderType;
   status: OrderStatus;
+  branchId?: number | null;
   tableId?: number;
   table?: RestaurantTable;
   customerId?: number;
@@ -284,6 +293,7 @@ export interface InventoryItem {
   costPerUnit?: number;
   category?: string;
   supplier?: string;
+  branchId?: number | null;
   lastRestockedAt?: string;
   createdAt?: string;
 }
@@ -331,6 +341,10 @@ export interface Employee {
   email?: string;
   salary?: number;
   isActive: boolean;
+  /** admin/manager always true — belongs to all branches */
+  allBranches?: boolean;
+  /** specific branches when allBranches is false */
+  branchIds?: number[];
   hireDate?: string;
   createdAt?: string;
 }
@@ -355,6 +369,8 @@ export interface CreateEmployeeBody {
   salary?: number;
   isActive?: boolean;
   hireDate?: string;
+  allBranches?: boolean;
+  branchIds?: number[];
 }
 
 export interface Expense {
@@ -365,6 +381,7 @@ export interface Expense {
   category: string;
   date: string;
   employeeId?: number;
+  branchId?: number | null;
   createdAt?: string;
 }
 

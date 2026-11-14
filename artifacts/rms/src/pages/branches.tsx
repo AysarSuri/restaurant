@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBranches,
@@ -22,9 +22,52 @@ import {
   ToggleRight,
   AlertTriangle,
   Store,
+  Upload,
+  X,
+  Ban,
 } from "lucide-react";
 
 const MAX_BRANCHES = 3;
+const MAX_LOGO_BYTES = 2.5 * 1024 * 1024; // 2.5MB before compress
+
+/** Compress / resize logo and return a data URL for storage */
+function fileToStoredLogo(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("الملف يجب أن يكون صورة"));
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      reject(new Error("حجم الصورة كبير جداً (الحد 2.5 ميجا)"));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("تعذر قراءة الصورة"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("صورة غير صالحة"));
+      img.onload = () => {
+        const maxSide = 512;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("تعذر معالجة الصورة"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const EMPTY_FORM = {
   name: "",
@@ -63,6 +106,25 @@ export default function Branches() {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [submitError, setSubmitError] = useState("");
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoDeleteOpen, setLogoDeleteOpen] = useState(false);
+  const [limitOpen, setLimitOpen] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoPick = async (file?: File | null) => {
+    if (!file) return;
+    setLogoBusy(true);
+    setSubmitError("");
+    try {
+      const dataUrl = await fileToStoredLogo(file);
+      setForm((prev) => ({ ...prev, logoUrl: dataUrl }));
+    } catch (err: any) {
+      setSubmitError(err?.message || "تعذر رفع الصورة");
+    } finally {
+      setLogoBusy(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
 
   const count = branches?.length ?? 0;
   const canAdd = count < MAX_BRANCHES;
@@ -73,13 +135,14 @@ export default function Branches() {
 
   const openAdd = () => {
     if (!canAdd) {
-      setSubmitError(`الحد الأقصى ${MAX_BRANCHES} فروع فقط`);
+      setLimitOpen(true);
       return;
     }
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setErrors({});
     setSubmitError("");
+    setLogoDeleteOpen(false);
     setFormOpen(true);
   };
 
@@ -96,12 +159,22 @@ export default function Branches() {
     });
     setErrors({});
     setSubmitError("");
+    setLogoDeleteOpen(false);
     setFormOpen(true);
   };
 
   const validate = () => {
     const e: Partial<Record<keyof FormData, string>> = {};
-    if (!form.name.trim()) e.name = "اسم الفرع مطلوب";
+    const name = form.name.trim();
+    if (!name) e.name = "اسم الفرع مطلوب";
+    else {
+      const duplicate = (branches ?? []).some(
+        (b) =>
+          b.name.trim().toLowerCase() === name.toLowerCase() &&
+          b.id !== editTarget?.id
+      );
+      if (duplicate) e.name = "اسم الفرع مستخدم مسبقاً";
+    }
     if (!form.mobile1.trim()) e.mobile1 = "موبايل 1 مطلوب";
     return e;
   };
@@ -227,19 +300,12 @@ export default function Branches() {
         </div>
         <Button
           onClick={openAdd}
-          disabled={!canAdd}
           className="rounded-full h-10 gap-1.5 text-sm flex-shrink-0 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           إضافة فرع
         </Button>
       </div>
-
-      {!canAdd && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-          تم الوصول للحد الأقصى ({MAX_BRANCHES} فروع). احذف فرعاً أو عدّل الموجود لإدارة البيانات.
-        </div>
-      )}
 
       {/* Cards grid */}
       {showLoader ? (
@@ -349,45 +415,55 @@ export default function Branches() {
         </div>
       )}
 
-      {/* Add / Edit dialog */}
+      {/* Add / Edit dialog — wider + compact vertically */}
       <Dialog
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         title={editTarget ? `تعديل فرع — ${editTarget.name}` : "إضافة فرع جديد"}
-        maxWidth="max-w-xl"
+        maxWidth="max-w-3xl"
       >
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-amber-500/5 to-transparent p-4 flex items-start gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-amber-500 text-primary-foreground flex items-center justify-center shadow-md shadow-primary/30 flex-shrink-0">
-              <Building2 className="w-5 h-5" />
+        <div className="space-y-3">
+          <div className="rounded-xl border border-primary/20 bg-gradient-to-r from-primary/10 to-amber-500/5 px-3 py-2 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-amber-500 text-primary-foreground flex items-center justify-center shadow-sm shadow-primary/25 flex-shrink-0">
+              <Building2 className="w-4 h-4" />
             </div>
-            <div className="min-w-0 pt-0.5">
-              <p className="font-bold text-foreground">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-bold text-foreground">
                 {editTarget ? "تحديث بيانات الفرع" : "فرع جديد"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                الحد الأقصى {MAX_BRANCHES} فروع · المتبقي {Math.max(0, MAX_BRANCHES - count)}
-              </p>
-            </div>
+              </span>
+              {" · "}الحد {MAX_BRANCHES} · المتبقي {Math.max(0, MAX_BRANCHES - count)}
+            </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              اسم الفرع <span className="text-destructive">*</span>
-            </label>
-            <Input
-              placeholder="مثال: فرع المنصور"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              className={errors.name ? "border-destructive" : ""}
-            />
-            {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold mb-1.5">
-                <Phone className="w-4 h-4 inline me-1 text-primary" />
+              <label className="block text-xs font-semibold mb-1">
+                اسم الفرع <span className="text-destructive">*</span>
+              </label>
+              <Input
+                placeholder="مثال: فرع المنصور"
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                className={`h-10 ${errors.name ? "border-destructive" : ""}`}
+              />
+              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                <MapPin className="w-3.5 h-3.5 inline me-1 text-primary" />
+                العنوان
+              </label>
+              <Input
+                placeholder="المدينة / الشارع / أقرب نقطة"
+                value={form.address}
+                onChange={(e) => set("address", e.target.value)}
+                className="h-10"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                <Phone className="w-3.5 h-3.5 inline me-1 text-primary" />
                 موبايل 1 <span className="text-destructive">*</span>
               </label>
               <Input
@@ -395,15 +471,15 @@ export default function Branches() {
                 value={form.mobile1}
                 onChange={(e) => set("mobile1", e.target.value)}
                 dir="ltr"
-                className={errors.mobile1 ? "border-destructive" : ""}
+                className={`h-10 ${errors.mobile1 ? "border-destructive" : ""}`}
               />
               {errors.mobile1 && (
                 <p className="text-xs text-destructive mt-1">{errors.mobile1}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-1.5">
-                <Phone className="w-4 h-4 inline me-1 text-primary" />
+              <label className="block text-xs font-semibold mb-1">
+                <Phone className="w-3.5 h-3.5 inline me-1 text-primary" />
                 موبايل 2
               </label>
               <Input
@@ -411,67 +487,86 @@ export default function Branches() {
                 value={form.mobile2}
                 onChange={(e) => set("mobile2", e.target.value)}
                 dir="ltr"
+                className="h-10"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold mb-1">
+                <ImageIcon className="w-3.5 h-3.5 inline me-1 text-primary" />
+                رسم / لوجو الفرع
+              </label>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => handleLogoPick(e.target.files?.[0])}
+              />
+              <div className="flex items-center gap-3 rounded-xl border-2 border-dashed border-border/70 bg-secondary/30 p-2.5">
+                <div className="w-14 h-14 rounded-xl border border-border/50 bg-background overflow-hidden flex items-center justify-center flex-shrink-0">
+                  {form.logoUrl ? (
+                    <img
+                      src={form.logoUrl}
+                      alt="معاينة اللوجو"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="w-6 h-6 text-muted-foreground/60" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    {form.logoUrl ? "تم اختيار الصورة" : "اختر صورة من الجهاز"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    PNG أو JPG · تُخزَّن مع الفرع تلقائياً
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {form.logoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive"
+                      onClick={() => setLogoDeleteOpen(true)}
+                      aria-label="حذف الصورة"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1.5"
+                    isLoading={logoBusy}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {form.logoUrl ? "تغيير" : "رفع"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                <StickyNote className="w-3.5 h-3.5 inline me-1 text-primary" />
+                ملاحظة
+              </label>
+              <textarea
+                value={form.note}
+                onChange={(e) => set("note", e.target.value)}
+                rows={2}
+                placeholder="ملاحظات إدارية..."
+                className="flex w-full min-h-[2.5rem] rounded-xl border-2 border-border bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 transition-all duration-200 resize-none"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <MapPin className="w-4 h-4 inline me-1 text-primary" />
-              العنوان
-            </label>
-            <Input
-              placeholder="المدينة / الشارع / أقرب نقطة"
-              value={form.address}
-              onChange={(e) => set("address", e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <ImageIcon className="w-4 h-4 inline me-1 text-primary" />
-              عنوان اللوجو (رابط الصورة)
-            </label>
-            <Input
-              placeholder="https://..."
-              value={form.logoUrl}
-              onChange={(e) => set("logoUrl", e.target.value)}
-              dir="ltr"
-            />
-            {form.logoUrl.trim() && (
-              <div className="mt-2 flex items-center gap-3 rounded-xl border border-border/50 bg-secondary/30 p-2">
-                <img
-                  src={form.logoUrl}
-                  alt="معاينة اللوجو"
-                  className="w-12 h-12 rounded-lg object-cover bg-background"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "";
-                    (e.currentTarget as HTMLImageElement).alt = "رابط غير صالح";
-                  }}
-                />
-                <p className="text-xs text-muted-foreground truncate" dir="ltr">
-                  {form.logoUrl}
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <StickyNote className="w-4 h-4 inline me-1 text-primary" />
-              ملاحظة
-            </label>
-            <textarea
-              value={form.note}
-              onChange={(e) => set("note", e.target.value)}
-              rows={3}
-              placeholder="ملاحظات إدارية عن الفرع..."
-              className="flex w-full rounded-xl border-2 border-border bg-background/50 px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 transition-all duration-200 resize-none"
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl border border-border/50">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/50 bg-secondary/40 px-3 py-2.5">
+            <div className="min-w-0">
               <p className="font-semibold text-sm flex items-center gap-1.5">
                 {form.isActive ? (
                   <ToggleRight className="w-4 h-4 text-emerald-500" />
@@ -480,39 +575,131 @@ export default function Branches() {
                 )}
                 تنشيط الفرع
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-[11px] text-muted-foreground">
                 {form.isActive ? "الفرع نشط ويعمل حالياً" : "الفرع موقوف مؤقتاً"}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => set("isActive", !form.isActive)}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
-                form.isActive ? "bg-emerald-500" : "bg-destructive/60"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  form.isActive ? "translate-x-1" : "translate-x-8"
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => set("isActive", !form.isActive)}
+                className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
+                  form.isActive ? "bg-emerald-500" : "bg-destructive/60"
                 }`}
-              />
-            </button>
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    form.isActive ? "translate-x-1" : "translate-x-8"
+                  }`}
+                />
+              </button>
+              <Button variant="outline" size="sm" className="h-9" onClick={() => setFormOpen(false)}>
+                إلغاء
+              </Button>
+              <Button
+                size="sm"
+                className="h-9"
+                onClick={handleSubmit}
+                isLoading={isCreating || isUpdating}
+              >
+                {editTarget ? "حفظ" : "إضافة الفرع"}
+              </Button>
+            </div>
           </div>
 
           {submitError && (
             <p className="text-sm font-semibold text-destructive">{submitError}</p>
           )}
+        </div>
+      </Dialog>
 
-          <div className="flex gap-3 pt-1">
-            <Button variant="outline" className="flex-1" onClick={() => setFormOpen(false)}>
-              إلغاء
+      {/* Max branches limit message */}
+      <Dialog
+        isOpen={limitOpen}
+        onClose={() => setLimitOpen(false)}
+        title="حد الفروع"
+        maxWidth="max-w-md"
+      >
+        <div className="text-center space-y-5 py-1">
+          <div className="relative mx-auto w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-amber-500/25 blur-xl" />
+            <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
+              <Ban className="w-9 h-9" />
+            </div>
+          </div>
+          <div>
+            <p className="font-extrabold text-xl text-foreground">لا يمكن إضافة فرع جديد</p>
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+              تم الوصول للحد الأقصى{" "}
+              <span className="font-bold text-foreground">{MAX_BRANCHES} فروع</span>.
+              <br />
+              لا يُقبل تخزين أكثر من ذلك. احذف فرعاً موجوداً إن أردت إضافة فرع جديد.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-center justify-center gap-3">
+            <Store className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+            <span className="text-sm font-bold text-amber-800 dark:text-amber-200 font-display">
+              {count} / {MAX_BRANCHES} فروع مسجّلة
+            </span>
+          </div>
+          <Button
+            className="w-full h-11 rounded-xl font-bold"
+            onClick={() => setLimitOpen(false)}
+          >
+            حسناً
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Confirm remove logo */}
+      <Dialog
+        isOpen={logoDeleteOpen}
+        onClose={() => setLogoDeleteOpen(false)}
+        title="حذف الرسم"
+        maxWidth="max-w-sm"
+        layer="overlay"
+      >
+        <div className="text-center space-y-5 py-1">
+          <div className="relative mx-auto w-24 h-24">
+            <div className="absolute inset-0 rounded-3xl bg-destructive/15 blur-xl" />
+            <div className="relative w-24 h-24 rounded-3xl border border-border/60 bg-secondary/40 overflow-hidden shadow-lg">
+              {form.logoUrl ? (
+                <img src={form.logoUrl} alt="اللوجو" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-destructive text-white flex items-center justify-center shadow-md">
+                <Trash2 className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="font-extrabold text-lg text-foreground">هل تريد حذف الرسم؟</p>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+              سيتم إزالة لوجو الفرع من النموذج. يمكنك رفع صورة جديدة لاحقاً.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Button
+              variant="outline"
+              className="h-11 rounded-xl font-bold"
+              onClick={() => setLogoDeleteOpen(false)}
+            >
+              لا
             </Button>
             <Button
-              className="flex-1"
-              onClick={handleSubmit}
-              isLoading={isCreating || isUpdating}
+              variant="destructive"
+              className="h-11 rounded-xl font-bold gap-1.5"
+              onClick={() => {
+                set("logoUrl", "");
+                setLogoDeleteOpen(false);
+              }}
             >
-              {editTarget ? "حفظ التعديلات" : "إضافة الفرع"}
+              <Trash2 className="w-4 h-4" />
+              نعم
             </Button>
           </div>
         </div>

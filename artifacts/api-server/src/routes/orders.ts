@@ -9,6 +9,7 @@ import {
   employeesTable,
 } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 
 const router: IRouter = Router();
 
@@ -28,6 +29,7 @@ async function getOrderWithDetails(orderId: number) {
       orderNumber: ordersTable.orderNumber,
       type: ordersTable.type,
       status: ordersTable.status,
+      branchId: ordersTable.branchId,
       tableId: ordersTable.tableId,
       customerId: ordersTable.customerId,
       employeeId: ordersTable.employeeId,
@@ -81,10 +83,13 @@ async function getOrderWithDetails(orderId: number) {
 // GET /orders
 router.get("/", async (req, res) => {
   const { status, type, date, limit = "50" } = req.query;
+  const scope = parseBranchScope(req);
 
   const conditions = [];
   type OrderStatus = typeof ordersTable.status.enumValues[number];
   type OrderType = typeof ordersTable.type.enumValues[number];
+  const branchCond = branchEq(ordersTable.branchId, scope);
+  if (branchCond) conditions.push(branchCond);
   if (status) {
     const statusList = (status as string)
       .split(",")
@@ -111,6 +116,7 @@ router.get("/", async (req, res) => {
       orderNumber: ordersTable.orderNumber,
       type: ordersTable.type,
       status: ordersTable.status,
+      branchId: ordersTable.branchId,
       tableId: ordersTable.tableId,
       customerId: ordersTable.customerId,
       employeeId: ordersTable.employeeId,
@@ -180,7 +186,25 @@ router.get("/:id", async (req, res) => {
 
 // POST /orders
 router.post("/", async (req, res) => {
-  const { type, tableId, customerId, employeeId, items, discount, notes, deliveryAddress, deliveryPhone } = req.body;
+  const scope = parseBranchScope(req);
+  const {
+    type,
+    tableId,
+    customerId,
+    employeeId,
+    items,
+    discount,
+    notes,
+    deliveryAddress,
+    deliveryPhone,
+    branchId,
+  } = req.body;
+
+  const resolvedBranchId = resolveWriteBranchId(scope, branchId);
+  if (!resolvedBranchId) {
+    res.status(400).json({ error: "اختر فرعاً قبل إنشاء طلب" });
+    return;
+  }
 
   let subtotal = 0;
   const itemsWithPrice: { menuItemId: number; quantity: number; unitPrice: number; notes?: string }[] = [];
@@ -203,6 +227,7 @@ router.post("/", async (req, res) => {
       orderNumber: generateOrderNumber(),
       type,
       status: "pending",
+      branchId: resolvedBranchId,
       tableId: tableId ?? null,
       customerId: customerId ?? null,
       employeeId: employeeId ?? null,

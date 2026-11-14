@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon, Delete } from "lucide-react";
-import { useGetEmployees, useGetTables } from "@workspace/api-client-react";
+import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon, Delete, Building2 } from "lucide-react";
+import { useGetEmployees, useGetTables, useGetBranches } from "@workspace/api-client-react";
 import { useAuth, useTheme } from "@/App";
 import { useLocation } from "wouter";
+
+type BranchPick = number | "all";
 
 type ComboItem = { id: number; label: string; sublabel?: string; icon?: string };
 
@@ -113,7 +115,17 @@ function Combobox({ items, value, onChange, disabled, placeholder, isTable }: {
 }
 
 /* ─── Mobile QWERTY Keyboard ─────────────────────────────── */
-function MobileKeyboard({ value, onChange, onEnter }: { value: string; onChange: (v: string) => void; onEnter: () => void; }) {
+function MobileKeyboard({
+  value,
+  onChange,
+  onEnter,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onEnter: () => void;
+  disabled?: boolean;
+}) {
   const [shifted, setShifted] = useState(false);
 
   const rows = [
@@ -124,22 +136,24 @@ function MobileKeyboard({ value, onChange, onEnter }: { value: string; onChange:
   ];
 
   const press = (k: string) => {
+    if (disabled) return;
     onChange(value + (shifted ? k.toUpperCase() : k));
     if (shifted) setShifted(false);
   };
 
   const Key = ({ k, wide = false }: { k: string; wide?: boolean }) => (
     <motion.button
-      type="button" whileTap={{ scale: 0.85 }}
+      type="button" whileTap={disabled ? undefined : { scale: 0.85 }}
+      disabled={disabled}
       onClick={() => press(k)}
-      className={`flex-1 ${wide ? "flex-[1.5]" : ""} h-11 rounded-lg bg-card border border-border text-foreground font-bold text-base flex items-center justify-center transition-colors hover:bg-muted active:bg-primary/20`}
+      className={`flex-1 ${wide ? "flex-[1.5]" : ""} h-11 rounded-lg bg-card border border-border text-foreground font-bold text-base flex items-center justify-center transition-colors hover:bg-muted active:bg-primary/20 disabled:opacity-40 disabled:pointer-events-none`}
     >
       {shifted ? k.toUpperCase() : k}
     </motion.button>
   );
 
   return (
-    <div className="flex flex-col gap-1.5 select-none" dir="ltr">
+    <div className={`flex flex-col gap-1.5 select-none ${disabled ? "opacity-60" : ""}`} dir="ltr">
       {/* Numbers row */}
       <div className="flex gap-1">
         {rows[0].map(k => <Key key={k} k={k} />)}
@@ -154,29 +168,33 @@ function MobileKeyboard({ value, onChange, onEnter }: { value: string; onChange:
       </div>
       {/* ZXCV row with Shift + Backspace */}
       <div className="flex gap-1">
-        <motion.button type="button" whileTap={{ scale: 0.85 }}
+        <motion.button type="button" whileTap={disabled ? undefined : { scale: 0.85 }}
+          disabled={disabled}
           onClick={() => setShifted(s => !s)}
-          className={`flex-[1.3] h-11 rounded-lg border font-bold text-sm flex items-center justify-center transition-colors
+          className={`flex-[1.3] h-11 rounded-lg border font-bold text-sm flex items-center justify-center transition-colors disabled:opacity-40 disabled:pointer-events-none
             ${shifted ? "bg-primary/30 border-primary text-primary" : "bg-secondary border-border text-foreground hover:bg-muted"}`}>
           ⇧
         </motion.button>
         {rows[3].map(k => <Key key={k} k={k} />)}
-        <motion.button type="button" whileTap={{ scale: 0.85 }}
+        <motion.button type="button" whileTap={disabled ? undefined : { scale: 0.85 }}
+          disabled={disabled}
           onClick={() => onChange(value.slice(0, -1))}
-          className="flex-[1.3] h-11 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive flex items-center justify-center hover:bg-destructive/25 transition-colors">
+          className="flex-[1.3] h-11 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive flex items-center justify-center hover:bg-destructive/25 transition-colors disabled:opacity-40 disabled:pointer-events-none">
           <Delete className="w-4 h-4" />
         </motion.button>
       </div>
       {/* Space + Login */}
       <div className="flex gap-1">
-        <motion.button type="button" whileTap={{ scale: 0.97 }}
+        <motion.button type="button" whileTap={disabled ? undefined : { scale: 0.97 }}
+          disabled={disabled}
           onClick={() => onChange(value + " ")}
-          className="flex-1 h-11 rounded-lg bg-card border border-border text-muted-foreground font-bold text-sm flex items-center justify-center hover:bg-muted transition-colors">
+          className="flex-1 h-11 rounded-lg bg-card border border-border text-muted-foreground font-bold text-sm flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none">
           Space
         </motion.button>
-        <motion.button type="button" whileTap={{ scale: 0.97 }}
+        <motion.button type="button" whileTap={disabled ? undefined : { scale: 0.97 }}
+          disabled={disabled}
           onClick={onEnter}
-          className="flex-[1.8] h-11 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-1.5 shadow-md shadow-primary/25 transition-colors">
+          className="flex-[1.8] h-11 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm flex items-center justify-center gap-1.5 shadow-md shadow-primary/25 transition-colors disabled:opacity-40 disabled:pointer-events-none">
           تسجيل الدخول ↵
         </motion.button>
       </div>
@@ -185,7 +203,17 @@ function MobileKeyboard({ value, onChange, onEnter }: { value: string; onChange:
 }
 
 /* ─── Desktop Virtual Keyboard ────────────────────────────── */
-function DesktopKeyboard({ value, onChange, onEnter }: { value: string; onChange: (v: string) => void; onEnter: () => void; }) {
+function DesktopKeyboard({
+  value,
+  onChange,
+  onEnter,
+  disabled = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onEnter: () => void;
+  disabled?: boolean;
+}) {
   const [shifted, setShifted] = useState(false);
 
   const rows = [
@@ -196,33 +224,34 @@ function DesktopKeyboard({ value, onChange, onEnter }: { value: string; onChange
   ];
 
   const press = (k: string) => {
+    if (disabled) return;
     const ch = shifted ? k.toUpperCase() : k;
     onChange(value + ch);
     if (shifted) setShifted(false);
   };
 
   return (
-    <div className="flex flex-col gap-1.5 h-full justify-between">
+    <div className={`flex flex-col gap-1.5 h-full justify-between ${disabled ? "opacity-55" : ""}`}>
       {rows.map((row, ri) => (
         <div key={ri} className="flex gap-1.5 justify-center">
           {ri === 3 && (
-            <motion.button whileTap={{ scale: 0.93 }} type="button" onClick={() => setShifted(s => !s)}
-              className={`flex-shrink-0 flex items-center justify-center rounded-xl border-2 text-sm font-bold transition-all
+            <motion.button whileTap={disabled ? undefined : { scale: 0.93 }} type="button" disabled={disabled} onClick={() => setShifted(s => !s)}
+              className={`flex-shrink-0 flex items-center justify-center rounded-xl border-2 text-sm font-bold transition-all disabled:pointer-events-none
                 ${shifted ? "bg-primary/30 border-primary text-primary" : "bg-card border-border text-foreground hover:border-primary/40 hover:bg-muted"}
               `} style={{ height: 65, width: 110 }}>
               ⇧
             </motion.button>
           )}
           {row.map(k => (
-            <motion.button key={k} whileTap={{ scale: 0.9 }} type="button" onClick={() => press(k)}
-              className="flex items-center justify-center rounded-xl border-2 bg-card border-border text-foreground hover:border-primary/40 hover:bg-muted transition-all text-xl font-bold flex-shrink-0"
+            <motion.button key={k} whileTap={disabled ? undefined : { scale: 0.9 }} type="button" disabled={disabled} onClick={() => press(k)}
+              className="flex items-center justify-center rounded-xl border-2 bg-card border-border text-foreground hover:border-primary/40 hover:bg-muted transition-all text-xl font-bold flex-shrink-0 disabled:pointer-events-none"
               style={{ height: 65, width: 80 }}>
               {shifted ? k.toUpperCase() : k}
             </motion.button>
           ))}
           {ri === 3 && (
-            <motion.button whileTap={{ scale: 0.93 }} type="button" onClick={() => onChange(value.slice(0,-1))}
-              className="flex-shrink-0 flex items-center justify-center rounded-xl border-2 border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25 transition-all font-bold"
+            <motion.button whileTap={disabled ? undefined : { scale: 0.93 }} type="button" disabled={disabled} onClick={() => onChange(value.slice(0,-1))}
+              className="flex-shrink-0 flex items-center justify-center rounded-xl border-2 border-destructive/30 bg-destructive/15 text-destructive hover:bg-destructive/25 transition-all font-bold disabled:pointer-events-none"
               style={{ height: 65, width: 110 }}>
               <Delete className="w-5 h-5" />
             </motion.button>
@@ -230,13 +259,13 @@ function DesktopKeyboard({ value, onChange, onEnter }: { value: string; onChange
         </div>
       ))}
       <div className="flex gap-1.5">
-        <motion.button whileTap={{ scale: 0.97 }} type="button" onClick={() => onChange(value + " ")}
-          className="flex-1 flex items-center justify-center rounded-xl border-2 bg-card border-border text-foreground hover:border-primary/40 hover:bg-muted text-xl font-bold transition-all"
+        <motion.button whileTap={disabled ? undefined : { scale: 0.97 }} type="button" disabled={disabled} onClick={() => onChange(value + " ")}
+          className="flex-1 flex items-center justify-center rounded-xl border-2 bg-card border-border text-foreground hover:border-primary/40 hover:bg-muted text-xl font-bold transition-all disabled:pointer-events-none"
           style={{ height: 65 }}>
           Space
         </motion.button>
-        <motion.button whileTap={{ scale: 0.97 }} type="button" onClick={onEnter}
-          className="flex-shrink-0 flex items-center justify-center gap-2 rounded-xl border-2 bg-primary border-primary text-primary-foreground hover:bg-primary/90 text-lg font-bold transition-all shadow-lg shadow-primary/25"
+        <motion.button whileTap={disabled ? undefined : { scale: 0.97 }} type="button" disabled={disabled} onClick={onEnter}
+          className="flex-shrink-0 flex items-center justify-center gap-2 rounded-xl border-2 bg-primary border-primary text-primary-foreground hover:bg-primary/90 text-lg font-bold transition-all shadow-lg shadow-primary/25 disabled:pointer-events-none"
           style={{ height: 65, minWidth: 200 }}>
           تسجيل الدخول ↵
         </motion.button>
@@ -252,43 +281,216 @@ export default function Login() {
   const { theme, toggleTheme } = useTheme();
   const employeesQuery = useGetEmployees();
   const tablesQuery = useGetTables();
+  const branchesQuery = useGetBranches();
   const allEmployees = Array.isArray(employeesQuery.data) ? employeesQuery.data : [];
   const allTables = Array.isArray(tablesQuery.data) ? tablesQuery.data : [];
+  const allBranches = Array.isArray(branchesQuery.data)
+    ? branchesQuery.data.filter((b) => b.isActive !== false)
+    : [];
 
   const [selectedRole, setSelectedRole] = useState<RoleType | null>(null);
   const [selection, setSelection] = useState("");
+  const [selectedBranchId, setSelectedBranchId] = useState<BranchPick | null>(null);
   const [pin, setPin] = useState("");
   const [showPin, setShowPin] = useState(true);
   const [error, setError] = useState("");
+  const pinInputRef = useRef<HTMLInputElement>(null);
+  const pinInputDesktopRef = useRef<HTMLInputElement>(null);
 
   const roleConfig = ROLES.find(r => r.value === selectedRole);
   const isTableRole = selectedRole === "table";
 
+  const selectedEmployee = !isTableRole
+    ? allEmployees.find(
+        (e) =>
+          e.name === selection.trim() &&
+          roleConfig &&
+          e.role === roleConfig.empRole &&
+          e.isActive
+      )
+    : undefined;
+
+  const employeeCanAllBranches = Boolean(
+    selectedEmployee &&
+      (selectedEmployee.allBranches ||
+        selectedEmployee.role === "admin" ||
+        selectedEmployee.role === "manager")
+  );
+
+  const branchOptions: { id: BranchPick; label: string }[] = (() => {
+    if (isTableRole) {
+      return allBranches.map((b) => ({ id: b.id as BranchPick, label: b.name }));
+    }
+    if (!selectedEmployee) return [];
+    if (employeeCanAllBranches) {
+      return [
+        { id: "all" as const, label: "كل الفروع (حسابات مجمّعة)" },
+        ...allBranches.map((b) => ({ id: b.id as BranchPick, label: b.name })),
+      ];
+    }
+    return (selectedEmployee.branchIds ?? [])
+      .map((id) => allBranches.find((b) => b.id === id))
+      .filter((b): b is NonNullable<typeof b> => Boolean(b))
+      .map((b) => ({ id: b.id as BranchPick, label: b.name }));
+  })();
+
+  const branchReady = isTableRole
+    ? selectedBranchId !== null && selectedBranchId !== "all"
+    : Boolean(selectedEmployee) && selectedBranchId !== null;
+
+  const pinReady = Boolean(
+    selectedRole && selection.trim() && branchReady
+  );
+
+  useEffect(() => {
+    if (branchOptions.length === 1) {
+      setSelectedBranchId(branchOptions[0].id);
+      return;
+    }
+    if (
+      selectedBranchId != null &&
+      !branchOptions.some((o) => o.id === selectedBranchId)
+    ) {
+      setSelectedBranchId(null);
+    }
+    return;
+  }, [branchOptions.map((o) => String(o.id)).join("|"), selection, selectedRole]);
+
+  const focusPinInput = () => {
+    if (!pinReady) return;
+    const el =
+      typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
+        ? pinInputDesktopRef.current
+        : pinInputRef.current;
+    el?.focus();
+  };
+
+  useEffect(() => {
+    if (!pinReady) return undefined;
+    const t = window.setTimeout(focusPinInput, 50);
+    return () => window.clearTimeout(t);
+  }, [pinReady]);
+
+  const updatePin = (v: string) => {
+    if (!pinReady) return;
+    setPin(v);
+    setError("");
+  };
+
   const comboItems: ComboItem[] = isTableRole
-    ? allTables.map(t => ({ id: t.id, label: `طاولة ${t.number}`, sublabel: `${t.location ?? ""} — سعة ${t.capacity}`, icon: "🍽️" }))
+    ? allTables
+        .filter((t) => {
+          if (selectedBranchId == null || selectedBranchId === "all") return false;
+          return t.branchId == null || t.branchId === selectedBranchId;
+        })
+        .map((t) => ({
+          id: t.id,
+          label: `طاولة ${t.number}`,
+          sublabel: `${t.location ?? ""} — سعة ${t.capacity}`,
+          icon: "🍽️",
+        }))
     : allEmployees
         .filter((e) => Boolean(roleConfig && e.role === roleConfig.empRole && e.isActive))
         .map((e) => ({ id: e.id, label: e.name, sublabel: e.phone ?? undefined }));
 
   const handleRoleSelect = (role: RoleType) => {
-    setSelectedRole(role); setSelection(""); setPin(""); setError("");
+    setSelectedRole(role);
+    setSelection("");
+    setSelectedBranchId(null);
+    setPin("");
+    setError("");
   };
 
   const handleLogin = () => {
     if (!selectedRole)     { setError("اختر الدور أولاً"); return; }
+    if (isTableRole && (selectedBranchId == null || selectedBranchId === "all")) {
+      setError("اختر الفرع أولاً");
+      return;
+    }
     if (!selection.trim()) { setError(isTableRole ? "اختر الطاولة" : "اختر اسم الموظف"); return; }
+    if (!isTableRole && selectedBranchId == null) { setError("اختر الفرع"); return; }
     if (!pin)              { setError("أدخل الرقم السري"); return; }
     if (pin !== DEMO_PIN)  { setError("الرقم السري غير صحيح — جرب: 1234"); return; }
+
+    const branchName =
+      selectedBranchId === "all"
+        ? "كل الفروع"
+        : allBranches.find((b) => b.id === selectedBranchId)?.name;
 
     if (isTableRole) {
       const item = comboItems.find(i => i.label === selection.trim());
       const table = allTables.find(t => t.id === item?.id);
-      login({ name: selection.trim(), role: selectedRole, tableId: item?.id, tableNumber: table?.number });
+      login({
+        name: selection.trim(),
+        role: selectedRole,
+        tableId: item?.id,
+        tableNumber: table?.number,
+        allBranches: false,
+        branchIds: typeof selectedBranchId === "number" ? [selectedBranchId] : [],
+        selectedBranchId: selectedBranchId!,
+        branchName,
+      });
     } else {
-      login({ name: selection.trim(), role: selectedRole });
+      const emp = selectedEmployee;
+      login({
+        name: selection.trim(),
+        role: selectedRole,
+        employeeId: emp?.id,
+        allBranches: employeeCanAllBranches,
+        branchIds: employeeCanAllBranches ? [] : emp?.branchIds ?? [],
+        selectedBranchId: selectedBranchId!,
+        branchName,
+      });
     }
     navigate(roleConfig!.redirect);
   };
+
+  const branchPicker = (
+    <div>
+      <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
+        الفرع {!isTableRole && !selectedEmployee ? "" : <span className="text-destructive">*</span>}
+      </label>
+      <div
+        className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all
+          ${
+            (isTableRole ? !selectedRole : !selectedEmployee)
+              ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
+              : selectedBranchId != null
+                ? "border-primary bg-primary/5"
+                : "border-border bg-secondary/40"
+          }`}
+      >
+        <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <select
+          className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground disabled:cursor-not-allowed"
+          disabled={isTableRole ? !selectedRole : !selectedEmployee}
+          value={selectedBranchId == null ? "" : String(selectedBranchId)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSelectedBranchId(v === "" ? null : v === "all" ? "all" : Number(v));
+            if (isTableRole) setSelection("");
+            setPin("");
+            setError("");
+          }}
+        >
+          <option value="">
+            {isTableRole
+              ? selectedRole
+                ? "اختر الفرع..."
+                : "اختر الدور أولاً..."
+              : selectedEmployee
+                ? "اختر الفرع أو كل الفروع..."
+                : "اختر الموظف أولاً..."}
+          </option>
+          {branchOptions.map((o) => (
+            <option key={String(o.id)} value={String(o.id)}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-app h-app bg-background text-foreground flex flex-col overflow-hidden page-shell">
@@ -356,32 +558,82 @@ export default function Login() {
             })}
           </div>
 
+          {isTableRole && <div className="flex-shrink-0">{branchPicker}</div>}
+
           {/* Name combobox */}
           <div className="flex-shrink-0">
             <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
               {isTableRole ? "اختر الطاولة" : "اسم الموظف"}
             </label>
-            <Combobox items={comboItems} value={selection} onChange={v => { setSelection(v); setError(""); }}
-              disabled={!selectedRole} placeholder={isTableRole ? "اختر الطاولة..." : "اختر الاسم..."} isTable={isTableRole} />
+            <Combobox
+              items={comboItems}
+              value={selection}
+              onChange={(v) => {
+                setSelection(v);
+                if (!isTableRole) setSelectedBranchId(null);
+                setPin("");
+                setError("");
+              }}
+              disabled={!selectedRole || (isTableRole && (selectedBranchId == null || selectedBranchId === "all"))}
+              placeholder={
+                isTableRole
+                  ? selectedBranchId
+                    ? "اختر الطاولة..."
+                    : "اختر الفرع أولاً..."
+                  : "اختر الاسم..."
+              }
+              isTable={isTableRole}
+            />
           </div>
 
-          {/* PIN display */}
+          {!isTableRole && <div className="flex-shrink-0">{branchPicker}</div>}
+
+          {/* PIN — locked until employee/table + branch */}
           <div className="flex-shrink-0">
             <label className="text-[11px] font-bold text-muted-foreground mb-1 block">الرقم السري</label>
-            <div className={`w-full h-12 px-4 rounded-xl border-2 flex items-center gap-2 transition-all
-              ${pin.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40"}`}>
+            <div className={`w-full h-12 px-3 rounded-xl border-2 flex items-center gap-2 transition-all
+              ${!pinReady ? "opacity-50 cursor-not-allowed border-border bg-secondary/30" : pin.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40"}
+              ${pinReady ? "focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10" : ""}`}>
               <Lock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div className="flex-1 flex items-center gap-2 justify-center" dir="ltr">
-                {pin.length === 0
-                  ? <span className="text-muted-foreground text-sm">أدخل الرقم السري...</span>
-                  : Array.from({ length: pin.length }).map((_, i) =>
-                      showPin
-                        ? <span key={i} className="font-bold text-xl text-foreground">{pin[i]}</span>
-                        : <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block" />
-                    )
+              <input
+                ref={pinInputRef}
+                type={showPin ? "text" : "password"}
+                inputMode="text"
+                autoComplete="current-password"
+                value={pin}
+                disabled={!pinReady}
+                readOnly={!pinReady}
+                onChange={(e) => updatePin(e.target.value)}
+                onKeyDown={(e) => {
+                  if (!pinReady) {
+                    e.preventDefault();
+                    return;
+                  }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleLogin();
+                  }
+                }}
+                placeholder={
+                  !selectedRole
+                    ? "اختر الدور أولاً..."
+                    : !branchReady
+                      ? "اختر الفرع أولاً..."
+                      : !selection.trim()
+                        ? isTableRole
+                          ? "اختر الطاولة أولاً..."
+                          : "اختر اسم الموظف أولاً..."
+                        : "أدخل الرقم السري..."
                 }
-              </div>
-              <button type="button" onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+                dir="ltr"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground placeholder:text-muted-foreground placeholder:font-normal disabled:cursor-not-allowed"
+              />
+              <button
+                type="button"
+                disabled={!pinReady}
+                onClick={() => setShowPin((v) => !v)}
+                className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+              >
                 {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               </button>
             </div>
@@ -400,7 +652,7 @@ export default function Login() {
 
         {/* ── BOTTOM: PIN Pad — always visible, never hidden ── */}
         <div className="flex-shrink-0 border-t border-border/50 bg-secondary px-4 pt-3 pb-4">
-          <MobileKeyboard value={pin} onChange={v => { setPin(v); setError(""); }} onEnter={handleLogin} />
+          <MobileKeyboard value={pin} onChange={updatePin} onEnter={handleLogin} disabled={!pinReady} />
         </div>
       </div>
 
@@ -452,31 +704,81 @@ export default function Login() {
               })}
             </div>
 
-            {/* Name + PIN side by side */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">
-                  {isTableRole ? "اختر الطاولة" : "اسم الموظف"}
-                </label>
-                <Combobox items={comboItems} value={selection} onChange={v => { setSelection(v); setError(""); }}
-                  disabled={!selectedRole} placeholder={isTableRole ? "اختر الطاولة..." : "اختر الاسم..."} isTable={isTableRole} />
-              </div>
+            <div className="grid grid-cols-3 gap-2">
+              {isTableRole ? (
+                <>
+                  <div>{branchPicker}</div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">اختر الطاولة</label>
+                    <Combobox
+                      items={comboItems}
+                      value={selection}
+                      onChange={(v) => {
+                        setSelection(v);
+                        setPin("");
+                        setError("");
+                      }}
+                      disabled={!selectedRole || selectedBranchId == null || selectedBranchId === "all"}
+                      placeholder={selectedBranchId ? "اختر الطاولة..." : "اختر الفرع أولاً..."}
+                      isTable
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">اسم الموظف</label>
+                    <Combobox
+                      items={comboItems}
+                      value={selection}
+                      onChange={(v) => {
+                        setSelection(v);
+                        setSelectedBranchId(null);
+                        setPin("");
+                        setError("");
+                      }}
+                      disabled={!selectedRole}
+                      placeholder="اختر الاسم..."
+                    />
+                  </div>
+                  <div>{branchPicker}</div>
+                </>
+              )}
               <div>
                 <label className="text-[10px] font-semibold text-muted-foreground mb-1 block">الرقم السري</label>
-                <div className={`w-full h-14 px-4 rounded-xl border-2 flex items-center gap-2 cursor-default transition-all
-                  ${pin.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40"}`}>
+                <div className={`w-full h-14 px-4 rounded-xl border-2 flex items-center gap-2 transition-all
+                  ${!pinReady ? "opacity-50 cursor-not-allowed border-border bg-secondary/30" : pin.length > 0 ? "border-primary bg-primary/5" : "border-border bg-secondary/40"}
+                  ${pinReady ? "focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10" : ""}`}>
                   <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 flex items-center gap-2 justify-end" dir="ltr">
-                    {pin.length === 0
-                      ? <span className="text-muted-foreground text-base w-full text-left">أدخل الرقم السري...</span>
-                      : Array.from({ length: pin.length }).map((_, i) =>
-                          showPin
-                            ? <span key={i} className="font-bold text-lg text-foreground">{pin[i]}</span>
-                            : <span key={i} className="w-3 h-3 rounded-full bg-primary inline-block" />
-                        )
-                    }
-                  </div>
-                  <button type="button" onClick={() => setShowPin(v => !v)} className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+                  <input
+                    ref={pinInputDesktopRef}
+                    type={showPin ? "text" : "password"}
+                    inputMode="text"
+                    autoComplete="current-password"
+                    value={pin}
+                    disabled={!pinReady}
+                    readOnly={!pinReady}
+                    onChange={(e) => updatePin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (!pinReady) {
+                        e.preventDefault();
+                        return;
+                      }
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleLogin();
+                      }
+                    }}
+                    placeholder={!pinReady ? "أكمل البيانات أولاً..." : "أدخل الرقم السري..."}
+                    dir="ltr"
+                    className="flex-1 min-w-0 bg-transparent border-0 outline-none text-base font-bold text-foreground placeholder:text-muted-foreground placeholder:font-normal disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    disabled={!pinReady}
+                    onClick={() => setShowPin((v) => !v)}
+                    className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                  >
                     {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   </button>
                 </div>
@@ -496,7 +798,7 @@ export default function Login() {
 
         {/* Desktop Keyboard */}
         <div className="border-t border-border/50 bg-secondary flex-1 min-h-0 flex flex-col px-4 pt-2 pb-2">
-          <DesktopKeyboard value={pin} onChange={v => { setPin(v); setError(""); }} onEnter={handleLogin} />
+          <DesktopKeyboard value={pin} onChange={updatePin} onEnter={handleLogin} disabled={!pinReady} />
         </div>
       </div>
     </div>

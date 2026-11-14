@@ -4,6 +4,7 @@ import {
   useCreateEmployee,
   useUpdateEmployee,
   useDeleteEmployee,
+  useGetBranches,
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog } from "@/components/ui-elements";
 import {
@@ -13,7 +14,7 @@ import {
 import {
   Plus, Search, Edit, Trash2, Users,
   Phone, Mail, Briefcase, CalendarDays, BadgeDollarSign,
-  ToggleLeft, ToggleRight, AlertTriangle,
+  ToggleLeft, ToggleRight, AlertTriangle, Building2, Check,
 } from "lucide-react";
 import type { Employee } from "@workspace/api-client-react";
 
@@ -23,11 +24,16 @@ const ROLES: { value: string; label: string; color: string }[] = [
   { value: "cashier", label: "كاشير",          color: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
   { value: "waiter",  label: "نادل",           color: "bg-green-500/20 text-green-400 border-green-500/30" },
   { value: "kitchen", label: "مطبخ",           color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  { value: "driver",  label: "سائق توصيل",     color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+  { value: "delivery", label: "سائق توصيل",    color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
 ];
 
+const ALL_BRANCH_ROLES = new Set(["admin", "manager"]);
+
 const roleInfo = (value: string) =>
-  ROLES.find((r) => r.value === value) ?? { label: value, color: "bg-secondary text-foreground border-border" };
+  ROLES.find((r) => r.value === value) ??
+  (value === "driver"
+    ? { label: "سائق توصيل", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" }
+    : { label: value, color: "bg-secondary text-foreground border-border" });
 
 const formatIQD = (val?: number | string | null) =>
   val ? new Intl.NumberFormat("en-IQ").format(Number(val)) + " د.ع" : "—";
@@ -40,12 +46,16 @@ const EMPTY_FORM = {
   salary: "",
   hireDate: new Date().toISOString().slice(0, 10),
   isActive: true,
+  branchIds: [] as number[],
 };
 
 type FormData = typeof EMPTY_FORM;
 
 export default function Employees() {
   const { data: employees, isLoading, refetch } = useGetEmployees();
+  const { data: branches } = useGetBranches({
+    query: { staleTime: 60_000, refetchOnMount: false },
+  });
   const { mutate: createEmployee, isPending: isCreating } = useCreateEmployee();
   const { mutate: updateEmployee, isPending: isUpdating } = useUpdateEmployee();
   const { mutate: deleteEmployee, isPending: isDeleting } = useDeleteEmployee();
@@ -55,7 +65,9 @@ export default function Employees() {
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
-  const [errors, setErrors] = useState<Partial<FormData>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData | "branches", string>>>({});
+
+  const isAllBranchesRole = ALL_BRANCH_ROLES.has(form.role);
 
   const filtered = employees?.filter((e) =>
     e.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -72,23 +84,28 @@ export default function Employees() {
 
   const openEdit = (emp: Employee) => {
     setEditTarget(emp);
+    const role = (emp.role as string) === "driver" ? "delivery" : emp.role;
     setForm({
       name: emp.name,
-      role: emp.role,
+      role,
       phone: emp.phone ?? "",
       email: emp.email ?? "",
       salary: emp.salary ? String(emp.salary) : "",
       hireDate: emp.hireDate ? String(emp.hireDate).slice(0, 10) : "",
       isActive: emp.isActive ?? true,
+      branchIds: emp.branchIds ?? [],
     });
     setErrors({});
     setFormOpen(true);
   };
 
   const validate = () => {
-    const e: Partial<FormData> = {};
+    const e: Partial<Record<keyof FormData | "branches", string>> = {};
     if (!form.name.trim()) e.name = "الاسم مطلوب";
     if (!form.role) e.role = "المنصب مطلوب";
+    if (!ALL_BRANCH_ROLES.has(form.role) && form.branchIds.length === 0) {
+      e.branches = "اختر فرعاً واحداً على الأقل";
+    }
     return e;
   };
 
@@ -96,6 +113,7 @@ export default function Employees() {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
 
+    const usesAll = ALL_BRANCH_ROLES.has(form.role);
     const payload = {
       name: form.name.trim(),
       role: form.role as any,
@@ -104,6 +122,8 @@ export default function Employees() {
       salary: form.salary ? Number(form.salary) : undefined,
       hireDate: form.hireDate || undefined,
       isActive: form.isActive,
+      allBranches: usesAll,
+      branchIds: usesAll ? [] : form.branchIds,
     };
 
     if (editTarget) {
@@ -127,8 +147,38 @@ export default function Employees() {
     );
   };
 
-  const set = (field: keyof FormData, val: string | boolean) =>
+  const set = (field: keyof FormData, val: string | boolean | number[]) =>
     setForm((prev) => ({ ...prev, [field]: val }));
+
+  const setRole = (role: string) => {
+    setForm((prev) => ({
+      ...prev,
+      role,
+      branchIds: ALL_BRANCH_ROLES.has(role) ? [] : prev.branchIds,
+    }));
+    setErrors((prev) => ({ ...prev, role: undefined, branches: undefined }));
+  };
+
+  const toggleBranch = (id: number) => {
+    setForm((prev) => {
+      const exists = prev.branchIds.includes(id);
+      return {
+        ...prev,
+        branchIds: exists
+          ? prev.branchIds.filter((b) => b !== id)
+          : [...prev.branchIds, id],
+      };
+    });
+    setErrors((prev) => ({ ...prev, branches: undefined }));
+  };
+
+  const branchLabel = (emp: Employee) => {
+    if (ALL_BRANCH_ROLES.has(emp.role) || emp.allBranches) return "كل الفروع";
+    const names = (emp.branchIds ?? [])
+      .map((id) => branches?.find((b) => b.id === id)?.name)
+      .filter(Boolean);
+    return names.length ? names.join(" · ") : "—";
+  };
 
   return (
     <div className="h-full flex flex-col gap-4 md:gap-6">
@@ -207,6 +257,7 @@ export default function Employees() {
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <div><span className="text-muted-foreground text-xs">الهاتف: </span><span dir="ltr">{emp.phone || "—"}</span></div>
                   <div><span className="text-muted-foreground text-xs">الراتب: </span><span className="text-green-400 font-bold">{formatIQD(emp.salary)}</span></div>
+                  <div className="col-span-2"><span className="text-muted-foreground text-xs">الفرع: </span><span className="font-semibold">{branchLabel(emp)}</span></div>
                   <div><span className="text-muted-foreground text-xs">التعيين: </span>{emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-IQ") : "—"}</div>
                   <div className="truncate"><span className="text-muted-foreground text-xs">البريد: </span><span dir="ltr" className="text-xs">{emp.email || "—"}</span></div>
                 </div>
@@ -230,6 +281,7 @@ export default function Employees() {
               <TableRow className="border-border/50">
                 <TableHead className="text-primary font-bold">الموظف</TableHead>
                 <TableHead className="text-primary font-bold">المنصب</TableHead>
+                <TableHead className="text-primary font-bold">الفرع</TableHead>
                 <TableHead className="text-primary font-bold">الهاتف</TableHead>
                 <TableHead className="text-primary font-bold">البريد الإلكتروني</TableHead>
                 <TableHead className="text-primary font-bold">الراتب</TableHead>
@@ -239,21 +291,21 @@ export default function Employees() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-16">
-                    <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
-                  </TableCell>
-                </TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-16 text-muted-foreground">
-                    <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>لا يوجد موظفون مطابقون للبحث</p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((emp) => {
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-16">
+                  <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
+                </TableCell>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-16 text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>لا يوجد موظفون مطابقون للبحث</p>
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((emp) => {
                   const role = roleInfo(emp.role);
                   return (
                     <TableRow key={emp.id} className="border-border/20 group hover:bg-secondary/30 transition-colors">
@@ -268,6 +320,11 @@ export default function Employees() {
                       <TableCell>
                         <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${role.color}`}>
                           {role.label}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs font-semibold text-foreground">
+                          {branchLabel(emp)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -327,6 +384,7 @@ export default function Employees() {
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         title={editTarget ? `تعديل موظف — ${editTarget.name}` : "إضافة موظف جديد"}
+        maxWidth="max-w-xl"
       >
         <div className="space-y-5">
           {/* Name */}
@@ -354,7 +412,8 @@ export default function Employees() {
               {ROLES.map((r) => (
                 <button
                   key={r.value}
-                  onClick={() => set("role", r.value)}
+                  type="button"
+                  onClick={() => setRole(r.value)}
                   className={`py-2 px-3 rounded-xl border text-sm font-semibold transition-all ${
                     form.role === r.value
                       ? `${r.color} border-current`
@@ -365,6 +424,62 @@ export default function Employees() {
                 </button>
               ))}
             </div>
+            {errors.role && <p className="text-xs text-destructive mt-1">{errors.role}</p>}
+          </div>
+
+          {/* Branch assignment */}
+          <div>
+            <label className="block text-sm font-semibold mb-1.5">
+              <Building2 className="w-4 h-4 inline me-1 text-primary" />
+              تابع الفرع {!isAllBranchesRole && <span className="text-destructive">*</span>}
+            </label>
+            {isAllBranchesRole ? (
+              <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-foreground">تابع لكل الفروع</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    مدير النظام والمدير مرتبطان تلقائياً بجميع الفروع
+                  </p>
+                </div>
+              </div>
+            ) : (branches?.length ?? 0) === 0 ? (
+              <p className="text-xs text-muted-foreground rounded-xl border border-dashed border-border px-3 py-3">
+                لا توجد فروع — أضف فرعاً أولاً من صفحة الفروع
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {branches!.map((b) => {
+                  const selected = form.branchIds.includes(b.id);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggleBranch(b.id)}
+                      className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
+                        selected
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                      }`}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                          selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                        }`}
+                      >
+                        {selected && <Check className="w-3.5 h-3.5" />}
+                      </span>
+                      <span className="truncate">{b.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {errors.branches && (
+              <p className="text-xs text-destructive mt-1">{errors.branches}</p>
+            )}
           </div>
 
           {/* Phone + Email */}

@@ -118,9 +118,21 @@ interface DialogProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: string;
+  /** Use overlay when nesting above another dialog */
+  layer?: "base" | "overlay";
 }
 
-export function Dialog({ isOpen, onClose, title, children, maxWidth = "max-w-lg" }: DialogProps) {
+export function Dialog({
+  isOpen,
+  onClose,
+  title,
+  children,
+  maxWidth = "max-w-lg",
+  layer = "base",
+}: DialogProps) {
+  const backdropZ = layer === "overlay" ? "z-[70]" : "z-50";
+  const panelZ = layer === "overlay" ? "z-[80]" : "z-[60]";
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -130,23 +142,33 @@ export function Dialog({ isOpen, onClose, title, children, maxWidth = "max-w-lg"
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
+            className={cn("fixed inset-0 bg-black/80 backdrop-blur-sm", backdropZ)}
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-[50%] top-[50%] z-[60] grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 p-4 sm:p-0"
+            className={cn(
+              "fixed inset-0 flex items-center justify-center p-3 sm:p-4",
+              panelZ
+            )}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={cn("mx-auto w-full glass-panel rounded-2xl p-6", maxWidth)}>
-              <div className="flex flex-col space-y-1.5 text-center sm:text-left mb-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold leading-none tracking-tight">{title}</h2>
-                  <button onClick={onClose} className="rounded-full p-2 hover:bg-secondary transition-colors">
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
+            <div
+              className={cn(
+                "w-full glass-panel rounded-2xl p-4 sm:p-5 max-h-[min(92vh,880px)] overflow-y-auto overscroll-contain",
+                maxWidth
+              )}
+            >
+              <div className="flex justify-between items-center gap-3 mb-3 sm:mb-4">
+                <h2 className="text-lg sm:text-xl font-bold leading-tight tracking-tight">{title}</h2>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-full p-2 hover:bg-secondary transition-colors flex-shrink-0"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
               {children}
             </div>

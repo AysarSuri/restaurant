@@ -8,16 +8,20 @@ import {
   useCreateMenuCategory,
   useUpdateMenuCategory,
   useDeleteMenuCategory,
+  useGetBranches,
   type MenuCategory,
   type MenuItem,
 } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
 import { Dialog, Input, Button, Select } from "@/components/ui-elements";
-import { Check, FolderPlus, Pencil, Plus, Tags, Trash2, X } from "lucide-react";
+import { Building2, Check, FolderPlus, Pencil, Plus, Tags, Trash2, X } from "lucide-react";
 
 export default function Menu() {
   const { data: items, isLoading, refetch } = useGetMenuItems();
   const { data: categories, refetch: refetchCategories } = useGetMenuCategories();
+  const { data: branches } = useGetBranches({
+    query: { staleTime: 60_000, refetchOnMount: false },
+  });
   const { mutate: create } = useCreateMenuItem();
   const { mutate: update } = useUpdateMenuItem();
   const { mutate: remove } = useDeleteMenuItem();
@@ -33,6 +37,7 @@ export default function Menu() {
   const [categoryForm, setCategoryForm] = useState({ nameAr: "", name: "" });
   const [editForm, setEditForm] = useState({ nameAr: "", name: "" });
   const [categoryError, setCategoryError] = useState("");
+  const [formError, setFormError] = useState("");
 
   const [formData, setFormData] = useState({
     nameAr: "",
@@ -40,9 +45,12 @@ export default function Menu() {
     price: 0,
     categoryId: 0,
     isAvailable: true,
+    allBranches: true,
+    branchIds: [] as number[],
   });
 
   const handleOpen = (item?: MenuItem) => {
+    setFormError("");
     if (item) {
       setEditing(item);
       setFormData({
@@ -51,6 +59,8 @@ export default function Menu() {
         price: item.price,
         categoryId: item.categoryId,
         isAvailable: item.isAvailable,
+        allBranches: item.allBranches !== false || !(item.branchIds?.length),
+        branchIds: item.branchIds ?? [],
       });
     } else {
       setEditing(null);
@@ -60,13 +70,55 @@ export default function Menu() {
         price: 0,
         categoryId: categories?.[0]?.id || 0,
         isAvailable: true,
+        allBranches: true,
+        branchIds: [],
       });
     }
     setIsOpen(true);
   };
 
+  const toggleBranch = (id: number) => {
+    setFormData((f) => {
+      const exists = f.branchIds.includes(id);
+      const branchIds = exists ? f.branchIds.filter((b) => b !== id) : [...f.branchIds, id];
+      return { ...f, allBranches: false, branchIds };
+    });
+    setFormError("");
+  };
+
+  const selectAllBranches = () => {
+    setFormData((f) => ({ ...f, allBranches: true, branchIds: [] }));
+    setFormError("");
+  };
+
   const handleSubmit = () => {
-    const data = { ...formData, nameKu: "", description: "", descriptionAr: "" };
+    if (!formData.nameAr.trim() || !formData.name.trim()) {
+      setFormError("الاسم العربي والإنجليزي مطلوبان");
+      return;
+    }
+    if (!formData.categoryId) {
+      setFormError("اختر التصنيف");
+      return;
+    }
+    if (!formData.allBranches && formData.branchIds.length === 0) {
+      setFormError("اختر جميع الفروع أو فرعاً واحداً على الأقل");
+      return;
+    }
+    setFormError("");
+
+    const data = {
+      nameAr: formData.nameAr.trim(),
+      name: formData.name.trim(),
+      price: formData.price,
+      categoryId: formData.categoryId,
+      isAvailable: formData.isAvailable,
+      allBranches: formData.allBranches,
+      branchIds: formData.allBranches ? [] : formData.branchIds,
+      nameKu: "",
+      description: "",
+      descriptionAr: "",
+    };
+
     if (editing) {
       update({ id: editing.id, data }, { onSuccess: () => { setIsOpen(false); refetch(); } });
     } else {
@@ -182,6 +234,27 @@ export default function Menu() {
       render: (item: MenuItem) => categories?.find((c) => c.id === item.categoryId)?.nameAr,
     },
     {
+      key: "branchIds",
+      header: "الفروع",
+      render: (item: MenuItem) => {
+        if (item.allBranches !== false || !(item.branchIds?.length)) {
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-primary/15 text-primary border border-primary/25">
+              جميع الفروع
+            </span>
+          );
+        }
+        const names = item.branchIds
+          .map((id) => branches?.find((b) => b.id === id)?.name)
+          .filter(Boolean);
+        return (
+          <span className="text-xs font-semibold text-foreground">
+            {names.length ? names.join(" · ") : `${item.branchIds.length} فرع`}
+          </span>
+        );
+      },
+    },
+    {
       key: "isAvailable",
       header: "الحالة",
       render: (item: MenuItem) => (
@@ -229,6 +302,7 @@ export default function Menu() {
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         title={editing ? "تعديل صنف" : "إضافة صنف"}
+        maxWidth="max-w-xl"
       >
         <div className="space-y-4">
           <div>
@@ -269,7 +343,69 @@ export default function Menu() {
               ))}
             </Select>
           </div>
-          <div className="pt-4 flex justify-end gap-2">
+
+          <div>
+            <label className="text-sm font-semibold mb-2 block flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-primary" />
+              الفروع <span className="text-destructive">*</span>
+            </label>
+            <div className="rounded-2xl border border-border/60 bg-secondary/20 p-3 space-y-2.5">
+              <button
+                type="button"
+                onClick={selectAllBranches}
+                className={`w-full h-11 rounded-xl border-2 text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                  formData.allBranches
+                    ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                    : "border-border bg-background/60 text-foreground hover:border-primary/40"
+                }`}
+              >
+                <Check className={`w-4 h-4 ${formData.allBranches ? "opacity-100" : "opacity-30"}`} />
+                جميع الفروع
+              </button>
+
+              {(branches?.length ?? 0) === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  لا توجد فروع مسجّلة — سيتم اعتبار الصنف لكل الفروع
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {branches!.map((b) => {
+                    const selected = !formData.allBranches && formData.branchIds.includes(b.id);
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => toggleBranch(b.id)}
+                        className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
+                          selected
+                            ? "border-primary bg-primary/15 text-primary"
+                            : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                        }`}
+                      >
+                        <span
+                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                            selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                          }`}
+                        >
+                          {selected && <Check className="w-3.5 h-3.5" />}
+                        </span>
+                        <span className="truncate">{b.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                اختر «جميع الفروع» أو حدد فرعاً واحداً أو أكثر
+              </p>
+            </div>
+          </div>
+
+          {formError && (
+            <p className="text-sm font-semibold text-destructive">{formError}</p>
+          )}
+
+          <div className="pt-2 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsOpen(false)}>
               إلغاء
             </Button>

@@ -1,12 +1,54 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { menuCategoriesTable, menuItemsTable } from "@workspace/db/schema";
-import { eq, asc } from "drizzle-orm";
+import {
+  menuCategoriesTable,
+  menuItemsTable,
+  menuItemBranchesTable,
+} from "@workspace/db/schema";
+import { eq, asc, inArray } from "drizzle-orm";
+import { parseBranchScope } from "../lib/branch-scope";
 
 const router: IRouter = Router();
 
+async function getBranchIdsForItems(itemIds: number[]) {
+  const map = new Map<number, number[]>();
+  if (itemIds.length === 0) return map;
+  const rows = await db
+    .select()
+    .from(menuItemBranchesTable)
+    .where(inArray(menuItemBranchesTable.menuItemId, itemIds));
+  for (const row of rows) {
+    const list = map.get(row.menuItemId) ?? [];
+    list.push(row.branchId);
+    map.set(row.menuItemId, list);
+  }
+  return map;
+}
+
+async function setItemBranches(menuItemId: number, allBranches: boolean, branchIds: number[]) {
+  await db.delete(menuItemBranchesTable).where(eq(menuItemBranchesTable.menuItemId, menuItemId));
+  if (allBranches || branchIds.length === 0) return;
+  const unique = [...new Set(branchIds.map(Number).filter((id) => Number.isFinite(id) && id > 0))];
+  if (unique.length === 0) return;
+  await db.insert(menuItemBranchesTable).values(
+    unique.map((branchId) => ({ menuItemId, branchId }))
+  );
+}
+
+function withBranches<T extends { id: number; allBranches?: boolean | null }>(
+  item: T,
+  branchMap: Map<number, number[]>
+) {
+  const allBranches = item.allBranches ?? true;
+  return {
+    ...item,
+    allBranches,
+    branchIds: allBranches ? [] : branchMap.get(item.id) ?? [],
+  };
+}
+
 // GET /menu/categories
-router.get("/categories", async (req, res) => {
+router.get("/categories", async (_req, res) => {
   const cats = await db
     .select()
     .from(menuCategoriesTable)
@@ -43,7 +85,9 @@ router.delete("/categories/:id", async (req, res) => {
 // GET /menu/items
 router.get("/items", async (req, res) => {
   const { categoryId, available } = req.query;
-  let query = db
+  const scope = parseBranchScope(req);
+
+  const rows = await db
     .select({
       id: menuItemsTable.id,
       categoryId: menuItemsTable.categoryId,
@@ -56,6 +100,7 @@ router.get("/items", async (req, res) => {
       cost: menuItemsTable.cost,
       imageUrl: menuItemsTable.imageUrl,
       isAvailable: menuItemsTable.isAvailable,
+      allBranches: menuItemsTable.allBranches,
       preparationTime: menuItemsTable.preparationTime,
       calories: menuItemsTable.calories,
       sortOrder: menuItemsTable.sortOrder,
@@ -63,17 +108,30 @@ router.get("/items", async (req, res) => {
       category: menuCategoriesTable,
     })
     .from(menuItemsTable)
-    .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id));
+    .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id))
+    .orderBy(asc(menuItemsTable.sortOrder), asc(menuItemsTable.id));
 
-  const conditions = [];
-  if (categoryId) conditions.push(eq(menuItemsTable.categoryId, parseInt(categoryId as string)));
-  if (available !== undefined) conditions.push(eq(menuItemsTable.isAvailable, available === "true"));
+  let items = rows;
+  if (categoryId) {
+    const cid = parseInt(categoryId as string);
+    items = items.filter((i) => i.categoryId === cid);
+  }
+  if (available !== undefined) {
+    const avail = available === "true";
+    items = items.filter((i) => i.isAvailable === avail);
+  }
 
-  const items = conditions.length > 0
-    ? await query.where(conditions.length === 1 ? conditions[0] : conditions[0]).orderBy(asc(menuItemsTable.sortOrder), asc(menuItemsTable.id))
-    : await query.orderBy(asc(menuItemsTable.sortOrder), asc(menuItemsTable.id));
+  const branchMap = await getBranchIdsForItems(items.map((i) => i.id));
+  let result = items.map((i) => withBranches(i, branchMap));
 
-  res.json(items);
+  if (scope.mode === "one") {
+    const bid = scope.branchId;
+    result = result.filter(
+      (i) => i.allBranches || (i.branchIds ?? []).includes(bid)
+    );
+  }
+
+  res.json(result);
 });
 
 // GET /menu/items/:id
@@ -92,6 +150,7 @@ router.get("/items/:id", async (req, res) => {
       cost: menuItemsTable.cost,
       imageUrl: menuItemsTable.imageUrl,
       isAvailable: menuItemsTable.isAvailable,
+      allBranches: menuItemsTable.allBranches,
       preparationTime: menuItemsTable.preparationTime,
       calories: menuItemsTable.calories,
       sortOrder: menuItemsTable.sortOrder,
@@ -101,34 +160,140 @@ router.get("/items/:id", async (req, res) => {
     .from(menuItemsTable)
     .leftJoin(menuCategoriesTable, eq(menuItemsTable.categoryId, menuCategoriesTable.id))
     .where(eq(menuItemsTable.id, id));
-  res.json(item);
+
+  if (!item) {
+    res.status(404).json({ success: false, message: "Not found" });
+    return;
+  }
+
+  const branchMap = await getBranchIdsForItems([id]);
+  res.json(withBranches(item, branchMap));
 });
 
 // POST /menu/items
 router.post("/items", async (req, res) => {
-  const { categoryId, name, nameAr, nameKu, description, descriptionAr, price, cost, imageUrl, isAvailable, preparationTime, calories, sortOrder } = req.body;
+  const {
+    categoryId,
+    name,
+    nameAr,
+    nameKu,
+    description,
+    descriptionAr,
+    price,
+    cost,
+    imageUrl,
+    isAvailable,
+    preparationTime,
+    calories,
+    sortOrder,
+    allBranches,
+    branchIds,
+  } = req.body;
+
+  const applyAll =
+    allBranches === true ||
+    (allBranches !== false && (!Array.isArray(branchIds) || branchIds.length === 0));
+  if (allBranches === false && (!Array.isArray(branchIds) || branchIds.length === 0)) {
+    res.status(400).json({ success: false, message: "اختر فرعاً واحداً على الأقل أو جميع الفروع" });
+    return;
+  }
+
   const [item] = await db
     .insert(menuItemsTable)
-    .values({ categoryId, name, nameAr, nameKu, description, descriptionAr, price: price.toString(), cost: cost?.toString(), imageUrl, isAvailable: isAvailable ?? true, preparationTime, calories, sortOrder })
+    .values({
+      categoryId,
+      name,
+      nameAr,
+      nameKu,
+      description,
+      descriptionAr,
+      price: price.toString(),
+      cost: cost?.toString(),
+      imageUrl,
+      isAvailable: isAvailable ?? true,
+      allBranches: applyAll,
+      preparationTime,
+      calories,
+      sortOrder,
+    })
     .returning();
-  res.status(201).json(item);
+
+  await setItemBranches(item.id, applyAll, applyAll ? [] : branchIds);
+  const branchMap = await getBranchIdsForItems([item.id]);
+  res.status(201).json(withBranches(item, branchMap));
 });
 
 // PUT /menu/items/:id
 router.put("/items/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { categoryId, name, nameAr, nameKu, description, descriptionAr, price, cost, imageUrl, isAvailable, preparationTime, calories, sortOrder } = req.body;
+  const {
+    categoryId,
+    name,
+    nameAr,
+    nameKu,
+    description,
+    descriptionAr,
+    price,
+    cost,
+    imageUrl,
+    isAvailable,
+    preparationTime,
+    calories,
+    sortOrder,
+    allBranches,
+    branchIds,
+  } = req.body;
+
+  const applyAll =
+    allBranches === undefined && branchIds === undefined
+      ? undefined
+      : allBranches === true ||
+        (allBranches !== false && (!Array.isArray(branchIds) || branchIds.length === 0));
+
+  if (allBranches === false && (!Array.isArray(branchIds) || branchIds.length === 0)) {
+    res.status(400).json({ success: false, message: "اختر فرعاً واحداً على الأقل أو جميع الفروع" });
+    return;
+  }
+
   const [item] = await db
     .update(menuItemsTable)
-    .set({ categoryId, name, nameAr, nameKu, description, descriptionAr, price: price?.toString(), cost: cost?.toString(), imageUrl, isAvailable, preparationTime, calories, sortOrder })
+    .set({
+      categoryId,
+      name,
+      nameAr,
+      nameKu,
+      description,
+      descriptionAr,
+      price: price?.toString(),
+      cost: cost?.toString(),
+      imageUrl,
+      isAvailable,
+      ...(applyAll !== undefined ? { allBranches: applyAll } : {}),
+      preparationTime,
+      calories,
+      sortOrder,
+    })
     .where(eq(menuItemsTable.id, id))
     .returning();
-  res.json(item);
+
+  if (!item) {
+    res.status(404).json({ success: false, message: "Not found" });
+    return;
+  }
+
+  if (allBranches !== undefined || branchIds !== undefined) {
+    const finalAll = applyAll ?? item.allBranches;
+    await setItemBranches(id, finalAll, finalAll ? [] : branchIds ?? []);
+  }
+
+  const branchMap = await getBranchIdsForItems([id]);
+  res.json(withBranches(item, branchMap));
 });
 
 // DELETE /menu/items/:id
 router.delete("/items/:id", async (req, res) => {
   const id = parseInt(req.params.id);
+  await db.delete(menuItemBranchesTable).where(eq(menuItemBranchesTable.menuItemId, id));
   await db.delete(menuItemsTable).where(eq(menuItemsTable.id, id));
   res.json({ success: true, message: "Deleted" });
 });

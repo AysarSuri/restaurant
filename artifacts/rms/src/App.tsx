@@ -17,10 +17,12 @@ import Customers from "@/pages/customers";
 import Employees from "@/pages/employees";
 import Expenses from "@/pages/expenses";
 import Branches from "@/pages/branches";
+import Cards from "@/pages/cards";
 import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import Cashier from "@/pages/cashier";
 import TableOrder from "@/pages/table-order";
+import { BranchProvider } from "@/lib/branch-context";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,8 +78,16 @@ export type UserRole = "admin" | "manager" | "cashier" | "kitchen" | "table";
 export interface AuthUser {
   name: string;
   role: UserRole;
+  employeeId?: number;
   tableId?: number;
   tableNumber?: string;
+  /** employee belongs to every branch (admin/manager or flag) */
+  allBranches?: boolean;
+  /** assigned branch ids when not allBranches */
+  branchIds?: number[];
+  /** active working scope: one branch or all (admin/manager) */
+  selectedBranchId?: number | "all";
+  branchName?: string;
 }
 
 interface AuthContextType {
@@ -114,6 +124,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("rms-user");
+    localStorage.removeItem("rms-branch");
   };
 
   return (
@@ -150,6 +161,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/employees": ["admin", "manager"],
   "/expenses": ["admin", "manager"],
   "/branches": ["admin", "manager"],
+  "/cards": ["admin", "manager"],
   "/reports": ["admin", "manager"],
 };
 
@@ -201,6 +213,7 @@ function Router() {
       <Route path="/employees" component={Employees} />
       <Route path="/expenses" component={Expenses} />
       <Route path="/branches" component={Branches} />
+      <Route path="/cards" component={Cards} />
       <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
@@ -216,12 +229,14 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
+          <BranchProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </BranchProvider>
         </QueryClientProvider>
       </AuthProvider>
     </ThemeProvider>

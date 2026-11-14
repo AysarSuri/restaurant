@@ -54,7 +54,7 @@ export const getGetBranchesQueryOptions = <
   TData = Awaited<ReturnType<typeof getBranches>>,
   TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getBranches>>, TError, TData>;
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getBranches>>, TError, TData>>;
   request?: RequestOpts;
 }) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
@@ -73,7 +73,7 @@ export function useGetBranches<
   TData = Awaited<ReturnType<typeof getBranches>>,
   TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getBranches>>, TError, TData>;
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getBranches>>, TError, TData>>;
   request?: RequestOpts;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBranchesQueryOptions(options);

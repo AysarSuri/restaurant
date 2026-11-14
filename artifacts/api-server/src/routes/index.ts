@@ -8,6 +8,7 @@ import employeesRouter from "./employees";
 import inventoryRouter from "./inventory";
 import expensesRouter from "./expenses";
 import branchesRouter from "./branches";
+import cardsRouter from "./cards";
 import reportsRouter from "./reports";
 
 const router: IRouter = Router();
@@ -21,6 +22,7 @@ router.use("/employees", employeesRouter);
 router.use("/inventory", inventoryRouter);
 router.use("/expenses", expensesRouter);
 router.use("/branches", branchesRouter);
+router.use("/cards", cardsRouter);
 router.use("/reports", reportsRouter);
 
 export default router;

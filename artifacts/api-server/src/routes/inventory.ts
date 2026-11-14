@@ -2,24 +2,51 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { inventoryTable } from "@workspace/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
+import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 
 const router: IRouter = Router();
 
-router.get("/", async (_req, res) => {
-  const items = await db.select().from(inventoryTable).orderBy(desc(inventoryTable.createdAt));
+router.get("/", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const cond = branchEq(inventoryTable.branchId, scope);
+  const items = await db
+    .select()
+    .from(inventoryTable)
+    .where(cond)
+    .orderBy(desc(inventoryTable.createdAt));
   res.json(items);
 });
 
 router.post("/", async (req, res) => {
-  const { name, nameAr, unit, currentQuantity, minimumQuantity, costPerUnit, category, supplier } = req.body;
+  const scope = parseBranchScope(req);
+  const {
+    name,
+    nameAr,
+    unit,
+    currentQuantity,
+    minimumQuantity,
+    costPerUnit,
+    category,
+    supplier,
+    branchId,
+  } = req.body;
+  const resolvedBranchId = resolveWriteBranchId(scope, branchId);
+  if (!resolvedBranchId) {
+    res.status(400).json({ error: "اختر فرعاً قبل إضافة مخزون" });
+    return;
+  }
   const [item] = await db
     .insert(inventoryTable)
     .values({
-      name, nameAr, unit,
+      name,
+      nameAr,
+      unit,
       currentQuantity: currentQuantity.toString(),
       minimumQuantity: minimumQuantity.toString(),
       costPerUnit: costPerUnit?.toString(),
-      category, supplier,
+      category,
+      supplier,
+      branchId: resolvedBranchId,
     })
     .returning();
   res.status(201).json(item);
@@ -27,15 +54,29 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, nameAr, unit, currentQuantity, minimumQuantity, costPerUnit, category, supplier } = req.body;
+  const {
+    name,
+    nameAr,
+    unit,
+    currentQuantity,
+    minimumQuantity,
+    costPerUnit,
+    category,
+    supplier,
+    branchId,
+  } = req.body;
   const [item] = await db
     .update(inventoryTable)
     .set({
-      name, nameAr, unit,
+      name,
+      nameAr,
+      unit,
       currentQuantity: currentQuantity?.toString(),
       minimumQuantity: minimumQuantity?.toString(),
       costPerUnit: costPerUnit?.toString(),
-      category, supplier,
+      category,
+      supplier,
+      ...(branchId != null ? { branchId: Number(branchId) } : {}),
     })
     .where(eq(inventoryTable.id, id))
     .returning();

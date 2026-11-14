@@ -17,6 +17,7 @@ import {
   Wallet,
   LogOut,
   Building2,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { getGetBranchesQueryOptions } from "@workspace/api-client-react";
@@ -43,6 +44,7 @@ const HOME_ITEMS: HomeItem[] = [
   { href: "/employees", label: "الموظفين", icon: UsersRound, roles: ["admin", "manager"] },
   { href: "/expenses", label: "المصاريف", icon: Receipt, roles: ["admin", "manager"] },
   { href: "/branches", label: "الفروع", icon: Building2, roles: ["admin", "manager"] },
+  { href: "/cards", label: "البطاقات", icon: CreditCard, roles: ["admin", "manager"] },
   { href: "/reports", label: "التقارير", icon: LineChart, roles: ["admin", "manager"] },
 ];
 

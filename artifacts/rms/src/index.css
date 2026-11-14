@@ -217,11 +217,84 @@
 }
 
 /*
-  Compact / POS portrait shells:
-  - phones, small tablets
-  - portrait terminals up to ~1080px wide (e.g. Gasan POS)
+  POS layout is class-driven (not width-only media queries) so Windows
+  display scaling / portrait PC (e.g. 1080×1920 @125–150%) still get
+  dual-pane: menu RIGHT · current order LEFT.
 */
-@media (max-width: 1199px), ((orientation: portrait) and (max-width: 1400px)) {
+.pos-compact {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.pos-compact .pos-order-aside {
+  display: none !important;
+}
+
+.pos-compact .pos-cart-fab {
+  display: flex !important;
+}
+
+.pos-expansive {
+  display: grid !important;
+  /* RTL: first column = right (menu), second = left (cart) */
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 40%);
+  grid-template-rows: 1fr;
+  gap: 0;
+  width: 100%;
+  max-width: none;
+}
+
+.pos-expansive-xl {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 38%);
+}
+
+.pos-expansive .pos-cart-fab {
+  display: none !important;
+}
+
+.pos-expansive .pos-order-aside {
+  display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Portrait computer / kiosk: two balanced screens */
+.pos-expansive.pos-portrait {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.pos-expansive.pos-portrait > :first-child {
+  border-inline-end: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.pos-expansive.pos-portrait .pos-order-pane {
+  min-width: 0;
+  box-shadow: none;
+  border-inline-start: none;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 92%, var(--primary) 8%) 0%,
+      var(--card) 28%,
+      var(--card) 100%
+    );
+}
+
+.pos-expansive.pos-portrait .pos-menu-pane {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 70% 0%,
+      color-mix(in oklab, var(--primary) 12%, transparent),
+      transparent 55%
+    ),
+    var(--background);
+}
+
+/* Legacy helpers for non-POS pages */
+@media (max-width: 899px) {
   .rms-stack-portrait {
     flex-direction: column !important;
   }
@@ -233,7 +306,7 @@
   }
 }
 
-@media (min-width: 1200px) and (orientation: landscape) {
+@media (min-width: 900px) {
   .rms-show-on-compact {
     display: none !important;
   }

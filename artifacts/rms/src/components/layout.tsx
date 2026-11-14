@@ -11,7 +11,9 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Dialog, Button } from "./ui-elements";
+import { BranchSwitcher } from "./branch-switcher";
 import { useTheme, useAuth } from "@/App";
+import { useBranch } from "@/lib/branch-context";
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "الصفحة الرئيسية",
@@ -25,6 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/employees": "الموظفين",
   "/expenses": "المصاريف",
   "/branches": "الفروع",
+  "/cards": "البطاقات",
   "/reports": "التقارير",
   "/cashier": "شاشة الكاشير",
   "/table-order": "طلب الطاولة",
@@ -42,6 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { branchLabel } = useBranch();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
@@ -114,6 +118,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            <BranchSwitcher compact />
             <div className="hidden sm:block text-right me-1 md:me-2">
               <div className="text-xs md:text-sm font-semibold text-foreground">
                 {new Date().toLocaleDateString("ar-IQ", {
@@ -124,7 +129,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 })}
               </div>
               <div className="text-[10px] md:text-xs text-primary font-display">
-                {user?.name ?? ""} · {ROLE_LABELS[user?.role ?? ""] ?? ""}
+                {user?.name ?? ""} · {ROLE_LABELS[user?.role ?? ""] ?? ""} · {branchLabel}
               </div>
             </div>
 

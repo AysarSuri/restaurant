@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { useBranch } from "@/lib/branch-context";
+import { BranchSwitcher } from "@/components/branch-switcher";
 
 interface CartItem extends MenuItem {
   cartQuantity: number;
@@ -34,7 +36,11 @@ export default function POS() {
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-  const { isCompactPos } = useBreakpoint();
+  const { isCompactPos, isPortrait, width } = useBreakpoint();
+  const { selectedBranchId, branchLabel } = useBranch();
+  const isPortraitPos = !isCompactPos && isPortrait;
+  const isWidePos = !isCompactPos && !isPortrait && width >= 1400;
+  const needsBranchPick = selectedBranchId === "all";
 
   const formatIQD = (val: number) =>
     new Intl.NumberFormat("en-IQ").format(Math.round(val));
@@ -50,6 +56,7 @@ export default function POS() {
   const selectedTable = tables?.find((t) => t.id === selectedTableId);
 
   const addToCart = (item: MenuItem) => {
+    if (needsBranchPick) return;
     setCart((prev) => {
       const existing = prev.find((i) => i.id === item.id);
       if (existing)
@@ -132,13 +139,27 @@ export default function POS() {
   };
 
   const cartPanel = (compact: boolean) => (
-      <div className={`${compact ? "h-full" : "w-full max-w-md lg:w-96 xl:w-[26rem]"} glass-panel border-r border-border/50 flex flex-col z-20 shadow-2xl relative`}>
-        <div className="p-4 sm:p-5 border-b border-border/50 space-y-3 sm:space-y-4">
+      <div
+        className={`pos-order-pane ${
+          compact
+            ? "h-full"
+            : isPortraitPos
+              ? "h-full w-full min-w-0"
+              : "h-full w-full min-w-[360px]"
+        } bg-card/90 backdrop-blur-xl border-s border-border/60 flex flex-col z-20 shadow-[-12px_0_40px_rgba(0,0,0,0.12)] relative`}
+      >
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-primary via-amber-400 to-transparent" />
+        <div className={`border-b border-border/50 space-y-3 sm:space-y-4 ${isPortraitPos && !compact ? "p-5 xl:p-6" : "p-4 sm:p-5"}`}>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg sm:text-xl font-bold flex items-center">
-              <ShoppingCart className="w-5 h-5 me-2 text-primary" />
-              الطلب الحالي
-            </h2>
+            <div>
+              <p className="text-[10px] font-display tracking-[0.2em] uppercase text-primary mb-0.5">
+                {isPortraitPos && !compact ? "Order Screen" : "Current Order"}
+              </p>
+              <h2 className={`font-extrabold flex items-center ${isPortraitPos && !compact ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl"}`}>
+                <ShoppingCart className={`me-2 text-primary ${isPortraitPos && !compact ? "w-6 h-6" : "w-5 h-5"}`} />
+                {isPortraitPos && !compact ? "شاشة الطلب" : "الطلب الحالي"}
+              </h2>
+            </div>
             {compact && (
               <button
                 onClick={() => setCartOpen(false)}
@@ -341,37 +362,59 @@ export default function POS() {
   );
 
   return (
-    <div className="flex h-app bg-background overflow-hidden text-foreground page-shell rms-stack-portrait">
-      {/* ── Menu Side ── */}
-      <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden relative">
-        <img
-          src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
-          alt="bg"
-          className="absolute inset-0 w-full h-full object-cover opacity-10 pointer-events-none"
-        />
+    <div
+      className={`h-app w-full bg-background overflow-hidden text-foreground ${
+        isCompactPos
+          ? "pos-compact"
+          : `pos-expansive pos-expansive-xl${isPortraitPos ? " pos-portrait" : ""}`
+      }`}
+    >
+      {/* ── Menu (RIGHT in RTL) ── */}
+      <div className="pos-menu-pane min-w-0 min-h-0 flex flex-col h-full overflow-hidden relative">
+        {!isPortraitPos && (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-bl from-primary/8 via-transparent to-amber-500/5 pointer-events-none" />
+            <img
+              src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-[0.07] pointer-events-none"
+            />
+          </>
+        )}
 
-        <header className="p-3 sm:p-4 md:p-6 relative z-10 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between bg-card/50 backdrop-blur-md border-b border-border/50">
+        <header
+          className={`relative z-10 flex flex-col gap-3 border-b border-border/50 bg-card/60 backdrop-blur-xl ${
+            isPortraitPos
+              ? "p-4 xl:p-5"
+              : "p-3 sm:p-4 md:p-5 xl:p-6 sm:flex-row sm:items-center sm:justify-between"
+          }`}
+        >
           <div className="flex items-center gap-3 min-w-0">
             <Button variant="outline" size="icon" className="touch-target flex-shrink-0" onClick={() => window.history.back()}>
               <ArrowLeft />
             </Button>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">نقطة البيع</h1>
-              <p className="text-xs sm:text-sm text-primary font-display tracking-widest uppercase">POS System</p>
+              <h1 className={`font-extrabold truncate ${isPortraitPos ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl md:text-2xl xl:text-3xl"}`}>
+                نقطة البيع
+              </h1>
+              <p className="text-xs sm:text-sm text-primary font-display tracking-widest uppercase truncate">
+                {branchLabel} · {isPortraitPos ? "شاشة الأصناف" : "POS"}
+              </p>
             </div>
+            <BranchSwitcher compact />
           </div>
-          <div className="relative w-full sm:w-64 md:w-72">
+          <div className={`relative w-full ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"}`}>
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               placeholder="ابحث عن صنف..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pr-12 h-11 bg-background/80 border-border/50"
+              className="pr-12 h-11 xl:h-12 bg-background/80 border-border/50"
             />
           </div>
         </header>
 
-        <div className="px-3 sm:px-6 py-3 flex gap-2 sm:gap-3 overflow-x-auto relative z-10 scrollbar-hide">
+        <div className={`py-3 flex gap-2 sm:gap-3 overflow-x-auto relative z-10 scrollbar-hide ${isPortraitPos ? "px-4 xl:px-5" : "px-3 sm:px-5 xl:px-6"}`}>
           <Button
             variant={activeCategory === null ? "default" : "secondary"}
             onClick={() => setActiveCategory(null)}
@@ -391,38 +434,65 @@ export default function POS() {
           ))}
         </div>
 
-        <div className={`flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 relative z-10 ${isCompactPos ? "pb-28" : ""}`}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+        <div className={`flex-1 overflow-y-auto relative z-10 ${isCompactPos ? "pb-28 p-3 sm:p-4" : isPortraitPos ? "p-4 xl:p-5" : "p-3 sm:p-4 md:p-5 xl:p-6"}`}>
+          {needsBranchPick && (
+            <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
+              أنت تشاهد «كل الفروع». اختر فرعاً محدداً من الأعلى قبل البيع أو إنشاء طلب.
+            </div>
+          )}
+          <div
+            className={`grid gap-3 md:gap-4 ${
+              isCompactPos
+                ? "grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3"
+                : isPortraitPos
+                  ? "grid-cols-2 xl:grid-cols-3"
+                  : isWidePos
+                    ? "grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+                    : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+            }`}
+          >
             <AnimatePresence mode="popLayout">
               {filteredItems?.map((item) => {
                 const inCart = cart.find((c) => c.id === item.id);
                 return (
-                  <motion.div
+                  <motion.button
                     key={item.id}
+                    type="button"
                     layout
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={{ opacity: 0, scale: 0.96 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    whileTap={{ scale: 0.95 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => addToCart(item)}
-                    className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-2xl p-3 sm:p-4 cursor-pointer flex flex-col justify-between hover:border-primary/60 hover:shadow-xl hover:shadow-primary/10 transition-all relative"
+                    className={`text-start bg-card/85 backdrop-blur-sm border rounded-2xl p-3 sm:p-4 cursor-pointer flex flex-col justify-between transition-all relative overflow-hidden
+                      ${
+                        inCart
+                          ? "border-primary/70 shadow-lg shadow-primary/15 ring-1 ring-primary/30"
+                          : "border-border/50 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10"
+                      }`}
                   >
                     {inCart && (
-                      <div className="absolute top-2 left-2 w-7 h-7 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground z-10">
+                      <div className="absolute top-2 left-2 min-w-7 h-7 px-1.5 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground z-10 shadow-md">
                         {inCart.cartQuantity}
                       </div>
                     )}
-                    <div className="w-full aspect-square rounded-xl bg-secondary/50 mb-2 sm:mb-4 flex items-center justify-center overflow-hidden">
-                      <div className="text-3xl sm:text-4xl">🍽️</div>
+                    <div className="w-full aspect-[4/3] sm:aspect-square rounded-xl bg-gradient-to-br from-secondary to-secondary/40 mb-2 sm:mb-3 flex items-center justify-center overflow-hidden">
+                      <ChefHat className="w-10 h-10 sm:w-12 sm:h-12 text-primary/40" />
                     </div>
-                    <div>
-                      <h3 className="font-bold text-sm sm:text-base leading-tight mb-1 line-clamp-2">{item.nameAr}</h3>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground font-display mb-2 hidden sm:block">{item.name}</p>
-                      <div className="text-primary font-bold font-display text-sm sm:text-lg">
-                        {formatIQD(Number(item.price))}
+                    <div className="mt-auto">
+                      <h3 className="font-extrabold text-sm sm:text-base leading-tight mb-1 line-clamp-2">{item.nameAr}</h3>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground font-display mb-2 hidden sm:block truncate">{item.name}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-primary font-extrabold font-display text-sm sm:text-lg">
+                          {formatIQD(Number(item.price))}
+                          <span className="text-[10px] ms-1 font-bold opacity-70">د.ع</span>
+                        </div>
+                        <span className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                          <Plus className="w-4 h-4" />
+                        </span>
                       </div>
                     </div>
-                  </motion.div>
+                  </motion.button>
                 );
               })}
             </AnimatePresence>
@@ -430,16 +500,16 @@ export default function POS() {
         </div>
       </div>
 
-      {/* Desktop / landscape cart */}
-      <div className="rms-hide-on-compact hidden lg:flex flex-shrink-0 h-full">
+      {/* ── Current order (LEFT in RTL) ── */}
+      <aside className="pos-order-aside min-h-0 h-full overflow-hidden flex flex-col">
         {cartPanel(false)}
-      </div>
+      </aside>
 
-      {/* Compact / POS portrait cart FAB */}
+      {/* Compact cart FAB — phones / small tablets only */}
       <button
         type="button"
         onClick={() => setCartOpen(true)}
-        className="rms-show-on-compact fixed bottom-4 left-1/2 -translate-x-1/2 z-30 hidden items-center gap-3 px-5 py-3 rounded-2xl bg-primary text-primary-foreground shadow-2xl shadow-primary/30 font-bold safe-pb"
+        className="pos-cart-fab fixed bottom-4 left-1/2 -translate-x-1/2 z-30 hidden items-center gap-3 px-5 py-3 rounded-2xl bg-primary text-primary-foreground shadow-2xl shadow-primary/30 font-bold safe-pb"
       >
         <ShoppingCart className="w-5 h-5" />
         <span>السلة ({cart.reduce((n, i) => n + i.cartQuantity, 0)})</span>
@@ -462,7 +532,7 @@ export default function POS() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              className="fixed inset-x-0 bottom-0 top-[12%] z-50 overflow-hidden rounded-t-3xl"
+              className="fixed inset-x-0 bottom-0 top-[10%] z-50 overflow-hidden rounded-t-3xl"
             >
               {cartPanel(true)}
             </motion.div>
