@@ -27,7 +27,6 @@ import {
   Wallet,
   Search,
   X,
-  Copy,
 } from "lucide-react";
 
 const EMPTY_FORM = {
@@ -62,7 +61,6 @@ export default function CardsPage() {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<"name" | "openingBalance" | "branches", string>>>({});
   const [submitError, setSubmitError] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const syncCards = (next: Card[]) => {
     queryClient.setQueryData<Card[]>(getGetCardsQueryKey(), next);
@@ -206,17 +204,6 @@ export default function CardsPage() {
         },
       }
     );
-  };
-
-  const copyToken = async () => {
-    if (!qrTarget) return;
-    try {
-      await navigator.clipboard.writeText(qrTarget.qrToken);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
   };
 
   const showLoader = isLoading && !cards;
@@ -486,10 +473,7 @@ export default function CardsPage() {
 
       <Dialog
         isOpen={Boolean(qrTarget)}
-        onClose={() => {
-          setQrTarget(null);
-          setCopied(false);
-        }}
+        onClose={() => setQrTarget(null)}
         title="رمز QR للبطاقة"
         maxWidth="max-w-md"
       >
@@ -508,22 +492,6 @@ export default function CardsPage() {
             <div>
               <p className="font-extrabold text-lg">{qrTarget.name}</p>
               <p className="text-sm text-primary font-display mt-1">{formatMoney(qrTarget.balance)}</p>
-            </div>
-            <div className="rounded-xl border border-border/60 bg-secondary/40 px-3 py-2.5 text-start">
-              <p className="text-[11px] text-muted-foreground mb-1">رمز البطاقة</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono break-all" dir="ltr">
-                  {qrTarget.qrToken}
-                </code>
-                <button
-                  type="button"
-                  onClick={copyToken}
-                  className="h-9 w-9 rounded-lg border border-border bg-background flex items-center justify-center hover:border-primary/40"
-                  title="نسخ"
-                >
-                  {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
             </div>
             <Button variant="outline" className="w-full gap-2" onClick={() => setQrTarget(null)}>
               <X className="w-4 h-4" /> إغلاق

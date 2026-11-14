@@ -18,11 +18,14 @@ import Employees from "@/pages/employees";
 import Expenses from "@/pages/expenses";
 import Branches from "@/pages/branches";
 import Cards from "@/pages/cards";
+import Settings from "@/pages/settings";
 import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import Cashier from "@/pages/cashier";
 import TableOrder from "@/pages/table-order";
 import { BranchProvider } from "@/lib/branch-context";
+import { applyBrandPrimary } from "@/lib/brand-theme";
+import { useGetSettings } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +73,21 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
       {children}
     </ThemeContext.Provider>
   );
+}
+
+function BrandThemeSync() {
+  const { data } = useGetSettings({
+    query: {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  });
+
+  useEffect(() => {
+    if (data?.themePrimary) applyBrandPrimary(data.themePrimary);
+  }, [data?.themePrimary]);
+
+  return null;
 }
 
 // ─── Auth ─────────────────────────────────────────────────
@@ -162,6 +180,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/expenses": ["admin", "manager"],
   "/branches": ["admin", "manager"],
   "/cards": ["admin", "manager"],
+  "/settings": ["admin", "manager"],
   "/reports": ["admin", "manager"],
 };
 
@@ -214,6 +233,7 @@ function Router() {
       <Route path="/expenses" component={Expenses} />
       <Route path="/branches" component={Branches} />
       <Route path="/cards" component={Cards} />
+      <Route path="/settings" component={Settings} />
       <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
@@ -231,6 +251,7 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <BranchProvider>
             <TooltipProvider>
+              <BrandThemeSync />
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <Router />
               </WouterRouter>

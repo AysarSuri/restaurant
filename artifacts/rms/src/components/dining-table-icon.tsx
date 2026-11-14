@@ -96,7 +96,7 @@ export function DiningTableIcon({ className = "", number }: DiningTableIconProps
           fill="#5C3A10"
           fontSize="16"
           fontWeight="800"
-          fontFamily="Tajawal, sans-serif"
+          fontFamily="Vazirmatn, 'Noto Sans Arabic', sans-serif"
         >
           {number}
         </text>

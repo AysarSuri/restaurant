@@ -1,9 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: 'Tajawal', sans-serif;
-  --font-display: 'Tajawal', sans-serif;
+  /* Vazirmatn supports Kurdish Sorani joining; Noto as fallback */
+  --font-sans: 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
+  --font-display: 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -143,8 +144,11 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary;
     direction: rtl;
-    font-family: 'Tajawal', sans-serif;
+    font-family: 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
     font-weight: 700;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "liga" 1, "calt" 1, "kern" 1;
+    font-variant-ligatures: common-ligatures contextual;
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
@@ -153,6 +157,14 @@
       env(safe-area-inset-right, 0)
       env(safe-area-inset-bottom, 0)
       env(safe-area-inset-left, 0);
+  }
+
+  /*
+    Letter-spacing breaks Arabic/Kurdish cursive joining.
+    Keep tracking utilities for Latin-only labels (e.g. RMS 2026).
+  */
+  :where(h1, h2, h3, h4, h5, h6, p, span, button, a, label, li, td, th, input, textarea, select) {
+    font-family: inherit;
   }
 
   /* Custom Scrollbar for a premium feel */
@@ -178,6 +190,13 @@
 }
 
 @layer utilities {
+  /* Never stretch Arabic/Kurdish letters apart */
+  .text-ar,
+  .text-ckb {
+    letter-spacing: 0 !important;
+    word-spacing: normal;
+  }
+
   .h-app {
     height: 100vh;
     height: 100dvh;

@@ -9,3 +9,4 @@ export * from "./inventory";
 export * from "./expenses";
 export * from "./branches";
 export * from "./cards";
+export * from "./settings";

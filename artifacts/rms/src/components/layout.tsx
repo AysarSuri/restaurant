@@ -14,6 +14,7 @@ import { Dialog, Button } from "./ui-elements";
 import { BranchSwitcher } from "./branch-switcher";
 import { useTheme, useAuth } from "@/App";
 import { useBranch } from "@/lib/branch-context";
+import { useGetSettings } from "@workspace/api-client-react";
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "الصفحة الرئيسية",
@@ -28,6 +29,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/expenses": "المصاريف",
   "/branches": "الفروع",
   "/cards": "البطاقات",
+  "/settings": "الإعدادات",
   "/reports": "التقارير",
   "/cashier": "شاشة الكاشير",
   "/table-order": "طلب الطاولة",
@@ -46,6 +48,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { branchLabel } = useBranch();
+  const { data: appSettings } = useGetSettings({
+    query: { staleTime: 60_000, refetchOnWindowFocus: false },
+  });
+  const restaurantName = appSettings?.restaurantName?.trim() || "المطعم الذكي";
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
@@ -104,7 +110,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <ChefHat className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
                 </div>
                 <div className="min-w-0 text-right">
-                  <h1 className="text-base sm:text-lg font-bold text-foreground leading-none truncate">المطعم الذكي</h1>
+                  <h1 className="text-base sm:text-lg font-bold text-foreground leading-none truncate">{restaurantName}</h1>
                   <p className="text-[10px] text-primary font-medium tracking-widest font-display uppercase">RMS 2026</p>
                 </div>
               </button>

@@ -1,0 +1,267 @@
+import React, { useMemo, useState } from "react";
+import { Check, ChevronDown, Search, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+export type ComboboxOption = {
+  value: string;
+  label: string;
+  subtitle?: string;
+  icon?: LucideIcon;
+};
+
+type ModernComboboxProps = {
+  value: string;
+  onChange: (value: string) => void;
+  options: ComboboxOption[];
+  placeholder?: string;
+  label?: string;
+  hint?: string;
+  icon?: LucideIcon;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  allowCustom?: boolean;
+  customPlaceholder?: string;
+  emptyText?: string;
+  disabled?: boolean;
+  className?: string;
+  dir?: "rtl" | "ltr";
+};
+
+export function ModernCombobox({
+  value,
+  onChange,
+  options,
+  placeholder = "اختر...",
+  label,
+  hint,
+  icon: TriggerIcon,
+  searchable = true,
+  searchPlaceholder = "بحث...",
+  allowCustom = false,
+  customPlaceholder = "أو اكتب قيمة مخصصة",
+  emptyText = "لا توجد نتائج",
+  disabled = false,
+  className,
+  dir = "rtl",
+}: ModernComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [customDraft, setCustomDraft] = useState("");
+
+  const selected = options.find((o) => o.value === value);
+  const displayLabel = selected?.label || (value ? value : placeholder);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter(
+      (o) =>
+        o.label.toLowerCase().includes(q) ||
+        o.subtitle?.toLowerCase().includes(q) ||
+        o.value.toLowerCase().includes(q)
+    );
+  }, [options, query]);
+
+  const commitCustom = () => {
+    const next = customDraft.trim();
+    if (!next) return;
+    onChange(next);
+    setCustomDraft("");
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div className={cn("w-full", className)}>
+      {label ? (
+        <div className="mb-1.5 flex items-end justify-between gap-2">
+          <label className="block text-sm font-semibold text-foreground">{label}</label>
+          {hint ? <span className="text-[10px] text-muted-foreground">{hint}</span> : null}
+        </div>
+      ) : null}
+
+      <DropdownMenu
+        open={open}
+        onOpenChange={(next) => {
+          if (disabled) return;
+          setOpen(next);
+          if (!next) {
+            setQuery("");
+            setCustomDraft("");
+          }
+        }}
+        dir={dir}
+      >
+        <DropdownMenuTrigger asChild disabled={disabled}>
+          <button
+            type="button"
+            disabled={disabled}
+            className={cn(
+              "group relative flex w-full items-center gap-2.5 overflow-hidden border text-start transition-all duration-200",
+              "h-12 rounded-xl ps-2.5 pe-3",
+              "bg-gradient-to-l from-primary/12 via-card/85 to-card/95 backdrop-blur-md",
+              "border-primary/25 shadow-[0_8px_22px_-14px_hsla(var(--primary),0.5)]",
+              "hover:border-primary/45 hover:shadow-[0_12px_26px_-12px_hsla(var(--primary),0.55)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+              "data-[state=open]:border-primary/55 data-[state=open]:bg-primary/10",
+              disabled && "opacity-60 cursor-not-allowed"
+            )}
+          >
+            {TriggerIcon ? (
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-md shadow-primary/25">
+                <TriggerIcon className="h-4 w-4" />
+              </span>
+            ) : null}
+            <span className="min-w-0 flex-1 leading-tight">
+              <span
+                className={cn(
+                  "block truncate text-sm font-bold",
+                  selected || value ? "text-foreground" : "text-muted-foreground"
+                )}
+                dir={selected || !value ? dir : "ltr"}
+              >
+                {displayLabel}
+              </span>
+              {selected?.subtitle ? (
+                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                  {selected.subtitle}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 flex-shrink-0 text-primary/80 transition-transform duration-200",
+                open && "rotate-180"
+              )}
+            />
+          </button>
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent
+          align="end"
+          sideOffset={8}
+          className={cn(
+            "z-[90] min-w-[18rem] w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border/70",
+            "bg-popover/95 p-0 text-popover-foreground shadow-2xl shadow-black/20 backdrop-blur-xl"
+          )}
+        >
+          <div className="border-b border-border/60 bg-gradient-to-l from-primary/10 via-transparent to-transparent px-3.5 py-3">
+            <DropdownMenuLabel className="p-0 text-sm font-extrabold text-foreground">
+              {label || "اختر خياراً"}
+            </DropdownMenuLabel>
+            {hint ? <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p> : null}
+          </div>
+
+          {searchable ? (
+            <div className="border-b border-border/50 p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute end-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="h-10 w-full rounded-xl border border-border/70 bg-background/70 pe-9 ps-3 text-sm outline-none focus:border-primary/50"
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="max-h-[min(16rem,45vh)] space-y-1 overflow-y-auto p-2">
+            {filtered.length === 0 ? (
+              <p className="px-2 py-6 text-center text-xs text-muted-foreground">{emptyText}</p>
+            ) : (
+              filtered.map((option) => {
+                const active = value === option.value;
+                const Icon = option.icon;
+                return (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onSelect={() => {
+                      onChange(option.value);
+                      setQuery("");
+                    }}
+                    className={cn(
+                      "cursor-pointer items-start gap-3 rounded-xl border border-transparent px-2.5 py-2.5",
+                      "focus:bg-primary/10 data-[highlighted]:bg-primary/10",
+                      active && "border-primary/25 bg-primary/10"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border",
+                        active
+                          ? "border-primary/30 bg-primary/15 text-primary"
+                          : "border-border/70 bg-secondary/80 text-foreground"
+                      )}
+                    >
+                      {Icon ? <Icon className="h-4 w-4" /> : <Check className={cn("h-4 w-4", !active && "opacity-0")} />}
+                    </span>
+                    <span className="min-w-0 flex-1 text-start">
+                      <span className="block truncate text-sm font-bold" dir={dir === "ltr" ? "ltr" : undefined}>
+                        {option.label}
+                      </span>
+                      {option.subtitle ? (
+                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                          {option.subtitle}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-1.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full",
+                        active ? "bg-primary text-primary-foreground" : "text-transparent"
+                      )}
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
+                  </DropdownMenuItem>
+                );
+              })
+            )}
+          </div>
+
+          {allowCustom ? (
+            <>
+              <DropdownMenuSeparator className="my-0 bg-border/70" />
+              <div className="space-y-2 p-2">
+                <p className="px-1 text-[11px] font-semibold text-muted-foreground">{customPlaceholder}</p>
+                <div className="flex gap-2">
+                  <input
+                    value={customDraft}
+                    onChange={(e) => setCustomDraft(e.target.value)}
+                    placeholder="اكتب هنا..."
+                    dir="ltr"
+                    className="h-10 flex-1 rounded-xl border border-border/70 bg-background/70 px-3 text-sm outline-none focus:border-primary/50"
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitCustom();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={commitCustom}
+                    className="h-10 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:brightness-110"
+                  >
+                    اعتماد
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
