@@ -46,6 +46,8 @@ export interface MenuItem {
   cost?: number;
   imageUrl?: string;
   isAvailable: boolean;
+  /** Favorite — shown first in POS */
+  isFavorite?: boolean;
   /** true = available in all branches */
   allBranches?: boolean;
   /** specific branch ids when allBranches is false */
@@ -68,6 +70,7 @@ export interface CreateMenuItemBody {
   cost?: number;
   imageUrl?: string;
   isAvailable?: boolean;
+  isFavorite?: boolean;
   allBranches?: boolean;
   branchIds?: number[];
   preparationTime?: number;

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   useGetMenuItems,
   useCreateMenuItem,
@@ -13,14 +13,18 @@ import {
   type MenuItem,
 } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
-import { Dialog, Input, Button, Select } from "@/components/ui-elements";
+import { Dialog, Input, Button } from "@/components/ui-elements";
+import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import {
   Building2,
   Check,
+  Eye,
+  EyeOff,
   FolderPlus,
   ImagePlus,
   Pencil,
   Plus,
+  Star,
   Tags,
   Trash2,
   X,
@@ -114,9 +118,21 @@ export default function Menu() {
     price: 0,
     categoryId: 0,
     isAvailable: true,
+    isFavorite: false,
     allBranches: true,
     branchIds: [] as number[],
+    imageUrl: "",
   });
+  const itemImageInputRef = useRef<HTMLInputElement>(null);
+
+  const categoryOptions = useMemo<ComboboxOption[]>(() => {
+    return (categories ?? []).map((c) => ({
+      value: String(c.id),
+      label: c.nameAr,
+      subtitle: c.name?.trim() || "تصنيف قائمة",
+      icon: Tags,
+    }));
+  }, [categories]);
 
   const handleOpen = (item?: MenuItem) => {
     setFormError("");
@@ -128,8 +144,10 @@ export default function Menu() {
         price: item.price,
         categoryId: item.categoryId,
         isAvailable: item.isAvailable,
+        isFavorite: item.isFavorite === true,
         allBranches: item.allBranches !== false || !(item.branchIds?.length),
         branchIds: item.branchIds ?? [],
+        imageUrl: item.imageUrl || "",
       });
     } else {
       setEditing(null);
@@ -139,8 +157,10 @@ export default function Menu() {
         price: 0,
         categoryId: categories?.[0]?.id || 0,
         isAvailable: true,
+        isFavorite: false,
         allBranches: true,
         branchIds: [],
+        imageUrl: "",
       });
     }
     setIsOpen(true);
@@ -160,6 +180,48 @@ export default function Menu() {
     setFormError("");
   };
 
+  const isDuplicateName = (nameAr: string, name: string, excludeId?: number) => {
+    const ar = nameAr.trim().toLowerCase();
+    const en = name.trim().toLowerCase();
+    return (items ?? []).some((item) => {
+      if (excludeId != null && item.id === excludeId) return false;
+      return (
+        item.nameAr.trim().toLowerCase() === ar ||
+        item.name.trim().toLowerCase() === en
+      );
+    });
+  };
+
+  const toggleItemFlag = (
+    item: MenuItem,
+    patch: { isAvailable?: boolean; isFavorite?: boolean }
+  ) => {
+    update(
+      {
+        id: item.id,
+        data: {
+          categoryId: item.categoryId,
+          name: item.name,
+          nameAr: item.nameAr,
+          nameKu: item.nameKu ?? "",
+          description: item.description ?? "",
+          descriptionAr: item.descriptionAr ?? "",
+          price: item.price,
+          cost: item.cost,
+          imageUrl: item.imageUrl ?? null,
+          isAvailable: patch.isAvailable ?? item.isAvailable,
+          isFavorite: patch.isFavorite ?? item.isFavorite === true,
+          allBranches: item.allBranches !== false,
+          branchIds: item.branchIds ?? [],
+          preparationTime: item.preparationTime,
+          calories: item.calories,
+          sortOrder: item.sortOrder,
+        },
+      },
+      { onSuccess: () => refetch() }
+    );
+  };
+
   const handleSubmit = () => {
     if (!formData.nameAr.trim() || !formData.name.trim()) {
       setFormError("الاسم العربي والإنجليزي مطلوبان");
@@ -173,6 +235,10 @@ export default function Menu() {
       setFormError("اختر جميع الفروع أو فرعاً واحداً على الأقل");
       return;
     }
+    if (isDuplicateName(formData.nameAr, formData.name, editing?.id)) {
+      setFormError("اسم الصنف مكرر — اختر اسماً عربياً أو إنجليزياً مختلفاً");
+      return;
+    }
     setFormError("");
 
     const data = {
@@ -181,17 +247,39 @@ export default function Menu() {
       price: formData.price,
       categoryId: formData.categoryId,
       isAvailable: formData.isAvailable,
+      isFavorite: formData.isFavorite,
       allBranches: formData.allBranches,
       branchIds: formData.allBranches ? [] : formData.branchIds,
+      imageUrl: formData.imageUrl || null,
       nameKu: "",
       description: "",
       descriptionAr: "",
     };
 
+    const onError = (err: any) =>
+      setFormError(err?.data?.message || err?.message || "تعذر الحفظ");
+
     if (editing) {
-      update({ id: editing.id, data }, { onSuccess: () => { setIsOpen(false); refetch(); } });
+      update(
+        { id: editing.id, data },
+        { onSuccess: () => { setIsOpen(false); refetch(); }, onError }
+      );
     } else {
-      create({ data }, { onSuccess: () => { setIsOpen(false); refetch(); } });
+      create(
+        { data },
+        { onSuccess: () => { setIsOpen(false); refetch(); }, onError }
+      );
+    }
+  };
+
+  const pickItemImage = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const dataUrl = await readCategoryImageFile(file);
+      setFormData((f) => ({ ...f, imageUrl: dataUrl }));
+      setFormError("");
+    } catch (err: any) {
+      setFormError(err?.message || "تعذر رفع الصورة");
     }
   };
 
@@ -314,6 +402,13 @@ export default function Menu() {
   };
 
   const columns = [
+    {
+      key: "imageUrl",
+      header: "الصورة",
+      render: (item: MenuItem) => (
+        <CategoryImageThumb src={item.imageUrl} alt={item.nameAr} className="w-11 h-11" />
+      ),
+    },
     { key: "nameAr", header: "الاسم (عربي)" },
     { key: "name", header: "الاسم (إنجليزي)" },
     {
@@ -353,16 +448,47 @@ export default function Menu() {
     },
     {
       key: "isAvailable",
-      header: "الحالة",
-      render: (item: MenuItem) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-bold ${
-            item.isAvailable ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
-          }`}
-        >
-          {item.isAvailable ? "متاح" : "غير متاح"}
-        </span>
-      ),
+      header: "إخفاء",
+      render: (item: MenuItem) => {
+        const hidden = !item.isAvailable;
+        return (
+          <button
+            type="button"
+            onClick={() => toggleItemFlag(item, { isAvailable: hidden })}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-extrabold border transition-colors ${
+              hidden
+                ? "bg-destructive/15 text-destructive border-destructive/30"
+                : "bg-success/15 text-success border-success/30 hover:bg-success/25"
+            }`}
+            title={hidden ? "إظهار في نقطة البيع" : "إخفاء من نقطة البيع"}
+          >
+            {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {hidden ? "مخفي" : "ظاهر"}
+          </button>
+        );
+      },
+    },
+    {
+      key: "isFavorite",
+      header: "مفضلة",
+      render: (item: MenuItem) => {
+        const fav = item.isFavorite === true;
+        return (
+          <button
+            type="button"
+            onClick={() => toggleItemFlag(item, { isFavorite: !fav })}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-extrabold border transition-colors ${
+              fav
+                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/35"
+                : "bg-secondary/60 text-muted-foreground border-border/60 hover:border-amber-500/35 hover:text-amber-600"
+            }`}
+            title={fav ? "إزالة من المفضلة" : "إضافة للمفضلة"}
+          >
+            <Star className={`w-3.5 h-3.5 ${fav ? "fill-current" : ""}`} />
+            {fav ? "مفضل" : "عادي"}
+          </button>
+        );
+      },
     },
   ];
 
@@ -399,46 +525,160 @@ export default function Menu() {
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         title={editing ? "تعديل صنف" : "إضافة صنف"}
-        maxWidth="max-w-xl"
+        maxWidth="max-w-5xl"
       >
         <div className="space-y-4">
-          <div>
-            <label className="text-sm font-semibold mb-1 block">الاسم (عربي)</label>
-            <Input
-              value={formData.nameAr}
-              onChange={(e) => setFormData((f) => ({ ...f, nameAr: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-semibold mb-1 block">الاسم (إنجليزي)</label>
-            <Input
-              value={formData.name}
-              onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-semibold mb-1 block">السعر (د.ع)</label>
-            <Input
-              type="number"
-              value={formData.price}
-              onChange={(e) => setFormData((f) => ({ ...f, price: Number(e.target.value) }))}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-semibold mb-1 block">التصنيف</label>
-            <Select
-              value={formData.categoryId}
-              onChange={(e) => setFormData((f) => ({ ...f, categoryId: Number(e.target.value) }))}
-            >
-              <option value={0} disabled>
-                اختر تصنيف...
-              </option>
-              {categories?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nameAr}
-                </option>
-              ))}
-            </Select>
+          <input
+            ref={itemImageInputRef}
+            type="file"
+            accept={CATEGORY_IMAGE_ACCEPT}
+            className="hidden"
+            onChange={(e) => {
+              void pickItemImage(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+
+          <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-amber-500/5 to-transparent p-3 sm:p-4">
+            <div className="flex flex-col md:flex-row md:items-stretch gap-3 sm:gap-4">
+              <div className="flex flex-col gap-2 flex-shrink-0 md:w-[9.5rem]">
+                <button
+                  type="button"
+                  onClick={() => itemImageInputRef.current?.click()}
+                  className="relative group w-full h-36 md:h-full min-h-[9.5rem] rounded-2xl border-2 border-dashed border-primary/35 bg-background/70 hover:border-primary/60 hover:bg-primary/5 transition-colors overflow-hidden"
+                  title="رفع صورة الصنف"
+                >
+                  {formData.imageUrl ? (
+                    <>
+                      <img
+                        src={formData.imageUrl}
+                        alt="معاينة الصنف"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] font-bold py-1.5 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        تغيير الصورة
+                      </span>
+                    </>
+                  ) : (
+                    <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-primary px-3 text-center">
+                      <ImagePlus className="w-7 h-7" />
+                      <span className="text-xs font-extrabold">رسم الصنف</span>
+                      <span className="text-[10px] text-muted-foreground font-semibold">
+                        PNG / JPG / WEBP / GIF
+                      </span>
+                    </span>
+                  )}
+                </button>
+                {formData.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData((f) => ({ ...f, imageUrl: "" }))}
+                    className="text-[11px] font-bold text-destructive hover:underline"
+                  >
+                    إزالة الصورة
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0 flex flex-col justify-center gap-3">
+                {/* Row 1: Arabic + English names */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                      الاسم (عربي) *
+                    </label>
+                    <Input
+                      value={formData.nameAr}
+                      onChange={(e) => setFormData((f) => ({ ...f, nameAr: e.target.value }))}
+                      placeholder="مثال: برجر لحم"
+                      className="h-11"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                      الاسم (إنجليزي) *
+                    </label>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Beef Burger"
+                      className="h-11"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Price + Category combobox */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                      السعر (د.ع) *
+                    </label>
+                    <Input
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) =>
+                        setFormData((f) => ({ ...f, price: Number(e.target.value) }))
+                      }
+                      className="h-11"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <ModernCombobox
+                      value={formData.categoryId ? String(formData.categoryId) : ""}
+                      onChange={(v) =>
+                        setFormData((f) => ({ ...f, categoryId: Number(v) || 0 }))
+                      }
+                      options={categoryOptions}
+                      label="التصنيف *"
+                      placeholder="اختر التصنيف..."
+                      searchPlaceholder="بحث عن تصنيف..."
+                      emptyText="لا توجد تصنيفات"
+                      icon={Tags}
+                      searchable
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((f) => ({ ...f, isAvailable: !f.isAvailable }))
+                    }
+                    className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border-2 text-xs font-extrabold transition-colors ${
+                      formData.isAvailable
+                        ? "border-success/40 bg-success/10 text-success"
+                        : "border-destructive/40 bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {formData.isAvailable ? (
+                      <Eye className="w-3.5 h-3.5" />
+                    ) : (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    )}
+                    {formData.isAvailable ? "ظاهر في البيع" : "مخفي من البيع"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((f) => ({ ...f, isFavorite: !f.isFavorite }))
+                    }
+                    className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border-2 text-xs font-extrabold transition-colors ${
+                      formData.isFavorite
+                        ? "border-amber-500/45 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        : "border-border/70 bg-background/60 text-muted-foreground"
+                    }`}
+                  >
+                    <Star
+                      className={`w-3.5 h-3.5 ${formData.isFavorite ? "fill-current" : ""}`}
+                    />
+                    {formData.isFavorite ? "مفضل" : "إضافة للمفضلة"}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -447,54 +687,59 @@ export default function Menu() {
               الفروع <span className="text-destructive">*</span>
             </label>
             <div className="rounded-2xl border border-border/60 bg-secondary/20 p-3 space-y-2.5">
-              <button
-                type="button"
-                onClick={selectAllBranches}
-                className={`w-full h-11 rounded-xl border-2 text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                  formData.allBranches
-                    ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                    : "border-border bg-background/60 text-foreground hover:border-primary/40"
-                }`}
-              >
-                <Check className={`w-4 h-4 ${formData.allBranches ? "opacity-100" : "opacity-30"}`} />
-                جميع الفروع
-              </button>
-
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllBranches}
+                  className={`sm:w-auto h-11 px-4 rounded-xl border-2 text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                    formData.allBranches
+                      ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                      : "border-border bg-background/60 text-foreground hover:border-primary/40"
+                  }`}
+                >
+                  <Check className={`w-4 h-4 ${formData.allBranches ? "opacity-100" : "opacity-30"}`} />
+                  جميع الفروع
+                </button>
+                {(branches?.length ?? 0) > 0 && (
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {branches!.map((b) => {
+                      const selected = !formData.allBranches && formData.branchIds.includes(b.id);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => toggleBranch(b.id)}
+                          className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
+                            selected
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                              selected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border"
+                            }`}
+                          >
+                            {selected && <Check className="w-3.5 h-3.5" />}
+                          </span>
+                          <span className="truncate">{b.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               {(branches?.length ?? 0) === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-2">
+                <p className="text-xs text-muted-foreground text-center py-1">
                   لا توجد فروع مسجّلة — سيتم اعتبار الصنف لكل الفروع
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {branches!.map((b) => {
-                    const selected = !formData.allBranches && formData.branchIds.includes(b.id);
-                    return (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => toggleBranch(b.id)}
-                        className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
-                          selected
-                            ? "border-primary bg-primary/15 text-primary"
-                            : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
-                        }`}
-                      >
-                        <span
-                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                            selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                          }`}
-                        >
-                          {selected && <Check className="w-3.5 h-3.5" />}
-                        </span>
-                        <span className="truncate">{b.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  اختر «جميع الفروع» أو حدد فرعاً واحداً أو أكثر
+                </p>
               )}
-              <p className="text-[11px] text-muted-foreground">
-                اختر «جميع الفروع» أو حدد فرعاً واحداً أو أكثر
-              </p>
             </div>
           </div>
 
@@ -502,7 +747,7 @@ export default function Menu() {
             <p className="text-sm font-semibold text-destructive">{formError}</p>
           )}
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-1 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsOpen(false)}>
               إلغاء
             </Button>

@@ -14,7 +14,7 @@ import { Button, Card, Input, Badge, Dialog } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
-  Clock, CheckCircle2, XCircle, Percent, Users, Armchair,
+  Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
@@ -149,12 +149,15 @@ export default function POS() {
   const liveClock = formatClock(now);
   const liveDate = formatDateAr(now);
 
-  const filteredItems = items?.filter(
-    (item) =>
-      (!activeCategory || item.categoryId === activeCategory) &&
-      (item.name.toLowerCase().includes(search.toLowerCase()) ||
-        item.nameAr.includes(search))
-  );
+  const filteredItems = items
+    ?.filter(
+      (item) =>
+        (!activeCategory || item.categoryId === activeCategory) &&
+        (item.name.toLowerCase().includes(search.toLowerCase()) ||
+          item.nameAr.includes(search))
+    )
+    .slice()
+    .sort((a, b) => Number(b.isFavorite === true) - Number(a.isFavorite === true));
 
   const selectedTable = branchTables.find((t) => t.id === selectedTableId);
 
@@ -666,8 +669,21 @@ export default function POS() {
                         {inCart.cartQuantity}
                       </div>
                     )}
+                    {item.isFavorite && (
+                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-amber-500/90 text-white flex items-center justify-center z-10 shadow-md">
+                        <Star className="w-3.5 h-3.5 fill-current" />
+                      </div>
+                    )}
                     <div className="w-full aspect-[4/3] sm:aspect-square rounded-xl bg-gradient-to-br from-secondary to-secondary/40 mb-2 sm:mb-3 flex items-center justify-center overflow-hidden">
-                      <ChefHat className="w-10 h-10 sm:w-12 sm:h-12 text-primary/40" />
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.nameAr}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ChefHat className="w-10 h-10 sm:w-12 sm:h-12 text-primary/40" />
+                      )}
                     </div>
                     <div className="mt-auto">
                       <h3 className="font-extrabold text-sm sm:text-base leading-tight mb-1 line-clamp-2">{item.nameAr}</h3>

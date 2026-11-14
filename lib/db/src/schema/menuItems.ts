@@ -25,6 +25,8 @@ export const menuItemsTable = pgTable("menu_items", {
   cost: numeric("cost", { precision: 12, scale: 2 }),
   imageUrl: text("image_url"),
   isAvailable: boolean("is_available").default(true).notNull(),
+  /** Favorite items appear first in POS */
+  isFavorite: boolean("is_favorite").default(false).notNull(),
   /** When true, item is available in every branch */
   allBranches: boolean("all_branches").default(true).notNull(),
   preparationTime: integer("preparation_time"),

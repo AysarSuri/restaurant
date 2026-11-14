@@ -5,9 +5,44 @@ import {
   menuItemsTable,
   menuItemBranchesTable,
 } from "@workspace/db/schema";
-import { eq, asc, inArray } from "drizzle-orm";
+import { eq, asc, inArray, ne, and, or, sql } from "drizzle-orm";
 import { parseBranchScope } from "../lib/branch-scope";
-import { persistCategoryImageDataUrl } from "../lib/category-image";
+import {
+  persistCategoryImageDataUrl,
+  persistMenuItemImageDataUrl,
+} from "../lib/category-image";
+
+async function findDuplicateMenuItemName(
+  nameAr: string,
+  name: string,
+  excludeId?: number
+) {
+  const ar = String(nameAr ?? "").trim().toLowerCase();
+  const en = String(name ?? "").trim().toLowerCase();
+  if (!ar && !en) return null;
+
+  const nameMatch = or(
+    sql`lower(trim(${menuItemsTable.nameAr})) = ${ar}`,
+    sql`lower(trim(${menuItemsTable.name})) = ${en}`
+  );
+
+  const where =
+    excludeId != null
+      ? and(ne(menuItemsTable.id, excludeId), nameMatch)
+      : nameMatch;
+
+  const [dup] = await db
+    .select({
+      id: menuItemsTable.id,
+      nameAr: menuItemsTable.nameAr,
+      name: menuItemsTable.name,
+    })
+    .from(menuItemsTable)
+    .where(where)
+    .limit(1);
+
+  return dup ?? null;
+}
 
 const router: IRouter = Router();
 
@@ -150,6 +185,7 @@ router.get("/items", async (req, res) => {
       cost: menuItemsTable.cost,
       imageUrl: menuItemsTable.imageUrl,
       isAvailable: menuItemsTable.isAvailable,
+      isFavorite: menuItemsTable.isFavorite,
       allBranches: menuItemsTable.allBranches,
       preparationTime: menuItemsTable.preparationTime,
       calories: menuItemsTable.calories,
@@ -200,6 +236,7 @@ router.get("/items/:id", async (req, res) => {
       cost: menuItemsTable.cost,
       imageUrl: menuItemsTable.imageUrl,
       isAvailable: menuItemsTable.isAvailable,
+      isFavorite: menuItemsTable.isFavorite,
       allBranches: menuItemsTable.allBranches,
       preparationTime: menuItemsTable.preparationTime,
       calories: menuItemsTable.calories,
@@ -233,6 +270,7 @@ router.post("/items", async (req, res) => {
     cost,
     imageUrl,
     isAvailable,
+    isFavorite,
     preparationTime,
     calories,
     sortOrder,
@@ -248,6 +286,23 @@ router.post("/items", async (req, res) => {
     return;
   }
 
+  const duplicate = await findDuplicateMenuItemName(nameAr, name);
+  if (duplicate) {
+    res.status(400).json({
+      success: false,
+      message: `اسم الصنف مكرر («${duplicate.nameAr}» / ${duplicate.name}) — اختر اسماً آخر`,
+    });
+    return;
+  }
+
+  let savedImage: string | null = null;
+  try {
+    savedImage = persistMenuItemImageDataUrl(imageUrl);
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err?.message || "تعذر حفظ صورة الصنف" });
+    return;
+  }
+
   const [item] = await db
     .insert(menuItemsTable)
     .values({
@@ -259,8 +314,9 @@ router.post("/items", async (req, res) => {
       descriptionAr,
       price: price.toString(),
       cost: cost?.toString(),
-      imageUrl,
+      imageUrl: savedImage,
       isAvailable: isAvailable ?? true,
+      isFavorite: isFavorite ?? false,
       allBranches: applyAll,
       preparationTime,
       calories,
@@ -287,6 +343,7 @@ router.put("/items/:id", async (req, res) => {
     cost,
     imageUrl,
     isAvailable,
+    isFavorite,
     preparationTime,
     calories,
     sortOrder,
@@ -305,6 +362,41 @@ router.put("/items/:id", async (req, res) => {
     return;
   }
 
+  const [existing] = await db
+    .select()
+    .from(menuItemsTable)
+    .where(eq(menuItemsTable.id, id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ success: false, message: "Not found" });
+    return;
+  }
+
+  const nextNameAr = nameAr != null ? String(nameAr) : existing.nameAr;
+  const nextName = name != null ? String(name) : existing.name;
+  const duplicate = await findDuplicateMenuItemName(nextNameAr, nextName, id);
+  if (duplicate) {
+    res.status(400).json({
+      success: false,
+      message: `اسم الصنف مكرر («${duplicate.nameAr}» / ${duplicate.name}) — اختر اسماً آخر`,
+    });
+    return;
+  }
+
+  let nextImage = existing.imageUrl;
+  if (imageUrl !== undefined) {
+    try {
+      if (imageUrl === null || imageUrl === "") {
+        nextImage = null;
+      } else {
+        nextImage = persistMenuItemImageDataUrl(imageUrl);
+      }
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err?.message || "تعذر حفظ صورة الصنف" });
+      return;
+    }
+  }
+
   const [item] = await db
     .update(menuItemsTable)
     .set({
@@ -316,8 +408,9 @@ router.put("/items/:id", async (req, res) => {
       descriptionAr,
       price: price?.toString(),
       cost: cost?.toString(),
-      imageUrl,
+      imageUrl: nextImage,
       isAvailable,
+      ...(isFavorite !== undefined ? { isFavorite: Boolean(isFavorite) } : {}),
       ...(applyAll !== undefined ? { allBranches: applyAll } : {}),
       preparationTime,
       calories,

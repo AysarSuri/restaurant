@@ -4,19 +4,22 @@ import path from "node:path";
 /** Persistent uploads folder under the api-server package cwd */
 export const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
 export const CATEGORY_UPLOADS_DIR = path.join(UPLOADS_ROOT, "categories");
+export const MENU_ITEM_UPLOADS_DIR = path.join(UPLOADS_ROOT, "menu-items");
 
 const ALLOWED = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export function ensureCategoryUploadsDir() {
   fs.mkdirSync(CATEGORY_UPLOADS_DIR, { recursive: true });
+  fs.mkdirSync(MENU_ITEM_UPLOADS_DIR, { recursive: true });
 }
 
-/**
- * Persist a browser data-URL image and return a public `/uploads/categories/...` path.
- * If value is already a normal URL/path, return it unchanged.
- */
-export function persistCategoryImageDataUrl(value: string | null | undefined): string | null {
+function persistImageDataUrl(
+  value: string | null | undefined,
+  dir: string,
+  publicPrefix: string,
+  filePrefix: string
+): string | null {
   if (value == null) return null;
   const raw = String(value).trim();
   if (!raw) return null;
@@ -42,8 +45,31 @@ export function persistCategoryImageDataUrl(value: string | null | undefined): s
     throw new Error("حجم الصورة كبير جداً (الحد 4MB)");
   }
 
-  ensureCategoryUploadsDir();
-  const fileName = `cat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  fs.writeFileSync(path.join(CATEGORY_UPLOADS_DIR, fileName), buffer);
-  return `/uploads/categories/${fileName}`;
+  fs.mkdirSync(dir, { recursive: true });
+  const fileName = `${filePrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  fs.writeFileSync(path.join(dir, fileName), buffer);
+  return `${publicPrefix}/${fileName}`;
+}
+
+/**
+ * Persist a browser data-URL image and return a public `/uploads/categories/...` path.
+ * If value is already a normal URL/path, return it unchanged.
+ */
+export function persistCategoryImageDataUrl(value: string | null | undefined): string | null {
+  return persistImageDataUrl(
+    value,
+    CATEGORY_UPLOADS_DIR,
+    "/uploads/categories",
+    "cat"
+  );
+}
+
+/** Persist menu-item image → `/uploads/menu-items/...` */
+export function persistMenuItemImageDataUrl(value: string | null | undefined): string | null {
+  return persistImageDataUrl(
+    value,
+    MENU_ITEM_UPLOADS_DIR,
+    "/uploads/menu-items",
+    "item"
+  );
 }
