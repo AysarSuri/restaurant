@@ -27,6 +27,13 @@ import {
   hslComponentsToHex,
 } from "@/lib/brand-theme";
 import {
+  CURRENCY_PRESETS,
+  DEFAULT_CURRENCY,
+  clampDecimalPlaces,
+  formatMoney,
+  type CurrencyCode,
+} from "@/lib/currency";
+import {
   Settings as SettingsIcon,
   Store,
   Printer,
@@ -39,15 +46,19 @@ import {
   Check,
   AlertTriangle,
   RefreshCw,
+  Coins,
 } from "lucide-react";
 
-type TabId = "restaurant" | "printers" | "themes";
+type TabId = "restaurant" | "printers" | "themes" | "currency";
 
 const TABS: { id: TabId; label: string; icon: typeof Store; hint: string }[] = [
   { id: "restaurant", label: "اسم المطعم", icon: Store, hint: "الهوية الأساسية" },
   { id: "printers", label: "الطابعات", icon: Printer, hint: "80×80 لكل جهاز" },
+  { id: "currency", label: "العملة", icon: Coins, hint: "د.ع / $ / €" },
   { id: "themes", label: "الثيمات", icon: Palette, hint: "لون المشروع" },
 ];
+
+const DECIMAL_OPTIONS = [0, 1, 2, 3, 4];
 
 const PRINTER_PRESETS = [
   "XP-80",
@@ -73,6 +84,10 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabId>("restaurant");
   const [restaurantName, setRestaurantName] = useState("");
   const [themePrimary, setThemePrimary] = useState("38 92% 50%");
+  const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(DEFAULT_CURRENCY.currencyCode);
+  const [currencySymbol, setCurrencySymbol] = useState(DEFAULT_CURRENCY.currencySymbol);
+  const [currencyName, setCurrencyName] = useState(DEFAULT_CURRENCY.currencyName);
+  const [decimalPlaces, setDecimalPlaces] = useState(DEFAULT_CURRENCY.decimalPlaces);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
 
@@ -87,6 +102,10 @@ export default function SettingsPage() {
     setRestaurantName(settings.restaurantName);
     setThemePrimary(settings.themePrimary);
     applyBrandPrimary(settings.themePrimary);
+    setCurrencyCode((settings.currencyCode as CurrencyCode) || DEFAULT_CURRENCY.currencyCode);
+    setCurrencySymbol(settings.currencySymbol || DEFAULT_CURRENCY.currencySymbol);
+    setCurrencyName(settings.currencyName || DEFAULT_CURRENCY.currencyName);
+    setDecimalPlaces(clampDecimalPlaces(settings.decimalPlaces, DEFAULT_CURRENCY.decimalPlaces));
   }, [settings]);
 
   useEffect(() => {
@@ -161,11 +180,57 @@ export default function SettingsPage() {
     return opts;
   }, [printers, printerName]);
 
-  const syncSettings = (next: { restaurantName: string; themePrimary: string }) => {
+  const syncSettings = (next: Record<string, unknown>) => {
     queryClient.setQueryData(getGetSettingsQueryKey(), (prev: any) => ({
       ...(prev ?? {}),
       ...next,
     }));
+  };
+
+  const applyCurrencyPreset = (code: Exclude<CurrencyCode, "custom">) => {
+    const preset = CURRENCY_PRESETS.find((p) => p.code === code);
+    if (!preset) return;
+    setCurrencyCode(code);
+    setCurrencyName(preset.name);
+    setCurrencySymbol(preset.symbol);
+    setDecimalPlaces(preset.decimalPlaces);
+  };
+
+  const handleSaveCurrency = () => {
+    setSaveMsg("");
+    setSaveErr("");
+    const name = currencyName.trim();
+    const symbol = currencySymbol.trim();
+    if (!name) {
+      setSaveErr("اسم العملة مطلوب");
+      return;
+    }
+    if (!symbol) {
+      setSaveErr("رمز العملة مطلوب");
+      return;
+    }
+    const decimals = clampDecimalPlaces(decimalPlaces);
+    saveSettings(
+      {
+        data: {
+          currencyCode,
+          currencyName: name,
+          currencySymbol: symbol,
+          decimalPlaces: decimals,
+        },
+      },
+      {
+        onSuccess: (res) => {
+          syncSettings(res);
+          setCurrencyCode((res.currencyCode as CurrencyCode) || currencyCode);
+          setCurrencyName(res.currencyName);
+          setCurrencySymbol(res.currencySymbol);
+          setDecimalPlaces(clampDecimalPlaces(res.decimalPlaces));
+          setSaveMsg("تم حفظ إعدادات العملة");
+        },
+        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+      }
+    );
   };
 
   const syncPrinters = (updater: (list: DevicePrinter[]) => DevicePrinter[]) => {
@@ -186,7 +251,7 @@ export default function SettingsPage() {
       { data: { restaurantName: name } },
       {
         onSuccess: (res) => {
-          syncSettings({ restaurantName: res.restaurantName, themePrimary: res.themePrimary });
+          syncSettings(res);
           setSaveMsg("تم حفظ اسم المطعم");
         },
         onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
@@ -203,7 +268,7 @@ export default function SettingsPage() {
       { data: { themePrimary: primary } },
       {
         onSuccess: (res) => {
-          syncSettings({ restaurantName: res.restaurantName, themePrimary: res.themePrimary });
+          syncSettings(res);
           setSaveMsg("تم حفظ لون الثيم");
         },
         onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
@@ -295,7 +360,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3">
         {TABS.map((t) => {
           const active = tab === t.id;
           const Icon = t.icon;
@@ -555,6 +620,139 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "currency" && (
+        <div className="space-y-5 max-w-3xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-5">
+            <div>
+              <h3 className="font-extrabold text-lg">عملة المشروع</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                اختر دينار عراقي أو دولار أو يورو، أو عرّف عملة مخصصة مع عدد الخانات العشرية.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {CURRENCY_PRESETS.map((preset) => {
+                const active = currencyCode === preset.code;
+                return (
+                  <button
+                    key={preset.code}
+                    type="button"
+                    onClick={() => applyCurrencyPreset(preset.code)}
+                    className={`rounded-2xl border-2 p-4 text-start transition-all ${
+                      active
+                        ? "border-primary bg-primary/10 shadow-md shadow-primary/15"
+                        : "border-border/70 hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground font-extrabold shadow-md shadow-primary/25">
+                        {preset.symbol}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-extrabold">{preset.name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {preset.hint} · {preset.decimalPlaces} خانات عشرية
+                        </p>
+                      </div>
+                      {active && <Check className="w-4 h-4 text-primary ms-auto" />}
+                    </div>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setCurrencyCode("custom")}
+                className={`rounded-2xl border-2 p-4 text-start transition-all sm:col-span-2 ${
+                  currencyCode === "custom"
+                    ? "border-primary bg-primary/10 shadow-md shadow-primary/15"
+                    : "border-border/70 hover:border-primary/40"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/30 bg-secondary text-primary">
+                    <Coins className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <p className="font-extrabold">عملة مخصصة</p>
+                    <p className="text-[11px] text-muted-foreground">اسم ورمز و Decimal Places حسب اختيارك</p>
+                  </div>
+                  {currencyCode === "custom" && <Check className="w-4 h-4 text-primary ms-auto" />}
+                </div>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1.5">اسم العملة *</label>
+                <Input
+                  value={currencyName}
+                  onChange={(e) => {
+                    setCurrencyName(e.target.value);
+                    if (currencyCode !== "custom") setCurrencyCode("custom");
+                  }}
+                  placeholder="مثال: دينار عراقي"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1.5">رمز العملة *</label>
+                <Input
+                  value={currencySymbol}
+                  onChange={(e) => {
+                    setCurrencySymbol(e.target.value);
+                    if (currencyCode !== "custom") setCurrencyCode("custom");
+                  }}
+                  placeholder="د.ع / $ / €"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold mb-1.5">Decimal Places *</label>
+              <div className="flex flex-wrap gap-2">
+                {DECIMAL_OPTIONS.map((d) => {
+                  const active = decimalPlaces === d;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDecimalPlaces(d)}
+                      className={`h-11 min-w-[3rem] rounded-xl border-2 px-3 font-extrabold font-display transition-all ${
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background/50 text-muted-foreground hover:border-primary/40"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                0 بدون كسور · 2 مناسب للدولار واليورو · حتى 4 كحد أقصى
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-transparent to-transparent p-4">
+              <p className="text-[11px] text-muted-foreground mb-1">معاينة</p>
+              <p className="text-2xl font-extrabold font-display" dir="ltr">
+                {formatMoney(12345.6789, {
+                  currencyCode,
+                  currencyName,
+                  currencySymbol,
+                  decimalPlaces,
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{currencyName}</p>
+            </div>
+
+            <Button className="gap-2" isLoading={savingSettings} onClick={handleSaveCurrency}>
+              <Save className="w-4 h-4" /> حفظ العملة
+            </Button>
+          </Card>
         </div>
       )}
 

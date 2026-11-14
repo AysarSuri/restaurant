@@ -30,6 +30,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/branches": "الفروع",
   "/cards": "البطاقات",
   "/settings": "الإعدادات",
+  "/delivery-contacts": "أرقام التوصيل",
   "/reports": "التقارير",
   "/cashier": "شاشة الكاشير",
   "/table-order": "طلب الطاولة",
@@ -127,12 +128,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <BranchSwitcher compact />
             <div className="hidden sm:block text-right me-1 md:me-2">
               <div className="text-xs md:text-sm font-semibold text-foreground">
-                {new Date().toLocaleDateString("ar-IQ", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+                {(() => {
+                  const d = new Date();
+                  const weekday = d.toLocaleDateString("ar-IQ", { weekday: "long" });
+                  const day = String(d.getDate()).padStart(2, "0");
+                  const month = String(d.getMonth() + 1).padStart(2, "0");
+                  const year = d.getFullYear();
+                  return (
+                    <>
+                      {weekday}{" "}
+                      <span className="font-display" dir="ltr">
+                        {day}/{month}/{year}
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
               <div className="text-[10px] md:text-xs text-primary font-display">
                 {user?.name ?? ""} · {ROLE_LABELS[user?.role ?? ""] ?? ""} · {branchLabel}

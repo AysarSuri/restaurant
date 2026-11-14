@@ -20,12 +20,20 @@ type RequestOpts = CustomFetchOptions;
 export interface AppSettings {
   restaurantName: string;
   themePrimary: string;
+  currencyCode: string;
+  currencySymbol: string;
+  currencyName: string;
+  decimalPlaces: number;
   updatedAt?: string;
 }
 
 export interface UpdateAppSettingsBody {
   restaurantName?: string;
   themePrimary?: string;
+  currencyCode?: string;
+  currencySymbol?: string;
+  currencyName?: string;
+  decimalPlaces?: number;
 }
 
 export interface DevicePrinter {

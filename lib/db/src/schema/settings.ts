@@ -10,12 +10,18 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { branchesTable } from "./branches";
 
-/** Singleton app settings (restaurant name + brand theme). */
+/** Singleton app settings (restaurant name + brand theme + currency). */
 export const appSettingsTable = pgTable("app_settings", {
   id: serial("id").primaryKey(),
   restaurantName: text("restaurant_name").default("المطعم الذكي").notNull(),
   /** HSL components without hsl(), e.g. "38 92% 50%" */
   themePrimary: text("theme_primary").default("38 92% 50%").notNull(),
+  /** iqd | usd | eur | custom */
+  currencyCode: text("currency_code").default("iqd").notNull(),
+  currencySymbol: text("currency_symbol").default("د.ع").notNull(),
+  currencyName: text("currency_name").default("دينار عراقي").notNull(),
+  /** 0–4 */
+  decimalPlaces: integer("decimal_places").default(0).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

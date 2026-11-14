@@ -1,14 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useGetMenuItems, useGetMenuCategories, useCreateOrder, useGetTables } from "@workspace/api-client-react";
+import {
+  useGetMenuItems,
+  useGetMenuCategories,
+  useCreateOrder,
+  useGetTables,
+  lookupDeliveryPhone,
+  upsertDeliveryContact,
+} from "@workspace/api-client-react";
 import { Button, Card, Input, Badge, Dialog } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
-  Clock,
+  Clock, CheckCircle2, XCircle,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { useCurrency } from "@/hooks/use-currency";
 import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
 
@@ -82,6 +90,9 @@ export default function POS() {
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryPhone, setDeliveryPhone] = useState("");
+  /** null = not checked yet / too short; true = found; false = not found */
+  const [phoneKnown, setPhoneKnown] = useState<boolean | null>(null);
+  const phoneLookupSeq = useRef(0);
   const [discount, setDiscount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
@@ -91,6 +102,7 @@ export default function POS() {
   const [now, setNow] = useState(() => new Date());
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const { selectedBranchId, branchLabel } = useBranch();
+  const { format: formatMoneyAmount, formatValue, symbol: currencySymbol } = useCurrency();
   const isPortraitPos = !isCompactPos && isPortrait;
   const isWidePos = !isCompactPos && !isPortrait && width >= 1400;
   const needsBranchPick = selectedBranchId === "all";
@@ -104,8 +116,7 @@ export default function POS() {
     setInvoiceNumber(nextInvoiceNumber());
   };
 
-  const formatIQD = (val: number) =>
-    new Intl.NumberFormat("en-IQ").format(Math.round(val));
+  const formatIQD = (val: number) => formatValue(val);
 
   const liveClock = formatClock(now);
   const liveDate = formatDateAr(now);
@@ -157,11 +168,40 @@ export default function POS() {
     setSelectedTableId(null);
     setDeliveryAddress("");
     setDeliveryPhone("");
+    setPhoneKnown(null);
     setDiscount(0);
     setIsCheckoutOpen(false);
     setOrderSuccess(false);
     startNewOrderSession();
   };
+
+  useEffect(() => {
+    if (orderType !== "delivery") {
+      setPhoneKnown(null);
+      return;
+    }
+    const digits = deliveryPhone.replace(/\D/g, "");
+    if (digits.length < 7) {
+      setPhoneKnown(null);
+      return;
+    }
+    const seq = ++phoneLookupSeq.current;
+    const timer = window.setTimeout(() => {
+      lookupDeliveryPhone(deliveryPhone)
+        .then((res) => {
+          if (seq !== phoneLookupSeq.current) return;
+          setPhoneKnown(Boolean(res.found));
+          if (res.found && res.contact?.address) {
+            setDeliveryAddress(res.contact.address);
+          }
+        })
+        .catch(() => {
+          if (seq !== phoneLookupSeq.current) return;
+          setPhoneKnown(null);
+        });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [deliveryPhone, orderType]);
 
   const handleCheckout = (paymentMethod: "cash" | "card" | "transfer") => {
     createOrder(
@@ -178,6 +218,14 @@ export default function POS() {
       },
       {
         onSuccess: () => {
+          if (orderType === "delivery" && deliveryPhone.replace(/\D/g, "").length >= 7) {
+            upsertDeliveryContact({
+              phone: deliveryPhone,
+              address: deliveryAddress.trim(),
+            }).catch(() => {
+              /* non-blocking */
+            });
+          }
           setOrderSuccess(true);
         },
       }
@@ -233,6 +281,23 @@ export default function POS() {
                 >
                   {invoiceNumber}
                 </span>
+                {orderType === "dine_in" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsTablePickerOpen(true)}
+                    className={`inline-flex items-center gap-2 rounded-full border-2 px-3.5 py-2 text-sm font-extrabold transition-all max-w-[14rem] ${
+                      selectedTable
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
+                    }`}
+                    title={selectedTable ? selectedTable.location || undefined : "اختر رقم الطاولة"}
+                  >
+                    <Table2 className="w-5 h-5 flex-shrink-0" />
+                    <span className="truncate">
+                      {selectedTable ? `طاولة ${selectedTable.number}` : "اختر رقم الطاولة"}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
             {compact && (
@@ -265,39 +330,7 @@ export default function POS() {
             ))}
           </div>
 
-          {/* Table Selector — only when dine_in */}
           <AnimatePresence>
-            {orderType === "dine_in" && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <button
-                  onClick={() => setIsTablePickerOpen(true)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ${
-                    selectedTable
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Table2 className="w-5 h-5" />
-                    <span className="font-semibold">
-                      {selectedTable
-                        ? `طاولة رقم ${selectedTable.number}`
-                        : "اختر رقم الطاولة"}
-                    </span>
-                  </div>
-                  {selectedTable && (
-                    <span className="text-xs text-muted-foreground">
-                      {selectedTable.location}
-                    </span>
-                  )}
-                </button>
-              </motion.div>
-            )}
-
             {/* Delivery fields */}
             {orderType === "delivery" && (
               <motion.div
@@ -307,22 +340,46 @@ export default function POS() {
                 className="space-y-2"
               >
                 <div className="relative">
+                  <Phone
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                      phoneKnown === true
+                        ? "text-success"
+                        : phoneKnown === false
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                    }`}
+                  />
+                  <Input
+                    placeholder="رقم الهاتف"
+                    value={deliveryPhone}
+                    onChange={(e) => setDeliveryPhone(e.target.value)}
+                    className={`pr-10 pl-10 text-sm border-2 ${
+                      phoneKnown === true
+                        ? "border-success/60 focus-visible:border-success"
+                        : phoneKnown === false
+                          ? "border-destructive/60 focus-visible:border-destructive"
+                          : ""
+                    }`}
+                    dir="ltr"
+                  />
+                  {phoneKnown === true ? (
+                    <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-success" />
+                  ) : phoneKnown === false ? (
+                    <XCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-destructive" />
+                  ) : null}
+                </div>
+                {phoneKnown === true ? (
+                  <p className="text-[11px] text-success font-semibold">رقم محفوظ — تم تعبئة العنوان تلقائياً</p>
+                ) : phoneKnown === false ? (
+                  <p className="text-[11px] text-destructive font-semibold">رقم جديد — سيُحفظ مع الطلب</p>
+                ) : null}
+                <div className="relative">
                   <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="عنوان التوصيل"
                     value={deliveryAddress}
                     onChange={(e) => setDeliveryAddress(e.target.value)}
                     className="pr-10 text-sm"
-                  />
-                </div>
-                <div className="relative">
-                  <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="رقم الهاتف"
-                    value={deliveryPhone}
-                    onChange={(e) => setDeliveryPhone(e.target.value)}
-                    className="pr-10 text-sm"
-                    dir="ltr"
                   />
                 </div>
               </motion.div>
@@ -347,7 +404,7 @@ export default function POS() {
                 </div>
 
                 <span className="flex-shrink-0 font-display text-xs sm:text-sm font-bold text-primary tabular-nums whitespace-nowrap" dir="ltr">
-                  {formatIQD(item.price * item.cartQuantity)} د.ع
+                  {formatMoneyAmount(item.price * item.cartQuantity)}
                 </span>
 
                 <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-background/70 p-0.5">
@@ -395,7 +452,7 @@ export default function POS() {
         <div className="p-5 bg-card border-t border-border/50 space-y-4">
           {/* Discount */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">خصم (د.ع)</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">خصم ({currencySymbol})</span>
             <Input
               type="number"
               min={0}
@@ -410,17 +467,17 @@ export default function POS() {
           <div className="space-y-1 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>المجموع</span>
-              <span className="font-display">{formatIQD(subtotal)} د.ع</span>
+              <span className="font-display">{formatMoneyAmount(subtotal)}</span>
             </div>
             {discount > 0 && (
               <div className="flex justify-between text-green-500">
                 <span>الخصم</span>
-                <span className="font-display">- {formatIQD(discount)} د.ع</span>
+                <span className="font-display">- {formatMoneyAmount(discount)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-xl text-foreground pt-2 border-t border-border/50">
               <span>الإجمالي</span>
-              <span className="text-primary font-display">{formatIQD(total)} د.ع</span>
+              <span className="text-primary font-display">{formatMoneyAmount(total)}</span>
             </div>
           </div>
 
@@ -573,7 +630,7 @@ export default function POS() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-primary font-extrabold font-display text-sm sm:text-lg">
                           {formatIQD(Number(item.price))}
-                          <span className="text-[10px] ms-1 font-bold opacity-70">د.ع</span>
+                          <span className="text-[10px] ms-1 font-bold opacity-70">{currencySymbol}</span>
                         </div>
                         <span className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
                           <Plus className="w-4 h-4" />
@@ -601,7 +658,7 @@ export default function POS() {
       >
         <ShoppingCart className="w-5 h-5" />
         <span>السلة ({cart.reduce((n, i) => n + i.cartQuantity, 0)})</span>
-        <span className="font-display">{formatIQD(total)} د.ع</span>
+        <span className="font-display">{formatMoneyAmount(total)}</span>
       </button>
 
       {/* Compact cart sheet */}
@@ -684,7 +741,7 @@ export default function POS() {
               <p className="text-muted-foreground">طاولة رقم {selectedTable.number}</p>
             )}
             <p className="text-2xl font-bold text-primary font-display">
-              {formatIQD(total)} د.ع
+              {formatMoneyAmount(total)}
             </p>
             <Button className="w-full touch-target" onClick={resetOrder}>
               <RefreshCw className="w-4 h-4 me-2" />
@@ -731,7 +788,7 @@ export default function POS() {
             <div className="bg-secondary/50 p-4 rounded-xl text-center">
               <p className="text-sm text-muted-foreground mb-1">المبلغ المطلوب</p>
               <p className="text-2xl sm:text-3xl font-bold text-primary font-display">
-                {formatIQD(total)} د.ع
+                {formatMoneyAmount(total)}
               </p>
             </div>
           </>

@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog, Card as UiCard } from "@/components/ui-elements";
 import { useBranch } from "@/lib/branch-context";
+import { useCurrency } from "@/hooks/use-currency";
 import {
   Plus,
   Edit,
@@ -39,14 +40,10 @@ const EMPTY_FORM = {
 
 type FormData = typeof EMPTY_FORM;
 
-function formatMoney(value: number | string | null | undefined) {
-  const n = Number(value ?? 0);
-  return `${new Intl.NumberFormat("en-IQ").format(Number.isFinite(n) ? n : 0)} د.ع`;
-}
-
 export default function CardsPage() {
   const queryClient = useQueryClient();
   const { selectedBranchId, canViewAllBranches } = useBranch();
+  const { format: formatMoney } = useCurrency();
   const { data: cards, isLoading } = useGetCards();
   const { data: branches } = useGetBranches();
   const { mutate: createCard, isPending: isCreating } = useCreateCard();

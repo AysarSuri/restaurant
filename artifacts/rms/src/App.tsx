@@ -19,6 +19,7 @@ import Expenses from "@/pages/expenses";
 import Branches from "@/pages/branches";
 import Cards from "@/pages/cards";
 import Settings from "@/pages/settings";
+import DeliveryContacts from "@/pages/delivery-contacts";
 import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import Cashier from "@/pages/cashier";
@@ -181,6 +182,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/branches": ["admin", "manager"],
   "/cards": ["admin", "manager"],
   "/settings": ["admin", "manager"],
+  "/delivery-contacts": ["admin", "manager", "cashier"],
   "/reports": ["admin", "manager"],
 };
 
@@ -234,6 +236,7 @@ function Router() {
       <Route path="/branches" component={Branches} />
       <Route path="/cards" component={Cards} />
       <Route path="/settings" component={Settings} />
+      <Route path="/delivery-contacts" component={DeliveryContacts} />
       <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>

@@ -10,6 +10,7 @@ import expensesRouter from "./expenses";
 import branchesRouter from "./branches";
 import cardsRouter from "./cards";
 import settingsRouter from "./settings";
+import deliveryContactsRouter from "./delivery-contacts";
 import reportsRouter from "./reports";
 
 const router: IRouter = Router();
@@ -25,6 +26,7 @@ router.use("/expenses", expensesRouter);
 router.use("/branches", branchesRouter);
 router.use("/cards", cardsRouter);
 router.use("/settings", settingsRouter);
+router.use("/delivery-contacts", deliveryContactsRouter);
 router.use("/reports", reportsRouter);
 
 export default router;
