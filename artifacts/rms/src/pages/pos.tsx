@@ -403,10 +403,6 @@ export default function POS() {
                   <p className="truncate text-sm font-extrabold leading-tight">{item.nameAr}</p>
                 </div>
 
-                <span className="flex-shrink-0 font-display text-xs sm:text-sm font-bold text-primary tabular-nums whitespace-nowrap" dir="ltr">
-                  {formatMoneyAmount(item.price * item.cartQuantity)}
-                </span>
-
                 <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-background/70 p-0.5">
                   <button
                     type="button"
@@ -428,6 +424,10 @@ export default function POS() {
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                <span className="flex-shrink-0 font-display text-xs sm:text-sm font-bold text-primary tabular-nums whitespace-nowrap" dir="ltr">
+                  {formatMoneyAmount(item.price * item.cartQuantity)}
+                </span>
 
                 <button
                   type="button"
