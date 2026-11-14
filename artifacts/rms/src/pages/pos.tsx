@@ -104,7 +104,8 @@ export default function POS() {
     );
   }, [tables, selectedBranchId]);
 
-  const [activeCategory, setActiveCategory] = useState<number | null>(null);
+  /** null = all, "favorites" = favorites only, number = category id */
+  const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>(null);
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<OrderType>("dine_in");
@@ -150,12 +151,15 @@ export default function POS() {
   const liveDate = formatDateAr(now);
 
   const filteredItems = items
-    ?.filter(
-      (item) =>
-        (!activeCategory || item.categoryId === activeCategory) &&
-        (item.name.toLowerCase().includes(search.toLowerCase()) ||
-          item.nameAr.includes(search))
-    )
+    ?.filter((item) => {
+      const matchesSearch =
+        item.name.toLowerCase().includes(search.toLowerCase()) ||
+        item.nameAr.includes(search);
+      if (!matchesSearch) return false;
+      if (activeCategory === "favorites") return item.isFavorite === true;
+      if (typeof activeCategory === "number") return item.categoryId === activeCategory;
+      return true;
+    })
     .slice()
     .sort((a, b) => Number(b.isFavorite === true) - Number(a.isFavorite === true));
 
@@ -601,6 +605,20 @@ export default function POS() {
         </header>
 
         <div className={`py-3 flex gap-2 sm:gap-3 overflow-x-auto relative z-10 scrollbar-hide ${isPortraitPos ? "px-4 xl:px-5" : "px-3 sm:px-5 xl:px-6"}`}>
+          <Button
+            variant={activeCategory === "favorites" ? "default" : "secondary"}
+            onClick={() => setActiveCategory("favorites")}
+            className={`rounded-full px-3 sm:px-5 flex-shrink-0 touch-target gap-1.5 ${
+              activeCategory === "favorites"
+                ? "bg-amber-500 hover:bg-amber-500/90 text-white border-amber-500"
+                : "text-amber-700 dark:text-amber-400 border border-amber-500/30"
+            }`}
+          >
+            <Star
+              className={`w-4 h-4 ${activeCategory === "favorites" ? "fill-current" : ""}`}
+            />
+            مفضلة
+          </Button>
           <Button
             variant={activeCategory === null ? "default" : "secondary"}
             onClick={() => setActiveCategory(null)}
