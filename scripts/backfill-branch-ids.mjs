@@ -9,7 +9,7 @@ const pg = require(join(root, "node_modules/.pnpm/pg@8.20.0/node_modules/pg"));
 const pool = new pg.Pool({
   connectionString:
     process.env.DATABASE_URL ||
-    "postgresql://postgres:jrapp123@localhost:5432/restaurant",
+    "postgresql://postgres:restaurant123@localhost:5432/restaurant",
 });
 
 const client = await pool.connect();
