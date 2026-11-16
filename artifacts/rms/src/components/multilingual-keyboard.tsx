@@ -78,7 +78,6 @@ export function MultilingualKeyboard({
   onConfirm,
   onCancel,
   label = "أدخل النص",
-  placeholder = "اكتب هنا…",
   defaultLang = "ar",
 }: MultilingualKeyboardProps) {
   const [text, setText] = useState(value || "");
@@ -140,12 +139,9 @@ export function MultilingualKeyboard({
             className="rounded-2xl border border-border/40 bg-background/75 backdrop-blur-md px-4 py-3.5 shadow-inner min-h-[4.5rem]"
             dir={langMeta.dir}
           >
-            <p
-              className={`text-lg sm:text-xl font-bold leading-relaxed break-words ${
-                text ? "text-foreground" : "text-muted-foreground/60"
-              }`}
-            >
-              {text || placeholder}
+            <p className="text-lg sm:text-xl font-bold leading-relaxed break-words text-foreground min-h-[1.75rem]">
+              {text}
+              <span className="inline-block w-0.5 h-[1.1em] align-[-0.15em] ms-0.5 bg-primary/80 animate-pulse" />
             </p>
             <p className="mt-2 text-[10px] font-semibold text-muted-foreground">
               {langMeta.label}
