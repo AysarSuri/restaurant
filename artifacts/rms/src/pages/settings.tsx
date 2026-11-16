@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetSettings,
@@ -15,6 +15,7 @@ import {
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { useBranch } from "@/lib/branch-context";
+import { toast } from "@/hooks/use-toast";
 import {
   getOrCreateDeviceKey,
   setStoredDeviceName,
@@ -98,6 +99,50 @@ export default function SettingsPage() {
   const [cashierSendToKitchen, setCashierSendToKitchen] = useState(true);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
+  const saveBannerRef = useRef<HTMLDivElement>(null);
+  const saveFlashTimer = useRef<number | null>(null);
+
+  const clearSaveFlash = () => {
+    if (saveFlashTimer.current != null) {
+      window.clearTimeout(saveFlashTimer.current);
+      saveFlashTimer.current = null;
+    }
+  };
+
+  const notifySaveOk = (message: string) => {
+    clearSaveFlash();
+    setSaveErr("");
+    setSaveMsg(message);
+    toast({
+      title: "تم الحفظ",
+      description: message,
+    });
+    window.requestAnimationFrame(() => {
+      saveBannerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    saveFlashTimer.current = window.setTimeout(() => {
+      setSaveMsg("");
+      saveFlashTimer.current = null;
+    }, 4000);
+  };
+
+  const notifySaveErr = (message: string) => {
+    clearSaveFlash();
+    setSaveMsg("");
+    setSaveErr(message);
+    toast({
+      variant: "destructive",
+      title: "تعذر الحفظ",
+      description: message,
+    });
+    window.requestAnimationFrame(() => {
+      saveBannerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  };
+
+  useEffect(() => {
+    return () => clearSaveFlash();
+  }, []);
 
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
   const [deviceName, setDeviceName] = useState(() => suggestDeviceName());
@@ -211,16 +256,17 @@ export default function SettingsPage() {
   };
 
   const handleSaveCurrency = () => {
+    clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
     const name = currencyName.trim();
     const symbol = currencySymbol.trim();
     if (!name) {
-      setSaveErr("اسم العملة مطلوب");
+      notifySaveErr("اسم العملة مطلوب");
       return;
     }
     if (!symbol) {
-      setSaveErr("رمز العملة مطلوب");
+      notifySaveErr("رمز العملة مطلوب");
       return;
     }
     const decimals = clampDecimalPlaces(decimalPlaces);
@@ -240,9 +286,10 @@ export default function SettingsPage() {
           setCurrencyName(res.currencyName);
           setCurrencySymbol(res.currencySymbol);
           setDecimalPlaces(clampDecimalPlaces(res.decimalPlaces));
-          setSaveMsg("تم حفظ إعدادات العملة");
+          notifySaveOk("تم حفظ إعدادات العملة");
         },
-        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ العملة"),
       }
     );
   };
@@ -254,11 +301,12 @@ export default function SettingsPage() {
   };
 
   const handleSaveRestaurant = () => {
+    clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
     const name = restaurantName.trim();
     if (!name) {
-      setSaveErr("اسم المطعم مطلوب");
+      notifySaveErr("اسم المطعم مطلوب");
       return;
     }
     saveSettings(
@@ -266,14 +314,16 @@ export default function SettingsPage() {
       {
         onSuccess: (res) => {
           syncSettings(res);
-          setSaveMsg("تم حفظ اسم المطعم");
+          notifySaveOk("تم حفظ اسم المطعم");
         },
-        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ اسم المطعم"),
       }
     );
   };
 
   const handleSaveSales = () => {
+    clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
     saveSettings(
@@ -292,14 +342,16 @@ export default function SettingsPage() {
               : "cashier"
           );
           setCashierSendToKitchen(res.cashierSendToKitchen !== false);
-          setSaveMsg("تم حفظ إعدادات البيع");
+          notifySaveOk("تم حفظ إعدادات البيع");
         },
-        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ إعدادات البيع"),
       }
     );
   };
 
   const handleSaveTheme = (primary: string) => {
+    clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
     applyBrandPrimary(primary);
@@ -309,23 +361,25 @@ export default function SettingsPage() {
       {
         onSuccess: (res) => {
           syncSettings(res);
-          setSaveMsg("تم حفظ لون الثيم");
+          notifySaveOk("تم حفظ لون الثيم");
         },
-        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ الثيم"),
       }
     );
   };
 
   const handleRegisterDevice = () => {
+    clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
     const name = deviceName.trim();
     if (!name) {
-      setSaveErr("أدخل اسم الجهاز");
+      notifySaveErr("أدخل اسم الجهاز");
       return;
     }
     if (!printerName.trim()) {
-      setSaveErr("اختر أو اكتب اسم الطابعة");
+      notifySaveErr("اختر أو اكتب اسم الطابعة");
       return;
     }
     setStoredDeviceName(name);
@@ -344,9 +398,10 @@ export default function SettingsPage() {
             const without = list.filter((p) => p.deviceKey !== row.deviceKey && p.id !== row.id);
             return [row, ...without];
           });
-          setSaveMsg("تم حفظ طابعة هذا الجهاز (80×80)");
+          notifySaveOk("تم حفظ طابعة هذا الجهاز (80×80)");
         },
-        onError: (err: any) => setSaveErr(err?.data?.message || err?.message || "تعذر الحفظ"),
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ الطابعة"),
       }
     );
   };
@@ -365,7 +420,10 @@ export default function SettingsPage() {
       {
         onSuccess: (updated) => {
           syncPrinters((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+          notifySaveOk("تم تحديث إعدادات الطابعة");
         },
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر تحديث الطابعة"),
       }
     );
   };
@@ -378,7 +436,10 @@ export default function SettingsPage() {
         onSuccess: () => {
           syncPrinters((list) => list.filter((p) => p.id !== deleteTarget.id));
           setDeleteTarget(null);
+          notifySaveOk("تم حذف الجهاز بنجاح");
         },
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || "تعذر حذف الجهاز"),
       }
     );
   };
@@ -410,6 +471,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => {
                 setTab(t.id);
+                clearSaveFlash();
                 setSaveMsg("");
                 setSaveErr("");
               }}
@@ -440,14 +502,21 @@ export default function SettingsPage() {
 
       {(saveMsg || saveErr) && (
         <div
-          className={`rounded-xl border px-3 py-2.5 text-sm flex items-start gap-2 ${
+          ref={saveBannerRef}
+          role="status"
+          aria-live="polite"
+          className={`sticky top-2 z-20 rounded-2xl border-2 px-4 py-3 text-sm font-bold flex items-start gap-2.5 shadow-lg backdrop-blur-md ${
             saveErr
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
-              : "border-success/30 bg-success/10 text-success"
+              ? "border-destructive/40 bg-destructive/15 text-destructive shadow-destructive/10"
+              : "border-emerald-500/45 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 shadow-emerald-500/15"
           }`}
         >
-          {saveErr ? <AlertTriangle className="w-4 h-4 mt-0.5" /> : <Check className="w-4 h-4 mt-0.5" />}
-          <span>{saveErr || saveMsg}</span>
+          {saveErr ? (
+            <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          ) : (
+            <Check className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          )}
+          <span className="min-w-0 flex-1">{saveErr || saveMsg}</span>
         </div>
       )}
 
