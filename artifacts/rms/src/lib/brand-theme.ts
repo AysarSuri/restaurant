@@ -76,6 +76,7 @@ export const THEME_PRESETS: { id: string; label: string; primary: string }[] = [
   { id: "amber", label: "ذهبي", primary: "38 92% 50%" },
   { id: "emerald", label: "زمردي", primary: "152 76% 40%" },
   { id: "sky", label: "سماوي", primary: "199 89% 48%" },
+  { id: "blue", label: "أزرق", primary: "221 83% 48%" },
   { id: "rose", label: "وردي", primary: "346 77% 50%" },
   { id: "violet", label: "بنفسجي", primary: "262 83% 58%" },
   { id: "orange", label: "برتقالي", primary: "24 95% 53%" },

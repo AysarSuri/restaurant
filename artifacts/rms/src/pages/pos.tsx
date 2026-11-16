@@ -494,14 +494,15 @@ export default function POS() {
               toast({
                 title: "تم الحفظ والطباعة",
                 description: devicePrinter?.printerName?.trim()
-                  ? `اختر الطابعة: ${devicePrinter.printerName.trim()} (80×80)`
-                  : "اختر طابعة 80×80 من نافذة الطباعة — سجّل طابعة الجهاز من الإعدادات",
+                  ? `ستفتح نافذة الفاتورة — اختر الطابعة «${devicePrinter.printerName.trim()}» (80×80)`
+                  : "ستفتح نافذة الفاتورة — اختر طابعة 80×80 من قائمة الطابعات",
               });
             } catch {
               toast({
                 variant: "destructive",
                 title: "تم الحفظ",
-                description: "تعذر فتح نافذة الطباعة",
+                description:
+                  "تعذر فتح نافذة الطباعة — افتح نقطة البيع في Chrome/Edge واسمح بالنوافذ المنبثقة",
               });
             }
           }

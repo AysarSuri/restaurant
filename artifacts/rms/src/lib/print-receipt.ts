@@ -252,64 +252,119 @@ function buildReceiptHtml(data: ThermalReceiptData) {
 </html>`;
 }
 
-/** Opens a hidden iframe and prints a professional 80×80 thermal receipt. */
+function waitForImages(doc: Document): Promise<void> {
+  const images = Array.from(doc.images);
+  if (images.length === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    let pending = images.length;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const done = () => {
+      pending -= 1;
+      if (pending <= 0) finish();
+    };
+    images.forEach((img) => {
+      if (img.complete) done();
+      else {
+        img.addEventListener("load", done);
+        img.addEventListener("error", done);
+      }
+    });
+    window.setTimeout(finish, 2000);
+  });
+}
+
+function printFromWindow(win: Window) {
+  const doc = win.document;
+  const run = () => {
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      /* ignore */
+    }
+  };
+  void waitForImages(doc).then(() => {
+    window.setTimeout(run, 80);
+  });
+  win.onafterprint = () => {
+    window.setTimeout(() => {
+      try {
+        win.close();
+      } catch {
+        /* ignore */
+      }
+    }, 200);
+  };
+}
+
+/**
+ * Prints a professional 80×80 thermal receipt from a dedicated document window
+ * (not the host Cursor/app page — avoids empty "app doesn't support print preview").
+ */
 export function printThermalReceipt(data: ThermalReceiptData) {
   const html = buildReceiptHtml(data);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const popup = window.open(
+    url,
+    "rms-thermal-receipt",
+    "width=420,height=740,left=80,top=40"
+  );
+
+  if (popup) {
+    let printed = false;
+    const start = () => {
+      if (printed) return;
+      printed = true;
+      printFromWindow(popup);
+      window.setTimeout(() => URL.revokeObjectURL(url), 8000);
+    };
+    popup.onload = start;
+    // Some browsers fire load before we attach the handler
+    window.setTimeout(() => {
+      try {
+        if (popup.document?.readyState === "complete") start();
+      } catch {
+        start();
+      }
+    }, 400);
+    return;
+  }
+
+  // Popup blocked — fallback: dedicated iframe with real size (not 0×0)
+  URL.revokeObjectURL(url);
   const iframe = document.createElement("iframe");
+  iframe.title = "فاتورة 80×80";
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  iframe.style.opacity = "0";
-  iframe.style.pointerEvents = "none";
+  iframe.style.cssText =
+    "position:fixed;left:-10000px;top:0;width:80mm;height:1200px;border:0;opacity:0;pointer-events:none;z-index:-1;";
   document.body.appendChild(iframe);
 
   const win = iframe.contentWindow;
   const doc = iframe.contentDocument || win?.document;
   if (!win || !doc) {
     iframe.remove();
-    throw new Error("تعذر تجهيز نافذة الطباعة");
+    throw new Error("تعذر تجهيز نافذة الطباعة — افتح النظام في المتصفح واسمح بالنوافذ المنبثقة");
   }
 
   doc.open();
   doc.write(html);
   doc.close();
 
-  const cleanup = () => {
-    window.setTimeout(() => iframe.remove(), 800);
-  };
-
-  const trigger = () => {
-    try {
-      win.focus();
-      win.print();
-    } finally {
-      cleanup();
-    }
-  };
-
-  // Wait for images (logo) before printing
-  const images = Array.from(doc.images);
-  if (images.length === 0) {
-    window.setTimeout(trigger, 50);
-    return;
-  }
-  let pending = images.length;
-  const done = () => {
-    pending -= 1;
-    if (pending <= 0) trigger();
-  };
-  images.forEach((img) => {
-    if (img.complete) done();
-    else {
-      img.addEventListener("load", done);
-      img.addEventListener("error", done);
-    }
+  void waitForImages(doc).then(() => {
+    window.setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } finally {
+        window.setTimeout(() => iframe.remove(), 1500);
+      }
+    }, 100);
   });
-  window.setTimeout(() => {
-    if (pending > 0) trigger();
-  }, 1500);
 }
