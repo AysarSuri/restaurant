@@ -58,12 +58,14 @@ const TYPE_META: Record<
     label: "شخص",
     labelPlural: "أشخاص",
     addTitle: "إضافة شخص",
-    numberLabel: "رقم الشخص",
+    numberLabel: "اسم الشخص",
     empty: "لا يوجد أشخاص في هذا التصنيف",
     capacityLabel: "سعة",
     icon: UserRound,
   },
 };
+
+const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
 
 const EMPTY_TABLE_FORM = {
   number: "",
@@ -126,9 +128,10 @@ export default function Tables() {
   };
 
   const openAdd = () => {
+    const isPerson = entityType === "person";
     setAddForm({
-      number: nextNumberForType(entityType),
-      capacity: "4",
+      number: isPerson ? "" : nextNumberForType(entityType),
+      capacity: isPerson ? "1" : "4",
       location: "",
       type: entityType,
     });
@@ -137,28 +140,39 @@ export default function Tables() {
   };
 
   const handleTypeChangeInForm = (type: EntityType) => {
+    const isPerson = type === "person";
     setAddForm((f) => ({
       ...f,
       type,
-      number: nextNumberForType(type),
+      number: isPerson ? "" : nextNumberForType(type),
+      capacity: isPerson ? "1" : f.capacity || "4",
     }));
+    setAddError("");
   };
 
   const handleCreateTable = () => {
-    const number = addForm.number.trim();
-    const capacity = Number(addForm.capacity);
     const type = addForm.type;
     const labels = TYPE_META[type];
+    const isPerson = type === "person";
+    const number = isPerson
+      ? addForm.number.trim().replace(/\s+/g, " ")
+      : addForm.number.trim();
+    const capacity = Number(addForm.capacity);
     if (!number) {
-      setAddError(`${labels.numberLabel} مطلوب`);
+      setAddError(isPerson ? "اسم الشخص مطلوب" : `${labels.numberLabel} مطلوب`);
       return;
     }
     if (!capacity || capacity < 1) {
       setAddError("السعة يجب أن تكون رقمًا أكبر من صفر");
       return;
     }
-    if (tables?.some((t) => (t.type ?? "table") === type && t.number === number)) {
-      setAddError(`${labels.numberLabel} مستخدم مسبقًا`);
+    const duplicate = tables?.some((t) => {
+      if ((t.type ?? "table") !== type) return false;
+      if (isPerson) return normalizeName(String(t.number)) === normalizeName(number);
+      return t.number === number;
+    });
+    if (duplicate) {
+      setAddError(isPerson ? "اسم الشخص مستخدم مسبقًا" : `${labels.numberLabel} مستخدم مسبقًا`);
       return;
     }
     setAddError("");
@@ -180,7 +194,12 @@ export default function Tables() {
           refetch();
         },
         onError: (err: any) => {
-          setAddError(err?.data?.message || err?.message || `تعذر إضافة ${labels.label}`);
+          setAddError(
+            err?.data?.error ||
+              err?.data?.message ||
+              err?.message ||
+              `تعذر إضافة ${labels.label}`
+          );
         },
       }
     );
@@ -352,7 +371,13 @@ export default function Tables() {
                     ) : (
                       <div className="flex flex-col items-center gap-2 py-4">
                         <TypeIcon className="w-14 h-14 text-primary drop-shadow-md" />
-                        <span className="font-display text-2xl font-extrabold text-foreground">
+                        <span
+                          className={`font-extrabold text-foreground px-1 ${
+                            entityType === "person"
+                              ? "text-base sm:text-lg leading-snug line-clamp-2"
+                              : "font-display text-2xl"
+                          }`}
+                        >
                           {table.number}
                         </span>
                         <span className="text-xs text-muted-foreground font-bold">
@@ -409,7 +434,9 @@ export default function Tables() {
                     : "طاولة جديدة"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                اختر النوع ثم أدخل الرقم والسعة والموقع (اختياري)
+                {addForm.type === "person"
+                  ? "أدخل اسم الشخص والسعة والموقع (اختياري)"
+                  : "اختر النوع ثم أدخل الرقم والسعة والموقع (اختياري)"}
               </p>
             </div>
           </div>
@@ -444,18 +471,35 @@ export default function Tables() {
 
           <div>
             <label className="text-sm font-semibold mb-1.5 block">
-              {TYPE_META[addForm.type].numberLabel}
+              {TYPE_META[addForm.type].numberLabel}{" "}
+              <span className="text-destructive">*</span>
             </label>
-            <Input
-              value={addForm.number}
-              readOnly
-              disabled
-              dir="ltr"
-              className="opacity-80 cursor-not-allowed font-display font-bold"
-            />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              يزداد تلقائياً حسب النوع ولا يمكن تعديله
-            </p>
+            {addForm.type === "person" ? (
+              <>
+                <Input
+                  value={addForm.number}
+                  onChange={(e) => setAddForm((f) => ({ ...f, number: e.target.value }))}
+                  placeholder="مثال: أحمد محمد"
+                  autoFocus
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  لا يُسمح بأسماء مكررة
+                </p>
+              </>
+            ) : (
+              <>
+                <Input
+                  value={addForm.number}
+                  readOnly
+                  disabled
+                  dir="ltr"
+                  className="opacity-80 cursor-not-allowed font-display font-bold"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  يزداد تلقائياً حسب النوع ولا يمكن تعديله
+                </p>
+              </>
+            )}
           </div>
           <div>
             <label className="text-sm font-semibold mb-1.5 block">
@@ -468,7 +512,7 @@ export default function Tables() {
               value={addForm.capacity}
               onChange={(e) => setAddForm((f) => ({ ...f, capacity: e.target.value }))}
               dir="ltr"
-              autoFocus
+              autoFocus={addForm.type !== "person"}
             />
           </div>
           <div>
