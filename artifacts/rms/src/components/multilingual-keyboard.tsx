@@ -8,9 +8,13 @@ export interface MultilingualKeyboardProps {
   value: string;
   onConfirm: (value: string) => void;
   onCancel?: () => void;
+  /** Live text updates while typing (on-screen or physical keyboard) */
+  onChange?: (value: string) => void;
   label?: string;
   placeholder?: string;
   defaultLang?: KeyboardLang;
+  /** Hide the visible text field (e.g. when an external search field is shown) */
+  showInput?: boolean;
 }
 
 const LANGS: { id: KeyboardLang; label: string; short: string; dir: "rtl" | "ltr" }[] = [
@@ -77,8 +81,10 @@ export function MultilingualKeyboard({
   value,
   onConfirm,
   onCancel,
+  onChange,
   label = "أدخل النص",
   defaultLang = "ar",
+  showInput = true,
 }: MultilingualKeyboardProps) {
   const [text, setText] = useState(value || "");
   const [lang, setLang] = useState<KeyboardLang>(defaultLang);
@@ -97,26 +103,39 @@ export function MultilingualKeyboard({
   const langMeta = LANGS.find((l) => l.id === lang) ?? LANGS[0];
   const rows = useMemo(() => rowsFor(lang, shift), [lang, shift]);
 
+  const commitText = (next: string) => {
+    setText(next);
+    onChange?.(next);
+  };
+
+  const updateText = (updater: (prev: string) => string) => {
+    setText((prev) => {
+      const next = updater(prev);
+      onChange?.(next);
+      return next;
+    });
+  };
+
   const focusInput = () => {
     inputRef.current?.focus();
   };
 
   const press = (key: string) => {
-    setText((prev) => prev + key);
+    updateText((prev) => prev + key);
     if (shift && lang === "en") setShift(false);
     focusInput();
   };
 
   const backspace = () => {
-    setText((prev) => prev.slice(0, -1));
+    updateText((prev) => prev.slice(0, -1));
     focusInput();
   };
   const clear = () => {
-    setText("");
+    commitText("");
     focusInput();
   };
   const space = () => {
-    setText((prev) => `${prev} `);
+    updateText((prev) => `${prev} `);
     focusInput();
   };
 
@@ -164,16 +183,42 @@ export function MultilingualKeyboard({
             </div>
           </div>
 
-          <div
-            className="rounded-2xl border border-border/40 bg-background/75 backdrop-blur-md px-4 py-2.5 shadow-inner flex items-center gap-3 min-h-14"
-            dir={langMeta.dir}
-            onClick={focusInput}
-          >
+          {showInput ? (
+            <div
+              className="rounded-2xl border border-border/40 bg-background/75 backdrop-blur-md px-4 py-2.5 shadow-inner flex items-center gap-3 min-h-14"
+              dir={langMeta.dir}
+              onClick={focusInput}
+            >
+              <input
+                ref={inputRef}
+                type="text"
+                value={text}
+                onChange={(e) => commitText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    onCancel?.();
+                    return;
+                  }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onConfirm(text.trim());
+                  }
+                }}
+                dir={langMeta.dir}
+                className="min-w-0 flex-1 bg-transparent border-0 outline-none text-lg sm:text-xl font-bold text-foreground placeholder:text-muted-foreground/30 caret-primary"
+                aria-label={label}
+              />
+              <p className="flex-shrink-0 text-[10px] sm:text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
+                {langMeta.label} · حاسوب أو شاشة · Enter للتأكيد
+              </p>
+            </div>
+          ) : (
             <input
               ref={inputRef}
               type="text"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => commitText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   e.preventDefault();
@@ -186,13 +231,10 @@ export function MultilingualKeyboard({
                 }
               }}
               dir={langMeta.dir}
-              className="min-w-0 flex-1 bg-transparent border-0 outline-none text-lg sm:text-xl font-bold text-foreground placeholder:text-muted-foreground/30 caret-primary"
+              className="sr-only"
               aria-label={label}
             />
-            <p className="flex-shrink-0 text-[10px] sm:text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
-              {langMeta.label} · حاسوب أو شاشة · Enter للتأكيد
-            </p>
-          </div>
+          )}
         </div>
 
         <div className="relative px-3 sm:px-5 py-4 sm:py-5 space-y-2.5 sm:space-y-3" dir="ltr">

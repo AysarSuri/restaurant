@@ -1362,19 +1362,154 @@ export default function POS() {
         isOpen={isPersonSearchPadOpen}
         onClose={() => setIsPersonSearchPadOpen(false)}
         hideHeader
-        maxWidth="max-w-5xl"
+        maxWidth={isPortrait ? "max-w-3xl" : "max-w-7xl"}
         layer="overlay"
       >
-        <MultilingualKeyboard
-          value={personSearch}
-          label="بحث عن شخص"
-          defaultLang="ar"
-          onCancel={() => setIsPersonSearchPadOpen(false)}
-          onConfirm={(v) => {
-            setPersonSearch(v.trim());
+        {(() => {
+          const landscapePad = !isPortrait;
+          const pickPerson = (id: number) => {
+            setSelectedTableId(id);
+            setPersonSearch("");
             setIsPersonSearchPadOpen(false);
-          }}
-        />
+            setIsTablePickerOpen(false);
+          };
+          const searchPanel = (
+            <div
+              className={`flex flex-col min-h-0 rounded-3xl border border-border/50 bg-gradient-to-b from-card via-card to-secondary/30 shadow-lg overflow-hidden ${
+                landscapePad ? "w-[min(100%,22rem)] flex-shrink-0" : "w-full max-h-[42vh]"
+              }`}
+              dir="rtl"
+            >
+              <div className="p-3 sm:p-3.5 border-b border-border/50 bg-primary/5">
+                <div className="relative rounded-2xl border border-primary/25 bg-background/90 px-3.5 py-2.5 flex items-center gap-2.5 shadow-inner">
+                  <Search className="w-5 h-5 text-primary flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold text-muted-foreground mb-0.5">بحث أشخاص</p>
+                    <p
+                      className={`truncate text-base font-extrabold ${
+                        personSearch ? "text-foreground" : "text-muted-foreground/50"
+                      }`}
+                    >
+                      {personSearch || "اكتب للبحث..."}
+                    </p>
+                  </div>
+                  {personSearch ? (
+                    <button
+                      type="button"
+                      onClick={() => setPersonSearch("")}
+                      className="w-8 h-8 rounded-xl border border-border/60 bg-secondary/70 text-muted-foreground hover:text-foreground flex items-center justify-center flex-shrink-0"
+                      aria-label="مسح"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain divide-y divide-border/45">
+                {pickerSeats.length === 0 ? (
+                  <div className="py-10 px-4 text-center text-muted-foreground">
+                    <UserRound className="w-10 h-10 mx-auto mb-2 opacity-45" />
+                    <p className="text-sm font-bold">
+                      {personSearch.trim() ? "لا توجد نتائج" : "لا يوجد أشخاص"}
+                    </p>
+                  </div>
+                ) : (
+                  pickerSeats.map((person) => {
+                    const presence = personPresence(person.status);
+                    const meta = PERSON_STATUS_META[presence];
+                    const isAvailable = presence === "available";
+                    const isSelected = selectedTableId === person.id;
+                    const name = String(person.number);
+                    return (
+                      <button
+                        key={person.id}
+                        type="button"
+                        disabled={!isAvailable}
+                        onClick={() => {
+                          if (!isAvailable) return;
+                          pickPerson(person.id);
+                        }}
+                        className={`w-full text-start px-3.5 py-3 flex items-center gap-2.5 transition-colors ${
+                          isSelected ? "bg-primary/10" : "hover:bg-primary/5"
+                        } ${isAvailable ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                      >
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-extrabold border flex-shrink-0 ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-secondary/80 border-border/60"
+                          }`}
+                        >
+                          {personInitials(name)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold text-sm truncate">{name}</p>
+                          {person.location ? (
+                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                              {person.location}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold flex-shrink-0 ${meta.chip}`}
+                        >
+                          {meta.label}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+
+          return (
+            <div
+              className={
+                landscapePad
+                  ? "flex flex-row items-stretch gap-3 sm:gap-4"
+                  : "flex flex-col gap-3"
+              }
+              dir="ltr"
+            >
+              {landscapePad ? (
+                <>
+                  {searchPanel}
+                  <div className="min-w-0 flex-1">
+                    <MultilingualKeyboard
+                      value={personSearch}
+                      label="بحث عن شخص"
+                      defaultLang="ar"
+                      showInput={false}
+                      onChange={setPersonSearch}
+                      onCancel={() => setIsPersonSearchPadOpen(false)}
+                      onConfirm={(v) => {
+                        setPersonSearch(v.trim());
+                        setIsPersonSearchPadOpen(false);
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <MultilingualKeyboard
+                    value={personSearch}
+                    label="بحث عن شخص"
+                    defaultLang="ar"
+                    showInput={false}
+                    onChange={setPersonSearch}
+                    onCancel={() => setIsPersonSearchPadOpen(false)}
+                    onConfirm={(v) => {
+                      setPersonSearch(v.trim());
+                      setIsPersonSearchPadOpen(false);
+                    }}
+                  />
+                  {searchPanel}
+                </>
+              )}
+            </div>
+          );
+        })()}
       </Dialog>
     </div>
   );
