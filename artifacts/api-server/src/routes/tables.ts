@@ -19,17 +19,20 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   const scope = parseBranchScope(req);
-  const { number, capacity, location, status, branchId } = req.body;
+  const { number, capacity, location, status, type, branchId } = req.body;
   const resolvedBranchId = resolveWriteBranchId(scope, branchId);
   if (!resolvedBranchId) {
     res.status(400).json({ error: "اختر فرعاً قبل إضافة طاولة" });
     return;
   }
+  const resolvedType =
+    type === "room" || type === "person" || type === "table" ? type : "table";
   const [table] = await db
     .insert(restaurantTablesTable)
     .values({
       number,
       capacity,
+      type: resolvedType,
       location,
       status: status ?? "available",
       branchId: resolvedBranchId,
@@ -40,7 +43,9 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { number, capacity, location, status, branchId } = req.body;
+  const { number, capacity, location, status, type, branchId } = req.body;
+  const resolvedType =
+    type === "room" || type === "person" || type === "table" ? type : undefined;
   const [table] = await db
     .update(restaurantTablesTable)
     .set({
@@ -48,6 +53,7 @@ router.put("/:id", async (req, res) => {
       capacity,
       location,
       status,
+      ...(resolvedType ? { type: resolvedType } : {}),
       ...(branchId != null ? { branchId: Number(branchId) } : {}),
     })
     .where(eq(restaurantTablesTable.id, id))

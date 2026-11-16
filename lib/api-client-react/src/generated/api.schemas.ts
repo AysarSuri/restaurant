@@ -78,6 +78,15 @@ export interface CreateMenuItemBody {
   sortOrder?: number;
 }
 
+export type RestaurantTableType =
+  (typeof RestaurantTableType)[keyof typeof RestaurantTableType];
+
+export const RestaurantTableType = {
+  table: "table",
+  room: "room",
+  person: "person",
+} as const;
+
 export type RestaurantTableStatus =
   (typeof RestaurantTableStatus)[keyof typeof RestaurantTableStatus];
 
@@ -92,11 +101,21 @@ export interface RestaurantTable {
   id: number;
   number: string;
   capacity: number;
+  type: RestaurantTableType;
   status: RestaurantTableStatus;
   location?: string;
   branchId?: number | null;
   createdAt?: string;
 }
+
+export type CreateTableBodyType =
+  (typeof CreateTableBodyType)[keyof typeof CreateTableBodyType];
+
+export const CreateTableBodyType = {
+  table: "table",
+  room: "room",
+  person: "person",
+} as const;
 
 export type CreateTableBodyStatus =
   (typeof CreateTableBodyStatus)[keyof typeof CreateTableBodyStatus];
@@ -111,9 +130,19 @@ export const CreateTableBodyStatus = {
 export interface CreateTableBody {
   number: string;
   capacity: number;
+  type?: CreateTableBodyType;
   location?: string;
   status?: CreateTableBodyStatus;
 }
+
+export type UpdateTableBodyType =
+  (typeof UpdateTableBodyType)[keyof typeof UpdateTableBodyType];
+
+export const UpdateTableBodyType = {
+  table: "table",
+  room: "room",
+  person: "person",
+} as const;
 
 export type UpdateTableBodyStatus =
   (typeof UpdateTableBodyStatus)[keyof typeof UpdateTableBodyStatus];
@@ -128,6 +157,7 @@ export const UpdateTableBodyStatus = {
 export interface UpdateTableBody {
   number?: string;
   capacity?: number;
+  type?: UpdateTableBodyType;
   location?: string;
   status?: UpdateTableBodyStatus;
 }

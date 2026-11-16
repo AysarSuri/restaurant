@@ -46,6 +46,7 @@ export * from "./payOrderBody";
 export * from "./payOrderBodyPaymentMethod";
 export * from "./restaurantTable";
 export * from "./restaurantTableStatus";
+export * from "./restaurantTableType";
 export * from "./salesDataPoint";
 export * from "./salesReport";
 export * from "./salesReportByOrderType";
