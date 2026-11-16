@@ -154,25 +154,6 @@ export default function POS() {
     );
   }, [tables, selectedBranchId]);
 
-  const seatTypeCounts = useMemo(() => {
-    const base = { table: 0, room: 0, person: 0 };
-    for (const t of branchTables) {
-      const key = (t.type ?? "table") as SeatEntityType;
-      if (key in base) base[key] += 1;
-    }
-    return base;
-  }, [branchTables]);
-
-  const pickerSeats = useMemo(() => {
-    const list = branchTables.filter(
-      (t) => (t.type ?? "table") === pickerEntityType
-    );
-    if (pickerEntityType !== "person") return list;
-    return [...list].sort((a, b) =>
-      String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
-    );
-  }, [branchTables, pickerEntityType]);
-
   /** null = all, "favorites" = favorites only, number = category id */
   const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>("favorites");
   const [search, setSearch] = useState("");
@@ -196,6 +177,26 @@ export default function POS() {
   const [cartOpen, setCartOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
   const [now, setNow] = useState(() => new Date());
+
+  const seatTypeCounts = useMemo(() => {
+    const base = { table: 0, room: 0, person: 0 };
+    for (const t of branchTables) {
+      const key = (t.type ?? "table") as SeatEntityType;
+      if (key in base) base[key] += 1;
+    }
+    return base;
+  }, [branchTables]);
+
+  const pickerSeats = useMemo(() => {
+    const list = branchTables.filter(
+      (t) => (t.type ?? "table") === pickerEntityType
+    );
+    if (pickerEntityType !== "person") return list;
+    return [...list].sort((a, b) =>
+      String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
+    );
+  }, [branchTables, pickerEntityType]);
+
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const {
     format: formatMoneyAmount,
