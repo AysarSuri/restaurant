@@ -8,6 +8,8 @@ import {
   useGetTables,
   useUpdateTable,
   useGetCards,
+  useGetBranches,
+  useGetDevicePrinters,
   getGetTablesQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
@@ -18,7 +20,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
-  DoorOpen, UserRound, Lock, Wallet,
+  DoorOpen, UserRound, Lock, Wallet, Printer,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
@@ -30,6 +32,9 @@ import { MultilingualKeyboard } from "@/components/multilingual-keyboard";
 import { DiningTableIcon } from "@/components/dining-table-icon";
 import { RoomIcon } from "@/components/room-icon";
 import { TABLE_STATUS_META } from "@/lib/table-status";
+import { getOrCreateDeviceKey } from "@/lib/device-id";
+import { printThermalReceipt } from "@/lib/print-receipt";
+import { toast } from "@/hooks/use-toast";
 
 type SeatEntityType = "table" | "room" | "person";
 
@@ -147,6 +152,8 @@ export default function POS() {
   });
   const { data: appSettings } = useGetSettings();
   const { data: paymentCards } = useGetCards();
+  const { data: branches } = useGetBranches();
+  const { data: devicePrinters } = useGetDevicePrinters();
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
   const posSaveTarget =
@@ -154,6 +161,21 @@ export default function POS() {
       ? appSettings.posSaveTarget
       : "cashier";
   const isDirectSave = posSaveTarget === "none";
+  const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
+
+  const currentBranch = useMemo(() => {
+    if (selectedBranchId === "all") return null;
+    return (branches ?? []).find((b) => b.id === selectedBranchId) ?? null;
+  }, [branches, selectedBranchId]);
+
+  const devicePrinter = useMemo(() => {
+    const list = devicePrinters ?? [];
+    return (
+      list.find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
+      list.find((p) => p.deviceKey === deviceKey) ??
+      null
+    );
+  }, [devicePrinters, deviceKey]);
 
   const branchTables = useMemo(() => {
     const list = tables ?? [];
@@ -387,14 +409,61 @@ export default function POS() {
     return () => window.clearTimeout(timer);
   }, [deliveryPhone, orderType]);
 
+  const orderTypeLabels: Record<OrderType, string> = {
+    dine_in: "طاولة",
+    takeaway: "سفري",
+    delivery: "توصيل",
+  };
+
+  const buildDirectReceipt = (paymentLabel: string) => {
+    const nowStamp = new Date();
+    return {
+      restaurantName: appSettings?.restaurantName?.trim() || "المطعم",
+      branchName: currentBranch?.name?.trim() || branchLabel,
+      mobile1: currentBranch?.mobile1,
+      mobile2: currentBranch?.mobile2,
+      address: currentBranch?.address,
+      logoUrl: currentBranch?.logoUrl,
+      invoiceNumber,
+      dateLabel: formatDateAr(nowStamp),
+      timeLabel: formatClock(nowStamp),
+      orderTypeLabel: orderTypeLabels[orderType],
+      seatLabel: orderType === "dine_in" ? seatLabel(selectedTable) : null,
+      items: cart.map((i) => ({
+        name: i.nameAr || i.name,
+        quantity: i.cartQuantity,
+        unitPrice: i.price,
+        lineTotal: i.price * i.cartQuantity,
+      })),
+      subtotal,
+      discount,
+      total,
+      paymentLabel,
+      received: checkoutPayMethod === "cash" ? checkoutReceived : total,
+      change: checkoutPayMethod === "cash" ? Math.max(0, checkoutReceived - total) : undefined,
+      formatMoney: formatMoneyAmount,
+      printerName: devicePrinter?.printerName?.trim() || null,
+    };
+  };
+
   const handleCheckout = (
     paymentMethod: "cash" | "card" | "transfer",
-    opts?: { cardId?: number | null; cardName?: string }
+    opts?: { cardId?: number | null; cardName?: string; print?: boolean }
   ) => {
     const cardNote =
       paymentMethod === "card" && opts?.cardName
         ? `بطاقة: ${opts.cardName}`
         : undefined;
+    const paymentLabel =
+      paymentMethod === "cash"
+        ? "كاش"
+        : paymentMethod === "card"
+          ? opts?.cardName
+            ? `كارت · ${opts.cardName}`
+            : "كارت"
+          : "تحويل";
+    const receiptData = isDirectSave ? buildDirectReceipt(paymentLabel) : null;
+
     createOrder(
       {
         data: {
@@ -419,26 +488,45 @@ export default function POS() {
             });
           }
           setOrderSuccess(true);
+          if (opts?.print && receiptData) {
+            try {
+              printThermalReceipt(receiptData);
+              toast({
+                title: "تم الحفظ والطباعة",
+                description: devicePrinter?.printerName?.trim()
+                  ? `اختر الطابعة: ${devicePrinter.printerName.trim()} (80×80)`
+                  : "اختر طابعة 80×80 من نافذة الطباعة — سجّل طابعة الجهاز من الإعدادات",
+              });
+            } catch {
+              toast({
+                variant: "destructive",
+                title: "تم الحفظ",
+                description: "تعذر فتح نافذة الطباعة",
+              });
+            }
+          }
         },
       }
     );
   };
 
-  const confirmDirectCheckout = () => {
+  const confirmDirectCheckout = (withPrint: boolean) => {
+    if (withPrint && !devicePrinter?.printerName?.trim()) {
+      toast({
+        variant: "destructive",
+        title: "لا توجد طابعة للجهاز",
+        description: "سجّل طابعة هذا الجهاز من الإعدادات → الطابعات قبل الطباعة",
+      });
+      return;
+    }
     if (checkoutPayMethod === "cash") {
       if (checkoutReceived < total) return;
-      handleCheckout("cash");
+      handleCheckout("cash", { print: withPrint });
       return;
     }
     const card = branchPaymentCards.find((c) => c.id === checkoutCardId);
     if (!card) return;
-    handleCheckout("card", { cardId: card.id, cardName: card.name });
-  };
-
-  const orderTypeLabels: Record<OrderType, string> = {
-    dine_in: "طاولة",
-    takeaway: "سفري",
-    delivery: "توصيل",
+    handleCheckout("card", { cardId: card.id, cardName: card.name, print: withPrint });
   };
 
   const cartPanel = (compact: boolean) => (
@@ -1457,19 +1545,44 @@ export default function POS() {
               </div>
             )}
 
-            <Button
-              className="w-full h-14 text-base sm:text-lg touch-target gap-2"
-              isLoading={isCreating}
-              disabled={
-                isCreating ||
-                (checkoutPayMethod === "cash" && checkoutReceived < total) ||
-                (checkoutPayMethod === "card" && !checkoutCardId)
-              }
-              onClick={confirmDirectCheckout}
-            >
-              <CheckCircle2 className="w-5 h-5" />
-              تأكيد الدفع والحفظ
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <Button
+                variant="outline"
+                className="h-14 text-sm sm:text-base touch-target gap-2 border-2"
+                isLoading={isCreating}
+                disabled={
+                  isCreating ||
+                  (checkoutPayMethod === "cash" && checkoutReceived < total) ||
+                  (checkoutPayMethod === "card" && !checkoutCardId)
+                }
+                onClick={() => confirmDirectCheckout(false)}
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                حفظ الفاتورة
+              </Button>
+              <Button
+                className="h-14 text-sm sm:text-base touch-target gap-2"
+                isLoading={isCreating}
+                disabled={
+                  isCreating ||
+                  (checkoutPayMethod === "cash" && checkoutReceived < total) ||
+                  (checkoutPayMethod === "card" && !checkoutCardId)
+                }
+                onClick={() => confirmDirectCheckout(true)}
+              >
+                <Printer className="w-5 h-5" />
+                حفظ وطباعة
+              </Button>
+            </div>
+            {devicePrinter?.printerName?.trim() ? (
+              <p className="text-[11px] text-center text-muted-foreground font-semibold">
+                طابعة الجهاز: {devicePrinter.printerName.trim()} · 80×80
+              </p>
+            ) : (
+              <p className="text-[11px] text-center text-amber-600 dark:text-amber-400 font-semibold">
+                لم تُسجَّل طابعة لهذا الجهاز — من الإعدادات → الطابعات
+              </p>
+            )}
           </div>
         ) : (
           <>

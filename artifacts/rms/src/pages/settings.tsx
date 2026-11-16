@@ -167,16 +167,20 @@ export default function SettingsPage() {
     setCashierSendToKitchen(settings.cashierSendToKitchen !== false);
   }, [settings]);
 
+  const myDevicePrinter = useMemo(
+    () => (printers ?? []).find((p) => p.deviceKey === deviceKey) ?? null,
+    [printers, deviceKey]
+  );
+
   useEffect(() => {
-    const mine = (printers ?? []).find((p) => p.deviceKey === deviceKey);
-    if (mine) {
-      setDeviceName(mine.deviceName);
-      setPrinterName(mine.printerName || "");
-      setDeviceBranchId(mine.branchId ?? "");
+    if (myDevicePrinter) {
+      setDeviceName(myDevicePrinter.deviceName);
+      setPrinterName(myDevicePrinter.printerName || "");
+      setDeviceBranchId(myDevicePrinter.branchId ?? "");
     } else if (selectedBranchId !== "all") {
       setDeviceBranchId(selectedBranchId);
     }
-  }, [printers, deviceKey, selectedBranchId]);
+  }, [myDevicePrinter, selectedBranchId]);
 
   const activeBranches = useMemo(
     () => (branches ?? []).filter((b) => b.isActive !== false),
@@ -398,7 +402,11 @@ export default function SettingsPage() {
             const without = list.filter((p) => p.deviceKey !== row.deviceKey && p.id !== row.id);
             return [row, ...without];
           });
-          notifySaveOk("تم حفظ طابعة هذا الجهاز (80×80)");
+          notifySaveOk(
+            myDevicePrinter
+              ? "تم تحديث طابعة هذا الجهاز (طابعة واحدة فقط لكل جهاز)"
+              : "تم حفظ طابعة هذا الجهاز (80×80)"
+          );
         },
         onError: (err: any) =>
           notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ الطابعة"),
@@ -789,11 +797,17 @@ export default function SettingsPage() {
                   <Badge variant="default">طابعة 80×80</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  سجّل اسم الحاسوب/الجهاز واختر طابعته الخاصة. كل فرع يمكن أن يملك عدة أجهزة.
+                  طابعة واحدة فقط لكل جهاز (80×80). الحفظ يحدّث طابعة هذا الجهاز ولا يضيف ثانية.
                 </p>
               </div>
               <Monitor className="w-8 h-8 text-primary opacity-80" />
             </div>
+
+            {myDevicePrinter && (
+              <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3.5 py-2.5 text-sm font-bold text-amber-700 dark:text-amber-300">
+                هذا الجهاز لديه طابعة مسجّلة مسبقاً — لن يُسمح بطابعة ثانية، سيتم التحديث فقط.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -817,7 +831,7 @@ export default function SettingsPage() {
               <div className="md:col-span-2">
                 <ModernCombobox
                   label="اسم الطابعة"
-                  hint="80×80"
+                  hint="80×80 · واحدة لكل جهاز"
                   icon={Printer}
                   value={printerName}
                   onChange={setPrinterName}
@@ -832,7 +846,15 @@ export default function SettingsPage() {
             </div>
 
             <Button className="gap-2" isLoading={upserting} onClick={handleRegisterDevice}>
-              <Plus className="w-4 h-4" /> حفظ طابعة هذا الجهاز
+              {myDevicePrinter ? (
+                <>
+                  <Save className="w-4 h-4" /> تحديث طابعة هذا الجهاز
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" /> حفظ طابعة هذا الجهاز
+                </>
+              )}
             </Button>
           </Card>
 

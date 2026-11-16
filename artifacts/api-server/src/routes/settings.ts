@@ -1,8 +1,24 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { appSettingsTable, devicePrintersTable, branchesTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
+
+/** Keep a single printer row per deviceKey (delete older duplicates). */
+async function keepSinglePrinterForDevice(deviceKey: string, keepId?: number) {
+  const rows = await db
+    .select({ id: devicePrintersTable.id })
+    .from(devicePrintersTable)
+    .where(eq(devicePrintersTable.deviceKey, deviceKey))
+    .orderBy(desc(devicePrintersTable.updatedAt));
+  if (rows.length <= 1) return rows[0]?.id ?? keepId ?? null;
+  const primaryId = keepId && rows.some((r) => r.id === keepId) ? keepId : rows[0].id;
+  const dupeIds = rows.filter((r) => r.id !== primaryId).map((r) => r.id);
+  if (dupeIds.length > 0) {
+    await db.delete(devicePrintersTable).where(inArray(devicePrintersTable.id, dupeIds));
+  }
+  return primaryId;
+}
 
 const router: IRouter = Router();
 
@@ -212,10 +228,26 @@ router.get("/printers", async (req, res) => {
     .leftJoin(branchesTable, eq(devicePrintersTable.branchId, branchesTable.id))
     .orderBy(desc(devicePrintersTable.updatedAt));
 
+  // Enforce one printer per device even if old duplicates exist
+  const seenKeys = new Set<string>();
+  const deduped: typeof rows = [];
+  const orphanIds: number[] = [];
+  for (const row of rows) {
+    if (seenKeys.has(row.deviceKey)) {
+      orphanIds.push(row.id);
+      continue;
+    }
+    seenKeys.add(row.deviceKey);
+    deduped.push(row);
+  }
+  if (orphanIds.length > 0) {
+    await db.delete(devicePrintersTable).where(inArray(devicePrintersTable.id, orphanIds));
+  }
+
   const filtered =
     scope.mode === "one"
-      ? rows.filter((r) => r.branchId === scope.branchId)
-      : rows;
+      ? deduped.filter((r) => r.branchId === scope.branchId)
+      : deduped;
 
   res.json(filtered);
 });
@@ -234,11 +266,15 @@ router.post("/printers", async (req, res) => {
   const resolvedBranchId = resolveWriteBranchId(scope, branchId != null ? Number(branchId) : null);
   const printer = String(printerName ?? "").trim();
 
-  const [existing] = await db
-    .select()
-    .from(devicePrintersTable)
-    .where(eq(devicePrintersTable.deviceKey, key))
-    .limit(1);
+  // One printer only per device — update existing (and purge duplicates)
+  const existingId = await keepSinglePrinterForDevice(key);
+  const [existing] = existingId
+    ? await db
+        .select()
+        .from(devicePrintersTable)
+        .where(eq(devicePrintersTable.id, existingId))
+        .limit(1)
+    : [];
 
   if (existing) {
     const [updated] = await db
@@ -267,29 +303,63 @@ router.post("/printers", async (req, res) => {
     return;
   }
 
-  const [created] = await db
-    .insert(devicePrintersTable)
-    .values({
-      deviceKey: key,
-      deviceName: name,
-      printerName: printer,
-      branchId: resolvedBranchId,
-      paperSize: "80x80",
-      note: note ? String(note).trim() : null,
-      isActive: isActive ?? true,
-    })
-    .returning();
+  try {
+    const [created] = await db
+      .insert(devicePrintersTable)
+      .values({
+        deviceKey: key,
+        deviceName: name,
+        printerName: printer,
+        branchId: resolvedBranchId,
+        paperSize: "80x80",
+        note: note ? String(note).trim() : null,
+        isActive: isActive ?? true,
+      })
+      .returning();
 
-  let branchName: string | null = null;
-  if (created.branchId) {
-    const [b] = await db
-      .select({ name: branchesTable.name })
-      .from(branchesTable)
-      .where(eq(branchesTable.id, created.branchId));
-    branchName = b?.name ?? null;
+    let branchName: string | null = null;
+    if (created.branchId) {
+      const [b] = await db
+        .select({ name: branchesTable.name })
+        .from(branchesTable)
+        .where(eq(branchesTable.id, created.branchId));
+      branchName = b?.name ?? null;
+    }
+
+    res.status(201).json({ ...created, branchName });
+  } catch {
+    // Race: another row was inserted for this device — update instead
+    const fallbackId = await keepSinglePrinterForDevice(key);
+    if (!fallbackId) {
+      res.status(400).json({
+        success: false,
+        message: "لا يمكن تسجيل أكثر من طابعة لنفس الجهاز",
+      });
+      return;
+    }
+    const [updated] = await db
+      .update(devicePrintersTable)
+      .set({
+        deviceName: name,
+        printerName: printer,
+        branchId: resolvedBranchId,
+        paperSize: "80x80",
+        note: note != null ? String(note).trim() || null : null,
+        isActive: isActive ?? true,
+        updatedAt: new Date(),
+      })
+      .where(eq(devicePrintersTable.id, fallbackId))
+      .returning();
+    let branchName: string | null = null;
+    if (updated.branchId) {
+      const [b] = await db
+        .select({ name: branchesTable.name })
+        .from(branchesTable)
+        .where(eq(branchesTable.id, updated.branchId));
+      branchName = b?.name ?? null;
+    }
+    res.json({ ...updated, branchName });
   }
-
-  res.status(201).json({ ...created, branchName });
 });
 
 router.put("/printers/:id", async (req, res) => {
