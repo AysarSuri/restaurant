@@ -169,6 +169,8 @@ export default function POS() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
   const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
+  const [personSearch, setPersonSearch] = useState("");
+  const [isPersonSearchPadOpen, setIsPersonSearchPadOpen] = useState(false);
   const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
   const [isPhonePadOpen, setIsPhonePadOpen] = useState(false);
   const [isAddressPadOpen, setIsAddressPadOpen] = useState(false);
@@ -188,14 +190,24 @@ export default function POS() {
   }, [branchTables]);
 
   const pickerSeats = useMemo(() => {
-    const list = branchTables.filter(
+    let list = branchTables.filter(
       (t) => (t.type ?? "table") === pickerEntityType
     );
-    if (pickerEntityType !== "person") return list;
-    return [...list].sort((a, b) =>
-      String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
-    );
-  }, [branchTables, pickerEntityType]);
+    if (pickerEntityType === "person") {
+      const q = personSearch.trim().toLowerCase();
+      if (q) {
+        list = list.filter((t) => {
+          const name = String(t.number).toLowerCase();
+          const loc = (t.location ?? "").toLowerCase();
+          return name.includes(q) || loc.includes(q);
+        });
+      }
+      return [...list].sort((a, b) =>
+        String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
+      );
+    }
+    return list;
+  }, [branchTables, pickerEntityType, personSearch]);
 
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const {
@@ -868,7 +880,10 @@ export default function POS() {
       {/* ── Seat Picker: طاولات / غرفات / أشخاص ── */}
       <Dialog
         isOpen={isTablePickerOpen}
-        onClose={() => setIsTablePickerOpen(false)}
+        onClose={() => {
+          setIsTablePickerOpen(false);
+          setIsPersonSearchPadOpen(false);
+        }}
         title="اختر رقم الطاولة"
         maxWidth="max-w-5xl"
       >
@@ -881,7 +896,13 @@ export default function POS() {
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setPickerEntityType(key)}
+                  onClick={() => {
+                    setPickerEntityType(key);
+                    if (key !== "person") {
+                      setPersonSearch("");
+                      setIsPersonSearchPadOpen(false);
+                    }
+                  }}
                   className={`flex-1 inline-flex items-center justify-center gap-2 h-11 sm:h-12 px-2 sm:px-3 rounded-lg text-sm sm:text-base font-extrabold transition-all duration-200 ${
                     active
                       ? "bg-gradient-to-l from-primary to-amber-500 text-primary-foreground shadow-md shadow-primary/30"
@@ -940,25 +961,79 @@ export default function POS() {
               <p className="font-bold">اختر فرعاً من أعلى الشاشة أولاً</p>
               <p className="text-xs mt-1 opacity-80">حتى لا تظهر عناصر الفروع الأخرى مكررة</p>
             </div>
-          ) : pickerSeats.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
-              {pickerEntityType === "room" ? (
-                <RoomIcon className="w-20 h-auto mx-auto mb-3 opacity-50" />
-              ) : pickerEntityType === "person" ? (
-                <UserRound className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              ) : (
-                <Armchair className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              )}
-              <p className="font-bold">
-                {pickerEntityType === "room"
-                  ? "لا توجد غرف لهذا الفرع"
-                  : pickerEntityType === "person"
-                    ? "لا يوجد أشخاص لهذا الفرع"
-                    : "لا توجد طاولات لهذا الفرع"}
-              </p>
-            </div>
           ) : pickerEntityType === "person" ? (
-            <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain">
+            <div className="space-y-3">
+              <div className="relative rounded-2xl p-[1.5px] bg-gradient-to-l from-primary via-amber-400 to-primary/40 shadow-md shadow-primary/10">
+                <button
+                  type="button"
+                  onClick={() => setIsPersonSearchPadOpen(true)}
+                  className="w-full h-14 sm:h-[3.75rem] rounded-[0.9rem] bg-background/95 backdrop-blur-md px-4 pe-12 flex items-center gap-3 text-start hover:bg-background transition-colors"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-amber-500/15 border border-primary/25 flex items-center justify-center flex-shrink-0">
+                    <Search className="w-5 h-5 text-primary" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block truncate text-base sm:text-lg font-extrabold ${
+                        personSearch ? "text-foreground" : "text-muted-foreground/55"
+                      }`}
+                    >
+                      {personSearch || "ابحث عن شخص بالاسم..."}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground mt-0.5">
+                      اضغط لفتح لوحة المفاتيح
+                    </span>
+                  </span>
+                </button>
+                {personSearch ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPersonSearch("");
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPersonSearch("");
+                      }
+                    }}
+                    className="absolute end-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl border border-border/60 bg-secondary/80 text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-center"
+                    aria-label="مسح البحث"
+                  >
+                    <X className="w-4 h-4" />
+                  </span>
+                ) : (
+                  <span className="absolute end-3 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] font-bold text-primary/70 bg-primary/10 border border-primary/20 rounded-lg px-2 py-1">
+                    بحث
+                  </span>
+                )}
+              </div>
+
+              {pickerSeats.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-12 text-center text-muted-foreground">
+                  <UserRound className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-bold">
+                    {personSearch.trim()
+                      ? "لا توجد نتائج لهذا البحث"
+                      : seatTypeCounts.person === 0
+                        ? "لا يوجد أشخاص لهذا الفرع"
+                        : "لا توجد نتائج"}
+                  </p>
+                  {personSearch.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setPersonSearch("")}
+                      className="mt-3 text-sm font-bold text-primary hover:underline"
+                    >
+                      مسح البحث
+                    </button>
+                  )}
+                </div>
+              ) : (
+            <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden max-h-[min(55vh,520px)] overflow-y-auto overscroll-contain">
               <div className="divide-y divide-border/50">
                 {pickerSeats.map((person, idx) => {
                   const presence = personPresence(person.status);
@@ -977,6 +1052,8 @@ export default function POS() {
                       onClick={() => {
                         if (!isAvailable) return;
                         setSelectedTableId(person.id);
+                        setPersonSearch("");
+                        setIsPersonSearchPadOpen(false);
                         setIsTablePickerOpen(false);
                       }}
                       className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors ${
@@ -1020,6 +1097,21 @@ export default function POS() {
                   );
                 })}
               </div>
+            </div>
+              )}
+            </div>
+          ) : pickerSeats.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
+              {pickerEntityType === "room" ? (
+                <RoomIcon className="w-20 h-auto mx-auto mb-3 opacity-50" />
+              ) : (
+                <Armchair className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              )}
+              <p className="font-bold">
+                {pickerEntityType === "room"
+                  ? "لا توجد غرف لهذا الفرع"
+                  : "لا توجد طاولات لهذا الفرع"}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain pe-1">
@@ -1262,6 +1354,25 @@ export default function POS() {
           onConfirm={(v) => {
             setSearch(v);
             setIsSearchPadOpen(false);
+          }}
+        />
+      </Dialog>
+
+      <Dialog
+        isOpen={isPersonSearchPadOpen}
+        onClose={() => setIsPersonSearchPadOpen(false)}
+        hideHeader
+        maxWidth="max-w-5xl"
+        layer="overlay"
+      >
+        <MultilingualKeyboard
+          value={personSearch}
+          label="بحث عن شخص"
+          defaultLang="ar"
+          onCancel={() => setIsPersonSearchPadOpen(false)}
+          onConfirm={(v) => {
+            setPersonSearch(v.trim());
+            setIsPersonSearchPadOpen(false);
           }}
         />
       </Dialog>
