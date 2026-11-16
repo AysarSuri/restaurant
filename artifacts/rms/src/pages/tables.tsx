@@ -10,19 +10,33 @@ import {
 
 type RestaurantTableType = (typeof TableTypeEnum)[keyof typeof TableTypeEnum];
 import { Button, Dialog, Select, Input } from "@/components/ui-elements";
+import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import {
   Users,
   MapPin,
   Sparkles,
   Armchair,
   Plus,
-  DoorOpen,
   UserRound,
+  ChevronLeft,
+  DoorOpen,
+  Search,
 } from "lucide-react";
 import { DiningTableIcon } from "@/components/dining-table-icon";
+import { RoomIcon } from "@/components/room-icon";
 import { TABLE_STATUS_META } from "@/lib/table-status";
 
 type EntityType = RestaurantTableType;
+
+const TYPE_TABS: {
+  key: EntityType;
+  label: string;
+  icon: typeof Armchair;
+}[] = [
+  { key: "table", label: "طاولة", icon: Armchair },
+  { key: "room", label: "غرفة", icon: DoorOpen },
+  { key: "person", label: "أشخاص", icon: UserRound },
+];
 
 const TYPE_META: Record<
   EntityType,
@@ -52,7 +66,7 @@ const TYPE_META: Record<
     numberLabel: "رقم الغرفة",
     empty: "لا توجد غرف في هذا التصنيف",
     capacityLabel: "سعة",
-    icon: DoorOpen,
+    icon: Armchair,
   },
   person: {
     label: "شخص",
@@ -87,9 +101,17 @@ export default function Tables() {
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(EMPTY_TABLE_FORM);
   const [addError, setAddError] = useState("");
+  const [searchId, setSearchId] = useState("");
 
   const typeMeta = TYPE_META[entityType];
   const TypeIcon = typeMeta.icon;
+
+  const searchPlaceholder =
+    entityType === "person"
+      ? "ابحث باسم الشخص..."
+      : entityType === "room"
+        ? "ابحث برقم الغرفة..."
+        : "ابحث برقم الطاولة...";
 
   const typedTables = useMemo(() => {
     return (tables ?? []).filter((t) => (t.type ?? "table") === entityType);
@@ -104,19 +126,57 @@ export default function Tables() {
     return base;
   }, [tables]);
 
+  const searchOptions = useMemo<ComboboxOption[]>(() => {
+    const allLabel =
+      entityType === "person" ? "كل الأشخاص" : entityType === "room" ? "كل الغرف" : "كل الطاولات";
+    const Icon = TYPE_TABS.find((t) => t.key === entityType)?.icon ?? Search;
+    const items = [...typedTables].sort((a, b) =>
+      String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
+    );
+    return [
+      { value: "", label: allLabel, subtitle: `${typedTables.length} عنصر`, icon: Icon },
+      ...items.map((t) => {
+        const statusLabel = STATUS_META[t.status]?.label ?? t.status;
+        const location = t.location?.trim();
+        return {
+          value: String(t.id),
+          label: String(t.number),
+          subtitle: location ? `${statusLabel} · ${location}` : statusLabel,
+          icon: Icon,
+        };
+      }),
+    ];
+  }, [typedTables, entityType]);
+
+  const searchedTables = useMemo(() => {
+    if (!searchId) return typedTables;
+    return typedTables.filter((t) => String(t.id) === searchId);
+  }, [typedTables, searchId]);
+
   const counts = useMemo(() => {
     const base = { all: 0, available: 0, occupied: 0, reserved: 0, cleaning: 0 };
-    for (const t of typedTables) {
+    for (const t of searchedTables) {
       base.all += 1;
       if (t.status in base) (base as any)[t.status] += 1;
     }
     return base;
-  }, [typedTables]);
+  }, [searchedTables]);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return typedTables;
-    return typedTables.filter((t) => t.status === filter);
-  }, [typedTables, filter]);
+    const list =
+      filter === "all" ? searchedTables : searchedTables.filter((t) => t.status === filter);
+    if (entityType !== "person") return list;
+    return [...list].sort((a, b) =>
+      String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
+    );
+  }, [searchedTables, filter, entityType]);
+
+  const personInitials = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2);
+    return `${parts[0][0]}${parts[1][0]}`;
+  };
 
   const nextNumberForType = (type: EntityType) => {
     const nums = (tables ?? [])
@@ -223,54 +283,86 @@ export default function Tables() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 text-primary mb-2">
-            <Sparkles className="w-4 h-4" />
-            <span className="text-[11px] font-display tracking-[0.2em] uppercase">Hall Floor</span>
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground">إدارة الطاولات</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            ثلاث صفحات: طاولات وغرف وأشخاص مع تحديث سريع للحالة
-          </p>
+      <div>
+        <div className="inline-flex items-center gap-2 text-primary mb-2">
+          <Sparkles className="w-4 h-4" />
+          <span className="text-[11px] font-display tracking-[0.2em] uppercase">Hall Floor</span>
         </div>
-
-        <Button onClick={openAdd} className="rounded-full h-10 gap-1.5 self-start sm:self-auto">
-          <Plus className="w-4 h-4" />
-          {typeMeta.addTitle}
-        </Button>
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground">إدارة الطاولات</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          ثلاث صفحات: طاولات وغرف وأشخاص مع تحديث سريع للحالة
+        </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 p-1 rounded-2xl bg-secondary/50 border border-border/60 w-fit">
-        {(
-          [
-            ["table", "طاولة", typeCounts.table],
-            ["room", "غرفة", typeCounts.room],
-            ["person", "أشخاص", typeCounts.person],
-          ] as const
-        ).map(([key, label, count]) => {
-          const active = entityType === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                setEntityType(key);
+      <div className="rounded-2xl border border-border/70 bg-secondary/40 p-2 sm:p-2.5 shadow-sm space-y-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2.5">
+          <div className="flex flex-1 min-w-0 p-1 rounded-xl bg-background/70 border border-border/50 gap-1">
+            {TYPE_TABS.map(({ key, label, icon: Icon }) => {
+              const active = entityType === key;
+              const count = typeCounts[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setEntityType(key);
+                    setFilter("all");
+                    setSearchId("");
+                  }}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 h-11 sm:h-12 px-2.5 sm:px-4 rounded-lg text-sm sm:text-base font-extrabold transition-all duration-200 ${
+                    active
+                      ? "bg-gradient-to-l from-primary to-amber-500 text-primary-foreground shadow-md shadow-primary/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${active ? "opacity-100" : "opacity-70"}`} />
+                  <span>{label}</span>
+                  <span
+                    className={`min-w-6 h-6 px-1.5 rounded-full inline-flex items-center justify-center text-[11px] font-display font-bold ${
+                      active
+                        ? "bg-white/25 text-primary-foreground"
+                        : "bg-secondary text-muted-foreground border border-border/60"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2.5 lg:w-[min(100%,28rem)] lg:flex-shrink-0">
+            <ModernCombobox
+              className="flex-1 min-w-0"
+              value={searchId}
+              onChange={(value) => {
+                setSearchId(value);
                 setFilter("all");
+                if (value) {
+                  const found = typedTables.find((t) => String(t.id) === value);
+                  if (found) {
+                    setSelectedTable(found);
+                    setStatus(found.status);
+                  }
+                }
               }}
-              className={`inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold transition-all ${
-                active
-                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background/70"
-              }`}
+              options={searchOptions}
+              searchable
+              searchPlaceholder={searchPlaceholder}
+              placeholder={searchPlaceholder}
+              label={undefined}
+              icon={Search}
+              emptyText="لا توجد نتائج"
+            />
+            <Button
+              onClick={openAdd}
+              className="rounded-xl h-12 px-5 gap-2 text-sm font-extrabold shadow-md shadow-primary/20 flex-shrink-0"
             >
-              {label}
-              <span className={`font-display text-xs ${active ? "opacity-90" : "opacity-70"}`}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
+              <Plus className="w-5 h-5" />
+              {typeMeta.addTitle}
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -319,7 +411,11 @@ export default function Tables() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-20 text-center text-muted-foreground">
-          <TypeIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          {entityType === "room" ? (
+            <RoomIcon className="w-24 h-auto mx-auto mb-3 opacity-60" />
+          ) : (
+            <TypeIcon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          )}
           <p className="font-bold">{typeMeta.empty}</p>
           {filter === "all" && (
             <Button onClick={openAdd} className="rounded-full mt-4">
@@ -327,6 +423,75 @@ export default function Tables() {
               {typeMeta.addTitle}
             </Button>
           )}
+        </div>
+      ) : entityType === "person" ? (
+        <div className="rounded-2xl border border-border/70 bg-card/40 overflow-hidden shadow-sm">
+          <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_40px] gap-3 px-5 py-3 border-b border-border/60 bg-secondary/40 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+            <span>الاسم</span>
+            <span>الموقع</span>
+            <span className="text-center">السعة</span>
+            <span className="text-center">الحالة</span>
+            <span />
+          </div>
+          <div className="divide-y divide-border/50">
+            {filtered.map((person, idx) => {
+              const meta = STATUS_META[person.status] ?? STATUS_META.available;
+              const name = String(person.number);
+              return (
+                <motion.button
+                  key={person.id}
+                  type="button"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(idx * 0.03, 0.3) }}
+                  onClick={() => {
+                    setSelectedTable(person);
+                    setStatus(person.status);
+                  }}
+                  className="w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_40px] gap-2 sm:gap-3 items-center hover:bg-primary/5 transition-colors group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary/90 to-amber-500 text-primary-foreground flex items-center justify-center text-sm font-extrabold shadow-md shadow-primary/20 flex-shrink-0">
+                      {personInitials(name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-foreground truncate">{name}</p>
+                      <p className="text-xs text-muted-foreground sm:hidden mt-0.5 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {person.location || "بدون موقع"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground min-w-0">
+                    <MapPin className="w-3.5 h-3.5 text-primary/70 flex-shrink-0" />
+                    <span className="truncate">{person.location || "بدون موقع"}</span>
+                  </div>
+
+                  <div className="hidden sm:flex items-center justify-center gap-1 text-sm font-bold text-foreground">
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    <span className="font-display">{person.capacity}</span>
+                  </div>
+
+                  <div className="flex sm:justify-center items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-bold ${meta.chip}`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                      {meta.label}
+                    </span>
+                    <span className="sm:hidden text-xs text-muted-foreground font-bold">
+                      سعة {person.capacity}
+                    </span>
+                  </div>
+
+                  <div className="hidden sm:flex justify-end">
+                    <ChevronLeft className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
@@ -369,21 +534,10 @@ export default function Tables() {
                         className="w-full h-auto drop-shadow-md"
                       />
                     ) : (
-                      <div className="flex flex-col items-center gap-2 py-4">
-                        <TypeIcon className="w-14 h-14 text-primary drop-shadow-md" />
-                        <span
-                          className={`font-extrabold text-foreground px-1 ${
-                            entityType === "person"
-                              ? "text-base sm:text-lg leading-snug line-clamp-2"
-                              : "font-display text-2xl"
-                          }`}
-                        >
-                          {table.number}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-bold">
-                          {typeMeta.label}
-                        </span>
-                      </div>
+                      <RoomIcon
+                        number={table.number}
+                        className="w-full h-auto drop-shadow-md"
+                      />
                     )}
                   </div>
 
@@ -419,6 +573,8 @@ export default function Tables() {
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-amber-500/5 to-transparent p-4 flex items-center gap-3">
             {addForm.type === "table" ? (
               <DiningTableIcon className="w-16 h-auto flex-shrink-0" />
+            ) : addForm.type === "room" ? (
+              <RoomIcon className="w-20 h-auto flex-shrink-0" />
             ) : (
               (() => {
                 const Icon = TYPE_META[addForm.type].icon;
@@ -479,7 +635,8 @@ export default function Tables() {
                 <Input
                   value={addForm.number}
                   onChange={(e) => setAddForm((f) => ({ ...f, number: e.target.value }))}
-                  placeholder="مثال: أحمد محمد"
+                  placeholder="احمد محمد"
+                  className="placeholder:text-muted-foreground/25"
                   autoFocus
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
@@ -548,6 +705,8 @@ export default function Tables() {
             <div className="rounded-2xl border border-border/60 bg-secondary/40 p-4 flex items-center gap-4">
               {(selectedTable.type ?? "table") === "table" ? (
                 <DiningTableIcon number={selectedTable.number} className="w-24 h-auto flex-shrink-0" />
+              ) : (selectedTable.type ?? "table") === "room" ? (
+                <RoomIcon number={selectedTable.number} className="w-28 h-auto flex-shrink-0" />
               ) : (
                 <SelectedTypeIcon className="w-14 h-14 text-primary flex-shrink-0" />
               )}

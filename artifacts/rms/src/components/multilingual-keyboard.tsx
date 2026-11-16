@@ -153,16 +153,16 @@ export function MultilingualKeyboard({
           </div>
         </div>
 
-        <div className="relative px-2.5 sm:px-4 py-3.5 sm:py-4 space-y-1.5 sm:space-y-2" dir="ltr">
+        <div className="relative px-3 sm:px-5 py-4 sm:py-5 space-y-2 sm:space-y-2.5" dir="ltr">
           {rows.map((row, ri) => (
-            <div key={ri} className="flex justify-center gap-1 sm:gap-1.5">
+            <div key={ri} className="flex justify-center gap-1.5 sm:gap-2">
               {row.map((key) => (
                 <motion.button
                   key={`${lang}-${ri}-${key}`}
                   type="button"
-                  whileTap={{ scale: 0.9 }}
+                  whileTap={{ scale: 0.92 }}
                   onClick={() => press(key)}
-                  className="min-w-0 flex-1 max-w-[3.1rem] h-10 sm:h-12 rounded-xl border border-border/50 bg-background/85 text-sm sm:text-base font-extrabold text-foreground hover:border-primary/45 hover:bg-primary/10 shadow-[0_6px_16px_-12px_rgba(0,0,0,0.5)] transition-colors"
+                  className="min-w-0 flex-1 max-w-[3.85rem] sm:max-w-[4.25rem] h-12 sm:h-14 rounded-2xl border border-border/50 bg-background/85 text-base sm:text-lg font-extrabold text-foreground hover:border-primary/45 hover:bg-primary/10 shadow-[0_6px_16px_-12px_rgba(0,0,0,0.5)] transition-colors"
                 >
                   {key}
                 </motion.button>
@@ -170,12 +170,12 @@ export function MultilingualKeyboard({
             </div>
           ))}
 
-          <div className="flex gap-1.5 sm:gap-2 pt-1">
+          <div className="flex gap-2 sm:gap-2.5 pt-1.5">
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
               onClick={() => setShift((s) => !s)}
-              className={`h-11 sm:h-12 px-3 sm:px-4 rounded-xl border text-xs sm:text-sm font-extrabold flex-shrink-0 ${
+              className={`h-14 px-4 sm:px-5 rounded-2xl border text-sm sm:text-base font-extrabold flex-shrink-0 ${
                 shift
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border/50 bg-secondary/70 text-foreground hover:border-primary/40"
@@ -188,7 +188,7 @@ export function MultilingualKeyboard({
               type="button"
               whileTap={{ scale: 0.97 }}
               onClick={space}
-              className="flex-1 h-11 sm:h-12 rounded-xl border border-border/50 bg-background/80 text-muted-foreground font-bold hover:text-foreground hover:border-primary/35 flex items-center justify-center"
+              className="flex-1 h-14 rounded-2xl border border-border/50 bg-background/80 text-muted-foreground text-sm sm:text-base font-bold hover:text-foreground hover:border-primary/35 flex items-center justify-center"
             >
               مسافة
             </motion.button>
@@ -197,30 +197,30 @@ export function MultilingualKeyboard({
               type="button"
               whileTap={{ scale: 0.96 }}
               onClick={backspace}
-              className="h-11 sm:h-12 px-3 sm:px-4 rounded-xl border border-destructive/25 bg-destructive/10 text-destructive flex-shrink-0 flex items-center justify-center"
+              className="h-14 px-4 sm:px-5 rounded-2xl border border-destructive/25 bg-destructive/10 text-destructive flex-shrink-0 flex items-center justify-center"
               aria-label="حذف"
             >
-              <Delete className="w-5 h-5" />
+              <Delete className="w-6 h-6" />
             </motion.button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-2 gap-2.5 pt-1.5">
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
               onClick={clear}
-              className="h-12 rounded-2xl border border-border/50 bg-secondary/60 text-sm font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-2"
+              className="h-14 rounded-2xl border border-border/50 bg-secondary/60 text-sm sm:text-base font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-2"
             >
-              <Eraser className="w-4 h-4" />
+              <Eraser className="w-5 h-5" />
               مسح
             </motion.button>
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
               onClick={() => onConfirm(text.trim())}
-              className="h-12 rounded-2xl border border-primary/40 bg-primary text-primary-foreground text-sm font-extrabold shadow-lg shadow-primary/25 flex items-center justify-center gap-2"
+              className="h-14 rounded-2xl border border-primary/40 bg-primary text-primary-foreground text-sm sm:text-base font-extrabold shadow-lg shadow-primary/25 flex items-center justify-center gap-2"
             >
-              <Check className="w-4 h-4" />
+              <Check className="w-5 h-5" />
               تأكيد
             </motion.button>
           </div>

@@ -989,7 +989,7 @@ export default function POS() {
         isOpen={isAddressPadOpen}
         onClose={() => setIsAddressPadOpen(false)}
         title="عنوان التوصيل"
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-5xl"
         layer="overlay"
       >
         <MultilingualKeyboard
