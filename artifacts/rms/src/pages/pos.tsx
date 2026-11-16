@@ -6,9 +6,11 @@ import {
   useCreateOrder,
   useGetSettings,
   useGetTables,
+  useUpdateTable,
   getGetTablesQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
+  type RestaurantTable,
 } from "@workspace/api-client-react";
 import { Button, Card, Badge, Dialog } from "@/components/ui-elements";
 import {
@@ -137,14 +139,18 @@ export default function POS() {
   const { selectedBranchId, branchLabel } = useBranch();
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
-  const { data: tables } = useGetTables({
+  const { data: tables, refetch: refetchTables } = useGetTables({
     query: {
       queryKey: [...getGetTablesQueryKey(), selectedBranchId],
     },
   });
   const { data: appSettings } = useGetSettings();
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
-  const posSaveTarget = appSettings?.posSaveTarget === "kitchen" ? "kitchen" : "cashier";
+  const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
+  const posSaveTarget =
+    appSettings?.posSaveTarget === "kitchen" || appSettings?.posSaveTarget === "none"
+      ? appSettings.posSaveTarget
+      : "cashier";
 
   const branchTables = useMemo(() => {
     const list = tables ?? [];
@@ -254,6 +260,37 @@ export default function POS() {
       setSelectedTableId(null);
     }
   }, [branchTables, selectedTableId]);
+
+  const finishPersonSelection = (personId: number) => {
+    setSelectedTableId(personId);
+    setPersonSearch("");
+    setIsPersonSearchPadOpen(false);
+    setIsTablePickerOpen(false);
+  };
+
+  /** Any person can be picked; مو موجود → موجود automatically */
+  const selectPerson = (person: RestaurantTable) => {
+    if (isUpdatingPerson) return;
+    const markPresent = () => {
+      if (personPresence(person.status) === "available") {
+        finishPersonSelection(person.id);
+        return;
+      }
+      updateTable(
+        { id: person.id, data: { status: "available" } },
+        {
+          onSuccess: () => {
+            void refetchTables();
+            finishPersonSelection(person.id);
+          },
+          onError: () => {
+            finishPersonSelection(person.id);
+          },
+        }
+      );
+    };
+    markPresent();
+  };
 
   const addToCart = (item: MenuItem) => {
     if (needsBranchPick) return;
@@ -947,7 +984,7 @@ export default function POS() {
                 {needsBranchPick
                   ? "اختر فرعاً أولاً لعرض عناصر ذلك الفرع فقط"
                   : pickerEntityType === "person"
-                    ? `${branchLabel} — اختر شخصاً موجوداً للطلب`
+                    ? `${branchLabel} — اختر شخصاً (يصبح موجود تلقائياً)`
                     : pickerEntityType === "room"
                       ? `غرف ${branchLabel} — اختر غرفة متاحة للطلب`
                       : `طاولات ${branchLabel} — اختر طاولة متاحة للطلب`}
@@ -1038,27 +1075,20 @@ export default function POS() {
                 {pickerSeats.map((person, idx) => {
                   const presence = personPresence(person.status);
                   const meta = PERSON_STATUS_META[presence];
-                  const isAvailable = presence === "available";
                   const isSelected = selectedTableId === person.id;
                   const name = String(person.number);
                   return (
                     <motion.button
                       key={person.id}
                       type="button"
-                      disabled={!isAvailable}
+                      disabled={isUpdatingPerson}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: Math.min(idx * 0.025, 0.3) }}
-                      onClick={() => {
-                        if (!isAvailable) return;
-                        setSelectedTableId(person.id);
-                        setPersonSearch("");
-                        setIsPersonSearchPadOpen(false);
-                        setIsTablePickerOpen(false);
-                      }}
-                      className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors ${
+                      onClick={() => selectPerson(person)}
+                      className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors cursor-pointer ${
                         isSelected ? "bg-primary/10" : "hover:bg-primary/5"
-                      } ${isAvailable ? "cursor-pointer" : "opacity-45 cursor-not-allowed"}`}
+                      } ${isUpdatingPerson ? "opacity-60" : ""}`}
                     >
                       <div
                         className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center text-sm sm:text-base font-extrabold border flex-shrink-0 ${
@@ -1209,7 +1239,9 @@ export default function POS() {
             <p className="text-lg font-bold">
               {posSaveTarget === "kitchen"
                 ? "تم إرسال الطلب لشاشة المطبخ!"
-                : "تم إرسال الطلب لشاشة الكاشير!"}
+                : posSaveTarget === "none"
+                  ? "تم حفظ الطلب بنجاح!"
+                  : "تم إرسال الطلب لشاشة الكاشير!"}
             </p>
             <p className="text-sm text-muted-foreground font-display" dir="ltr">
               {invoiceNumber}
@@ -1367,12 +1399,6 @@ export default function POS() {
       >
         {(() => {
           const landscapePad = !isPortrait;
-          const pickPerson = (id: number) => {
-            setSelectedTableId(id);
-            setPersonSearch("");
-            setIsPersonSearchPadOpen(false);
-            setIsTablePickerOpen(false);
-          };
           const searchPanel = (
             <div
               className={`flex flex-col min-h-0 rounded-3xl border border-border/50 bg-gradient-to-b from-card via-card to-secondary/30 shadow-lg overflow-hidden ${
@@ -1417,21 +1443,17 @@ export default function POS() {
                   pickerSeats.map((person) => {
                     const presence = personPresence(person.status);
                     const meta = PERSON_STATUS_META[presence];
-                    const isAvailable = presence === "available";
                     const isSelected = selectedTableId === person.id;
                     const name = String(person.number);
                     return (
                       <button
                         key={person.id}
                         type="button"
-                        disabled={!isAvailable}
-                        onClick={() => {
-                          if (!isAvailable) return;
-                          pickPerson(person.id);
-                        }}
-                        className={`w-full text-start px-3.5 py-3 flex items-center gap-2.5 transition-colors ${
+                        disabled={isUpdatingPerson}
+                        onClick={() => selectPerson(person)}
+                        className={`w-full text-start px-3.5 py-3 flex items-center gap-2.5 transition-colors cursor-pointer ${
                           isSelected ? "bg-primary/10" : "hover:bg-primary/5"
-                        } ${isAvailable ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                        } ${isUpdatingPerson ? "opacity-60" : ""}`}
                       >
                         <div
                           className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-extrabold border flex-shrink-0 ${

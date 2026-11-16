@@ -14,8 +14,9 @@ import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-
 
 async function getSalesRoutingSettings() {
   const [settings] = await db.select().from(appSettingsTable).limit(1);
+  const raw = settings?.posSaveTarget;
   const posSaveTarget =
-    settings?.posSaveTarget === "kitchen" ? "kitchen" : "cashier";
+    raw === "kitchen" || raw === "none" ? raw : "cashier";
   const cashierSendToKitchen = settings?.cashierSendToKitchen !== false;
   return { posSaveTarget, cashierSendToKitchen };
 }
@@ -232,7 +233,12 @@ router.post("/", async (req, res) => {
   const total = subtotal - discountAmt + tax;
 
   const { posSaveTarget } = await getSalesRoutingSettings();
-  const initialStatus = posSaveTarget === "kitchen" ? "preparing" : "pending";
+  const initialStatus =
+    posSaveTarget === "kitchen"
+      ? "preparing"
+      : posSaveTarget === "none"
+        ? "paid"
+        : "pending";
   const validPay =
     paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer"
       ? paymentMethod

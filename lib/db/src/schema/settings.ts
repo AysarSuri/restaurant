@@ -26,6 +26,7 @@ export const appSettingsTable = pgTable("app_settings", {
    * Where new sales (POS / table) go on save:
    * - cashier → status pending (شاشة الكاشير)
    * - kitchen → status preparing (شاشة المطبخ)
+   * - none → status paid (حفظ مباشر بدون كاشير/مطبخ)
    */
   posSaveTarget: text("pos_save_target").default("cashier").notNull(),
   /** When cashier confirms payment, forward order to kitchen (preparing). */

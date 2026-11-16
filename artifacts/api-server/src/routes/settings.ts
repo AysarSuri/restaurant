@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS = {
   cashierSendToKitchen: true,
 };
 
-const POS_SAVE_TARGETS = new Set(["cashier", "kitchen"]);
+const POS_SAVE_TARGETS = new Set(["cashier", "kitchen", "none"]);
 
 const CURRENCY_PRESETS: Record<
   string,
@@ -69,7 +69,7 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     currencySymbol: settings.currencySymbol,
     currencyName: settings.currencyName,
     decimalPlaces: settings.decimalPlaces,
-    posSaveTarget: target as "cashier" | "kitchen",
+    posSaveTarget: target as "cashier" | "kitchen" | "none",
     cashierSendToKitchen: settings.cashierSendToKitchen !== false,
     updatedAt: settings.updatedAt,
   };
@@ -160,7 +160,7 @@ router.put("/", async (req, res) => {
     if (!POS_SAVE_TARGETS.has(t)) {
       res.status(400).json({
         success: false,
-        message: "وجهة الحفظ غير صالحة (cashier أو kitchen)",
+        message: "وجهة الحفظ غير صالحة (cashier أو kitchen أو none)",
       });
       return;
     }

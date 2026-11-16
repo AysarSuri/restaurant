@@ -114,7 +114,11 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol || DEFAULT_CURRENCY.currencySymbol);
     setCurrencyName(settings.currencyName || DEFAULT_CURRENCY.currencyName);
     setDecimalPlaces(clampDecimalPlaces(settings.decimalPlaces, DEFAULT_CURRENCY.decimalPlaces));
-    setPosSaveTarget(settings.posSaveTarget === "kitchen" ? "kitchen" : "cashier");
+    setPosSaveTarget(
+      settings.posSaveTarget === "kitchen" || settings.posSaveTarget === "none"
+        ? settings.posSaveTarget
+        : "cashier"
+    );
     setCashierSendToKitchen(settings.cashierSendToKitchen !== false);
   }, [settings]);
 
@@ -282,7 +286,11 @@ export default function SettingsPage() {
       {
         onSuccess: (res) => {
           syncSettings(res);
-          setPosSaveTarget(res.posSaveTarget === "kitchen" ? "kitchen" : "cashier");
+          setPosSaveTarget(
+            res.posSaveTarget === "kitchen" || res.posSaveTarget === "none"
+              ? res.posSaveTarget
+              : "cashier"
+          );
           setCashierSendToKitchen(res.cashierSendToKitchen !== false);
           setSaveMsg("تم حفظ إعدادات البيع");
         },
@@ -458,7 +466,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setPosSaveTarget("cashier")}
@@ -520,6 +528,38 @@ export default function SettingsPage() {
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   يتخطى الطلب شاشة الكاشير ويظهر مباشرة في شاشة المطبخ للتحضير فوراً.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPosSaveTarget("none")}
+                className={`text-start rounded-2xl border-2 p-4 transition-all sm:col-span-2 xl:col-span-1 ${
+                  posSaveTarget === "none"
+                    ? "border-emerald-500/70 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
+                    : "border-border/70 bg-card/50 hover:border-emerald-500/35"
+                }`}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <span
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      posSaveTarget === "none"
+                        ? "bg-emerald-500 text-white"
+                        : "bg-secondary text-foreground"
+                    }`}
+                  >
+                    <Save className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-extrabold">حفظ تلقائي فقط</p>
+                    <p className="text-[11px] text-muted-foreground">الحالة: مدفوع / محفوظ</p>
+                  </div>
+                  {posSaveTarget === "none" && (
+                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  يُحفظ الطلب مباشرة من نقطة البيع دون إرساله إلى شاشة الكاشير أو شاشة المطبخ.
                 </p>
               </button>
             </div>
@@ -608,19 +648,26 @@ export default function SettingsPage() {
                     </>
                   )}
                 </>
-              ) : (
+              ) : posSaveTarget === "kitchen" ? (
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
                   <ChefHat className="w-3.5 h-3.5" />
                   المطبخ
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                  <Save className="w-3.5 h-3.5" />
+                  حفظ فقط
                 </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               {posSaveTarget === "kitchen"
                 ? "الطلبات من نقطة البيع تذهب مباشرة لشاشة المطبخ."
-                : cashierSendToKitchen
-                  ? "الطلبات تمر بالكاشير أولاً، ثم تُرسل للمطبخ بعد تأكيد الدفع."
-                  : "الطلبات تظهر في الكاشير فقط، ولن تُرسل للمطبخ عند الحفظ."}
+                : posSaveTarget === "none"
+                  ? "الطلبات تُحفظ مباشرة من نقطة البيع دون الظهور في الكاشير أو المطبخ."
+                  : cashierSendToKitchen
+                    ? "الطلبات تمر بالكاشير أولاً، ثم تُرسل للمطبخ بعد تأكيد الدفع."
+                    : "الطلبات تظهر في الكاشير فقط، ولن تُرسل للمطبخ عند الحفظ."}
             </p>
           </Card>
 
