@@ -10,7 +10,7 @@ import {
   lookupDeliveryPhone,
   upsertDeliveryContact,
 } from "@workspace/api-client-react";
-import { Button, Card, Input, Badge, Dialog } from "@/components/ui-elements";
+import { Button, Card, Badge, Dialog } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
@@ -121,6 +121,7 @@ export default function POS() {
   const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
   const [isPhonePadOpen, setIsPhonePadOpen] = useState(false);
   const [isAddressPadOpen, setIsAddressPadOpen] = useState(false);
+  const [isSearchPadOpen, setIsSearchPadOpen] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
@@ -353,77 +354,73 @@ export default function POS() {
           </div>
 
           <AnimatePresence>
-            {/* Delivery fields */}
             {orderType === "delivery" && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-2"
+                className="overflow-hidden"
               >
-                <button
-                  type="button"
-                  onClick={() => setIsPhonePadOpen(true)}
-                  className={`w-full flex items-center gap-2.5 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-3 py-2.5 transition-colors text-start ${
-                    phoneKnown === true
-                      ? "border-success/60"
-                      : phoneKnown === false
-                        ? "border-destructive/60"
-                        : "border-border/60 hover:border-primary/40"
-                  }`}
-                >
-                  <span
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                <div className="flex items-stretch gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPhonePadOpen(true)}
+                    className={`min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start ${
                       phoneKnown === true
-                        ? "bg-success/15 text-success"
+                        ? "border-success/60"
                         : phoneKnown === false
-                          ? "bg-destructive/15 text-destructive"
-                          : "bg-primary/15 text-primary"
+                          ? "border-destructive/60"
+                          : "border-border/60 hover:border-primary/40"
                     }`}
                   >
-                    <Phone className="w-4 h-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold text-muted-foreground">رقم الهاتف</p>
-                    <p
-                      className={`text-sm font-extrabold tabular-nums truncate ${
-                        deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
-                      }`}
-                      dir="ltr"
-                    >
-                      {deliveryPhone || "اضغط للإدخال"}
-                    </p>
-                  </div>
-                  {phoneKnown === true ? (
-                    <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
-                  ) : phoneKnown === false ? (
-                    <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                  ) : null}
-                </button>
-                {phoneKnown === true ? (
-                  <p className="text-[11px] text-success font-semibold">رقم محفوظ — تم تعبئة العنوان تلقائياً</p>
-                ) : phoneKnown === false ? (
-                  <p className="text-[11px] text-destructive font-semibold">رقم جديد — سيُحفظ مع الطلب</p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setIsAddressPadOpen(true)}
-                  className="w-full flex items-center gap-2.5 rounded-xl border-2 border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-3 py-2.5 transition-colors text-start"
-                >
-                  <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-4 h-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold text-muted-foreground">عنوان التوصيل</p>
-                    <p
-                      className={`text-sm font-extrabold truncate ${
-                        deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
+                    <span
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        phoneKnown === true
+                          ? "bg-success/15 text-success"
+                          : phoneKnown === false
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-primary/15 text-primary"
                       }`}
                     >
-                      {deliveryAddress || "اضغط للكتابة (عربي / English / کوردی)"}
-                    </p>
-                  </div>
-                </button>
+                      <Phone className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground">رقم الهاتف</p>
+                      <p
+                        className={`text-sm font-extrabold tabular-nums truncate ${
+                          deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
+                        }`}
+                        dir="ltr"
+                      >
+                        {deliveryPhone || "اضغط للإدخال"}
+                      </p>
+                    </div>
+                    {phoneKnown === true ? (
+                      <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
+                    ) : phoneKnown === false ? (
+                      <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddressPadOpen(true)}
+                    className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground">عنوان التوصيل</p>
+                      <p
+                        className={`text-sm font-extrabold truncate ${
+                          deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
+                        }`}
+                      >
+                        {deliveryAddress || "اضغط للكتابة"}
+                      </p>
+                    </div>
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -593,15 +590,41 @@ export default function POS() {
               </span>
             </div>
           </div>
-          <div className={`relative w-full ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"}`}>
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              placeholder="ابحث عن صنف..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pr-12 h-11 xl:h-12 bg-background/80 border-border/50"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsSearchPadOpen(true)}
+            className={`relative w-full text-start ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"} h-11 xl:h-12 rounded-xl border border-border/50 bg-background/80 px-4 pe-11 flex items-center gap-2 hover:border-primary/40 transition-colors`}
+          >
+            <Search className="absolute end-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+            <span
+              className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                search ? "text-foreground" : "text-muted-foreground/70"
+              }`}
+            >
+              {search || "ابحث عن صنف..."}
+            </span>
+            {search ? (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearch("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSearch("");
+                  }
+                }}
+                className="absolute end-10 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary"
+                aria-label="مسح البحث"
+              >
+                <X className="w-3.5 h-3.5" />
+              </span>
+            ) : null}
+          </button>
         </header>
 
         <div className={`py-3 flex gap-2 sm:gap-3 overflow-x-auto relative z-10 scrollbar-hide ${isPortraitPos ? "px-4 xl:px-5" : "px-3 sm:px-5 xl:px-6"}`}>
@@ -988,19 +1011,35 @@ export default function POS() {
       <Dialog
         isOpen={isAddressPadOpen}
         onClose={() => setIsAddressPadOpen(false)}
-        title="عنوان التوصيل"
+        hideHeader
         maxWidth="max-w-5xl"
         layer="overlay"
       >
         <MultilingualKeyboard
           value={deliveryAddress}
-          label="اكتب عنوان التوصيل"
-          placeholder="مثال: شارع… / Street… / شەقام…"
           defaultLang="ar"
           onCancel={() => setIsAddressPadOpen(false)}
           onConfirm={(v) => {
             setDeliveryAddress(v);
             setIsAddressPadOpen(false);
+          }}
+        />
+      </Dialog>
+
+      <Dialog
+        isOpen={isSearchPadOpen}
+        onClose={() => setIsSearchPadOpen(false)}
+        hideHeader
+        maxWidth="max-w-5xl"
+        layer="overlay"
+      >
+        <MultilingualKeyboard
+          value={search}
+          defaultLang="ar"
+          onCancel={() => setIsSearchPadOpen(false)}
+          onConfirm={(v) => {
+            setSearch(v);
+            setIsSearchPadOpen(false);
           }}
         />
       </Dialog>

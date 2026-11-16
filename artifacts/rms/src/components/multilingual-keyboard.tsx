@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Delete, Eraser } from "lucide-react";
+import { Check, Delete, Eraser, X } from "lucide-react";
 
 export type KeyboardLang = "ar" | "en" | "ckb";
 
@@ -83,22 +83,42 @@ export function MultilingualKeyboard({
   const [text, setText] = useState(value || "");
   const [lang, setLang] = useState<KeyboardLang>(defaultLang);
   const [shift, setShift] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setText(value || "");
   }, [value]);
 
+  useEffect(() => {
+    const id = window.setTimeout(() => inputRef.current?.focus(), 50);
+    return () => window.clearTimeout(id);
+  }, []);
+
   const langMeta = LANGS.find((l) => l.id === lang) ?? LANGS[0];
   const rows = useMemo(() => rowsFor(lang, shift), [lang, shift]);
+
+  const focusInput = () => {
+    inputRef.current?.focus();
+  };
 
   const press = (key: string) => {
     setText((prev) => prev + key);
     if (shift && lang === "en") setShift(false);
+    focusInput();
   };
 
-  const backspace = () => setText((prev) => prev.slice(0, -1));
-  const clear = () => setText("");
-  const space = () => setText((prev) => `${prev} `);
+  const backspace = () => {
+    setText((prev) => prev.slice(0, -1));
+    focusInput();
+  };
+  const clear = () => {
+    setText("");
+    focusInput();
+  };
+  const space = () => {
+    setText((prev) => `${prev} `);
+    focusInput();
+  };
 
   return (
     <div className="select-none">
@@ -106,11 +126,8 @@ export function MultilingualKeyboard({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_hsla(var(--primary),0.12),_transparent_58%)]" />
 
         <div className="relative px-4 sm:px-5 pt-4 sm:pt-5 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-              {label}
-            </p>
-            <div className="inline-flex rounded-full border border-border/60 bg-background/70 p-0.5">
+          <div className="flex items-center justify-end">
+            <div className="inline-flex items-center gap-2.5 sm:gap-3 rounded-2xl border border-border/60 bg-background/80 p-1.5 shadow-sm">
               {LANGS.map((l) => {
                 const active = lang === l.id;
                 return (
@@ -120,11 +137,12 @@ export function MultilingualKeyboard({
                     onClick={() => {
                       setLang(l.id);
                       setShift(false);
+                      focusInput();
                     }}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold transition-all ${
+                    className={`min-w-[3.25rem] sm:min-w-[3.75rem] h-11 sm:h-12 px-3 sm:px-4 rounded-xl text-sm sm:text-base font-extrabold transition-all ${
                       active
                         ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                        : "text-muted-foreground hover:text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
                     }`}
                     title={l.label}
                   >
@@ -132,26 +150,54 @@ export function MultilingualKeyboard({
                   </button>
                 );
               })}
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border-2 border-rose-500/45 bg-rose-500/15 text-rose-600 dark:text-rose-400 hover:bg-rose-500/25 hover:border-rose-500 flex items-center justify-center flex-shrink-0 transition-colors"
+                  aria-label="إغلاق"
+                  title="إغلاق"
+                >
+                  <X className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2.5} />
+                </button>
+              )}
             </div>
           </div>
 
           <div
-            className="rounded-2xl border border-border/40 bg-background/75 backdrop-blur-md px-4 py-3.5 shadow-inner min-h-[4.5rem]"
+            className="rounded-2xl border border-border/40 bg-background/75 backdrop-blur-md px-4 py-2.5 shadow-inner flex items-center gap-3 min-h-14"
             dir={langMeta.dir}
+            onClick={focusInput}
           >
-            <p className="text-lg sm:text-xl font-bold leading-relaxed break-words text-foreground min-h-[1.75rem]">
-              {text}
-              <span className="inline-block w-0.5 h-[1.1em] align-[-0.15em] ms-0.5 bg-primary/80 animate-pulse" />
-            </p>
-            <p className="mt-2 text-[10px] font-semibold text-muted-foreground">
-              {langMeta.label}
+            <input
+              ref={inputRef}
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  onCancel?.();
+                  return;
+                }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  onConfirm(text.trim());
+                }
+              }}
+              dir={langMeta.dir}
+              className="min-w-0 flex-1 bg-transparent border-0 outline-none text-lg sm:text-xl font-bold text-foreground placeholder:text-muted-foreground/30 caret-primary"
+              aria-label={label}
+            />
+            <p className="flex-shrink-0 text-[10px] sm:text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
+              {langMeta.label} · حاسوب أو شاشة · Enter للتأكيد
             </p>
           </div>
         </div>
 
-        <div className="relative px-3 sm:px-5 py-4 sm:py-5 space-y-2 sm:space-y-2.5" dir="ltr">
+        <div className="relative px-3 sm:px-5 py-4 sm:py-5 space-y-2.5 sm:space-y-3" dir="ltr">
           {rows.map((row, ri) => (
-            <div key={ri} className="flex justify-center gap-1.5 sm:gap-2">
+            <div key={ri} className="flex justify-center gap-2 sm:gap-2.5">
               {row.map((key) => (
                 <motion.button
                   key={`${lang}-${ri}-${key}`}
@@ -166,7 +212,7 @@ export function MultilingualKeyboard({
             </div>
           ))}
 
-          <div className="flex gap-2 sm:gap-2.5 pt-1.5">
+          <div className="flex gap-3 sm:gap-3.5 pt-1.5">
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
@@ -200,7 +246,17 @@ export function MultilingualKeyboard({
             </motion.button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5 pt-1.5">
+          <div className={`grid gap-3.5 pt-1.5 ${onCancel ? "grid-cols-3" : "grid-cols-2"}`}>
+            {onCancel && (
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.96 }}
+                onClick={onCancel}
+                className="h-14 rounded-2xl border-2 border-rose-500/50 bg-rose-500/15 text-rose-600 dark:text-rose-400 text-sm sm:text-base font-extrabold hover:bg-rose-500/25 hover:border-rose-500 flex items-center justify-center"
+              >
+                إلغاء
+              </motion.button>
+            )}
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
@@ -220,16 +276,6 @@ export function MultilingualKeyboard({
               تأكيد
             </motion.button>
           </div>
-
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="w-full py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-            >
-              إلغاء
-            </button>
-          )}
         </div>
       </div>
     </div>

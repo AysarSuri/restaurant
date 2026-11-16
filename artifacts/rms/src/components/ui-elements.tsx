@@ -115,20 +115,23 @@ export function Badge({ className, variant = "default", children, ...props }: Re
 interface DialogProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
   children: React.ReactNode;
   maxWidth?: string;
   /** Use overlay when nesting above another dialog */
   layer?: "base" | "overlay";
+  /** Hide title + close header (e.g. custom chrome inside children) */
+  hideHeader?: boolean;
 }
 
 export function Dialog({
   isOpen,
   onClose,
-  title,
+  title = "",
   children,
   maxWidth = "max-w-lg",
   layer = "base",
+  hideHeader = false,
 }: DialogProps) {
   const backdropZ = layer === "overlay" ? "z-[70]" : "z-50";
   const panelZ = layer === "overlay" ? "z-[80]" : "z-[60]";
@@ -160,16 +163,18 @@ export function Dialog({
                 maxWidth
               )}
             >
-              <div className="flex justify-between items-center gap-3 mb-3 sm:mb-4">
-                <h2 className="text-lg sm:text-xl font-bold leading-tight tracking-tight">{title}</h2>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-full p-2 hover:bg-secondary transition-colors flex-shrink-0"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+              {!hideHeader && (
+                <div className="flex justify-between items-center gap-3 mb-3 sm:mb-4">
+                  <h2 className="text-lg sm:text-xl font-bold leading-tight tracking-tight">{title}</h2>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-full p-2 hover:bg-secondary transition-colors flex-shrink-0"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
               {children}
             </div>
           </motion.div>
