@@ -7,6 +7,7 @@ import {
   useGetSettings,
   useGetTables,
   useUpdateTable,
+  useGetCards,
   getGetTablesQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
@@ -17,7 +18,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
-  DoorOpen, UserRound,
+  DoorOpen, UserRound, Lock, Wallet,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
@@ -145,12 +146,14 @@ export default function POS() {
     },
   });
   const { data: appSettings } = useGetSettings();
+  const { data: paymentCards } = useGetCards();
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
   const posSaveTarget =
     appSettings?.posSaveTarget === "kitchen" || appSettings?.posSaveTarget === "none"
       ? appSettings.posSaveTarget
       : "cashier";
+  const isDirectSave = posSaveTarget === "none";
 
   const branchTables = useMemo(() => {
     const list = tables ?? [];
@@ -173,6 +176,10 @@ export default function POS() {
   const phoneLookupSeq = useRef(0);
   const [discount, setDiscount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [checkoutPayMethod, setCheckoutPayMethod] = useState<"cash" | "card">("cash");
+  const [checkoutReceived, setCheckoutReceived] = useState(0);
+  const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
+  const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
   const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
   const [personSearch, setPersonSearch] = useState("");
@@ -320,6 +327,23 @@ export default function POS() {
   );
   const total = Math.max(0, subtotal - discount);
 
+  const branchPaymentCards = useMemo(() => {
+    const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
+    if (selectedBranchId === "all") return list;
+    return list.filter((c) => (c.branchIds ?? []).includes(selectedBranchId));
+  }, [paymentCards, selectedBranchId]);
+
+  const checkoutChange = Math.max(0, checkoutReceived - total);
+
+  const openCheckout = () => {
+    setCartOpen(false);
+    setCheckoutPayMethod("cash");
+    setCheckoutReceived(total);
+    setCheckoutCardId(null);
+    setOrderSuccess(false);
+    setIsCheckoutOpen(true);
+  };
+
   const resetOrder = () => {
     setCart([]);
     setSelectedTableId(null);
@@ -327,6 +351,9 @@ export default function POS() {
     setDeliveryPhone("");
     setPhoneKnown(null);
     setDiscount(0);
+    setCheckoutPayMethod("cash");
+    setCheckoutReceived(0);
+    setCheckoutCardId(null);
     setIsCheckoutOpen(false);
     setOrderSuccess(false);
     startNewOrderSession();
@@ -360,7 +387,14 @@ export default function POS() {
     return () => window.clearTimeout(timer);
   }, [deliveryPhone, orderType]);
 
-  const handleCheckout = (paymentMethod: "cash" | "card" | "transfer") => {
+  const handleCheckout = (
+    paymentMethod: "cash" | "card" | "transfer",
+    opts?: { cardId?: number | null; cardName?: string }
+  ) => {
+    const cardNote =
+      paymentMethod === "card" && opts?.cardName
+        ? `بطاقة: ${opts.cardName}`
+        : undefined;
     createOrder(
       {
         data: {
@@ -371,6 +405,7 @@ export default function POS() {
           deliveryAddress: orderType === "delivery" ? deliveryAddress : undefined,
           deliveryPhone: orderType === "delivery" ? deliveryPhone : undefined,
           paymentMethod,
+          notes: cardNote,
         } as any,
       },
       {
@@ -387,6 +422,17 @@ export default function POS() {
         },
       }
     );
+  };
+
+  const confirmDirectCheckout = () => {
+    if (checkoutPayMethod === "cash") {
+      if (checkoutReceived < total) return;
+      handleCheckout("cash");
+      return;
+    }
+    const card = branchPaymentCards.find((c) => c.id === checkoutCardId);
+    if (!card) return;
+    handleCheckout("card", { cardId: card.id, cardName: card.name });
   };
 
   const orderTypeLabels: Record<OrderType, string> = {
@@ -658,10 +704,7 @@ export default function POS() {
               cart.length === 0 ||
               (orderType === "dine_in" && !selectedTableId)
             }
-            onClick={() => {
-              setCartOpen(false);
-              setIsCheckoutOpen(true);
-            }}
+            onClick={openCheckout}
           >
             {orderType === "dine_in" && !selectedTableId
               ? "اختر مكان الجلوس أولاً"
@@ -1232,6 +1275,7 @@ export default function POS() {
         isOpen={isCheckoutOpen}
         onClose={() => !orderSuccess && setIsCheckoutOpen(false)}
         title={orderSuccess ? "✅ تم الطلب بنجاح" : "اختر طريقة الدفع"}
+        maxWidth={isDirectSave && !orderSuccess ? "max-w-lg" : "max-w-lg"}
       >
         {orderSuccess ? (
           <div className="text-center py-4 space-y-4">
@@ -1255,6 +1299,176 @@ export default function POS() {
             <Button className="w-full touch-target" onClick={resetOrder}>
               <RefreshCw className="w-4 h-4 me-2" />
               طلب جديد
+            </Button>
+          </div>
+        ) : isDirectSave ? (
+          <div className="space-y-4">
+            {orderType === "dine_in" && selectedTable && (
+              <div className="px-4 py-2.5 bg-primary/10 rounded-xl text-primary text-sm font-semibold flex items-center gap-2">
+                {(selectedTable.type ?? "table") === "room" ? (
+                  <DoorOpen className="w-4 h-4" />
+                ) : (selectedTable.type ?? "table") === "person" ? (
+                  <UserRound className="w-4 h-4" />
+                ) : (
+                  <Table2 className="w-4 h-4" />
+                )}
+                {seatLabel(selectedTable)}
+                {selectedTable.location ? ` — ${selectedTable.location}` : ""}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2.5 p-1.5 rounded-2xl border border-border/60 bg-secondary/40">
+              <button
+                type="button"
+                onClick={() => {
+                  setCheckoutPayMethod("cash");
+                  setCheckoutReceived(total);
+                  setCheckoutCardId(null);
+                }}
+                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all ${
+                  checkoutPayMethod === "cash"
+                    ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                }`}
+              >
+                <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
+                كاش
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCheckoutPayMethod("card");
+                  setCheckoutReceived(total);
+                }}
+                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all ${
+                  checkoutPayMethod === "card"
+                    ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                }`}
+              >
+                <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
+                كارت
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-secondary/30 overflow-hidden shadow-sm">
+              <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Lock className="w-4 h-4" />
+                  <span className="text-sm font-bold">مجموع الفاتورة</span>
+                </div>
+                <span className="font-display text-xl sm:text-2xl font-extrabold text-primary tabular-nums" dir="ltr">
+                  {formatMoneyAmount(total)}
+                </span>
+              </div>
+
+              <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm font-bold text-foreground">مجموع الواصل</span>
+                </div>
+                {checkoutPayMethod === "cash" ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsReceivedPadOpen(true)}
+                    className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors"
+                    dir="ltr"
+                  >
+                    {formatMoneyAmount(checkoutReceived)}
+                  </button>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border/50 bg-secondary/50 px-3 py-2 font-display text-lg sm:text-xl font-extrabold tabular-nums text-foreground"
+                    dir="ltr"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                    {formatMoneyAmount(total)}
+                  </span>
+                )}
+              </div>
+
+              {checkoutPayMethod === "cash" && (
+                <div className="px-4 py-3 flex items-center justify-between gap-3 bg-secondary/25">
+                  <span className="text-sm font-bold text-muted-foreground">الباقي</span>
+                  <span
+                    className={`font-display text-lg font-extrabold tabular-nums ${
+                      checkoutReceived >= total ? "text-amber-500" : "text-rose-500"
+                    }`}
+                    dir="ltr"
+                  >
+                    {checkoutReceived >= total
+                      ? formatMoneyAmount(checkoutChange)
+                      : `نقص ${formatMoneyAmount(total - checkoutReceived)}`}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {checkoutPayMethod === "card" && (
+              <div className="space-y-2.5">
+                <p className="text-sm font-extrabold flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-sky-500" />
+                  اختر البطاقة
+                </p>
+                {branchPaymentCards.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/30 py-8 text-center text-muted-foreground">
+                    <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-45" />
+                    <p className="text-sm font-bold">لا توجد بطاقات نشطة لهذا الفرع</p>
+                    <p className="text-xs mt-1 opacity-80">أضف بطاقة من فورم البطاقات أولاً</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[min(36vh,280px)] overflow-y-auto overscroll-contain pe-0.5">
+                    {branchPaymentCards.map((card) => {
+                      const active = checkoutCardId === card.id;
+                      return (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() => setCheckoutCardId(card.id)}
+                          className={`text-start rounded-2xl border-2 px-3.5 py-3 transition-all ${
+                            active
+                              ? "border-sky-500 bg-sky-500/10 shadow-md shadow-sky-500/15"
+                              : "border-border/60 bg-card/70 hover:border-sky-500/40"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                active
+                                  ? "bg-sky-500 text-white"
+                                  : "bg-secondary text-muted-foreground"
+                              }`}
+                            >
+                              <CreditCard className="w-4 h-4" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-extrabold text-sm truncate">{card.name}</p>
+                              <p className="text-[10px] text-muted-foreground font-display tabular-nums mt-0.5" dir="ltr">
+                                {formatMoneyAmount(Number(card.balance ?? 0))}
+                              </p>
+                            </div>
+                            {active && <CheckCircle2 className="w-5 h-5 text-sky-500 flex-shrink-0" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Button
+              className="w-full h-14 text-base sm:text-lg touch-target gap-2"
+              isLoading={isCreating}
+              disabled={
+                isCreating ||
+                (checkoutPayMethod === "cash" && checkoutReceived < total) ||
+                (checkoutPayMethod === "card" && !checkoutCardId)
+              }
+              onClick={confirmDirectCheckout}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              تأكيد الدفع والحفظ
             </Button>
           </div>
         ) : (
@@ -1309,6 +1523,27 @@ export default function POS() {
             </div>
           </>
         )}
+      </Dialog>
+
+      <Dialog
+        isOpen={isReceivedPadOpen}
+        onClose={() => setIsReceivedPadOpen(false)}
+        title="مجموع الواصل"
+        maxWidth="max-w-sm"
+        layer="overlay"
+      >
+        <NumericKeypad
+          value={checkoutReceived}
+          suffix={currencySymbol}
+          allowDecimal={decimalPlaces > 0}
+          maxDecimalPlaces={decimalPlaces}
+          label="أدخل المبلغ الواصل"
+          onCancel={() => setIsReceivedPadOpen(false)}
+          onConfirm={(v) => {
+            setCheckoutReceived(Math.max(0, v));
+            setIsReceivedPadOpen(false);
+          }}
+        />
       </Dialog>
 
       <Dialog
