@@ -15,6 +15,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
+  DoorOpen, UserRound,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
@@ -24,7 +25,56 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { MultilingualKeyboard } from "@/components/multilingual-keyboard";
 import { DiningTableIcon } from "@/components/dining-table-icon";
+import { RoomIcon } from "@/components/room-icon";
 import { TABLE_STATUS_META } from "@/lib/table-status";
+
+type SeatEntityType = "table" | "room" | "person";
+
+const SEAT_TABS: {
+  key: SeatEntityType;
+  label: string;
+  labelPlural: string;
+  icon: typeof Armchair;
+}[] = [
+  { key: "table", label: "طاولات", labelPlural: "طاولات", icon: Armchair },
+  { key: "room", label: "غرفات", labelPlural: "غرف", icon: DoorOpen },
+  { key: "person", label: "أشخاص", labelPlural: "أشخاص", icon: UserRound },
+];
+
+const PERSON_STATUS_META = {
+  available: {
+    label: "موجود",
+    chip: "bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/40",
+    card: "bg-emerald-500/10",
+    ring: "ring-emerald-500/70 border-emerald-500",
+    glow: "from-emerald-500/45 via-emerald-400/15 to-transparent",
+  },
+  occupied: {
+    label: "مو موجود",
+    chip: "bg-slate-500 text-white border-slate-600 shadow-sm shadow-slate-500/40",
+    card: "bg-slate-500/10",
+    ring: "ring-slate-500/70 border-slate-500",
+    glow: "from-slate-500/45 via-slate-400/15 to-transparent",
+  },
+} as const;
+
+const personPresence = (status: string): "available" | "occupied" =>
+  status === "available" ? "available" : "occupied";
+
+const personInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2);
+  return `${parts[0][0]}${parts[1][0]}`;
+};
+
+function seatLabel(seat: { type?: string | null; number: string | number } | undefined | null) {
+  if (!seat) return "اختر رقم الطاولة";
+  const type = (seat.type ?? "table") as SeatEntityType;
+  if (type === "person") return String(seat.number);
+  if (type === "room") return `غرفة ${seat.number}`;
+  return `طاولة ${seat.number}`;
+}
 
 const INVOICE_SEQ_KEY = "rms-invoice-seq";
 
@@ -104,6 +154,25 @@ export default function POS() {
     );
   }, [tables, selectedBranchId]);
 
+  const seatTypeCounts = useMemo(() => {
+    const base = { table: 0, room: 0, person: 0 };
+    for (const t of branchTables) {
+      const key = (t.type ?? "table") as SeatEntityType;
+      if (key in base) base[key] += 1;
+    }
+    return base;
+  }, [branchTables]);
+
+  const pickerSeats = useMemo(() => {
+    const list = branchTables.filter(
+      (t) => (t.type ?? "table") === pickerEntityType
+    );
+    if (pickerEntityType !== "person") return list;
+    return [...list].sort((a, b) =>
+      String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" })
+    );
+  }, [branchTables, pickerEntityType]);
+
   /** null = all, "favorites" = favorites only, number = category id */
   const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>("favorites");
   const [search, setSearch] = useState("");
@@ -118,6 +187,7 @@ export default function POS() {
   const [discount, setDiscount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
+  const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
   const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
   const [isPhonePadOpen, setIsPhonePadOpen] = useState(false);
   const [isAddressPadOpen, setIsAddressPadOpen] = useState(false);
@@ -307,7 +377,12 @@ export default function POS() {
                 {orderType === "dine_in" && (
                   <button
                     type="button"
-                    onClick={() => setIsTablePickerOpen(true)}
+                    onClick={() => {
+                      setPickerEntityType(
+                        ((selectedTable?.type ?? "table") as SeatEntityType) || "table"
+                      );
+                      setIsTablePickerOpen(true);
+                    }}
                     className={`inline-flex items-center gap-2 rounded-full border-2 px-3.5 py-2 text-sm font-extrabold transition-all max-w-[14rem] ${
                       selectedTable
                         ? "border-primary/40 bg-primary/10 text-primary"
@@ -315,10 +390,14 @@ export default function POS() {
                     }`}
                     title={selectedTable ? selectedTable.location || undefined : "اختر رقم الطاولة"}
                   >
-                    <Table2 className="w-5 h-5 flex-shrink-0" />
-                    <span className="truncate">
-                      {selectedTable ? `طاولة ${selectedTable.number}` : "اختر رقم الطاولة"}
-                    </span>
+                    {(selectedTable?.type ?? "table") === "room" ? (
+                      <DoorOpen className="w-5 h-5 flex-shrink-0" />
+                    ) : (selectedTable?.type ?? "table") === "person" ? (
+                      <UserRound className="w-5 h-5 flex-shrink-0" />
+                    ) : (
+                      <Table2 className="w-5 h-5 flex-shrink-0" />
+                    )}
+                    <span className="truncate">{seatLabel(selectedTable)}</span>
                   </button>
                 )}
               </div>
@@ -535,7 +614,7 @@ export default function POS() {
             }}
           >
             {orderType === "dine_in" && !selectedTableId
-              ? "اختر طاولة أولاً"
+              ? "اختر مكان الجلوس أولاً"
               : "دفع وإصدار الفاتورة"}
           </Button>
         </div>
@@ -785,7 +864,7 @@ export default function POS() {
         )}
       </AnimatePresence>
 
-      {/* ── Table Picker Dialog (same design as Tables page) ── */}
+      {/* ── Seat Picker: طاولات / غرفات / أشخاص ── */}
       <Dialog
         isOpen={isTablePickerOpen}
         onClose={() => setIsTablePickerOpen(false)}
@@ -793,14 +872,63 @@ export default function POS() {
         maxWidth="max-w-5xl"
       >
         <div className="space-y-4">
+          <div className="flex p-1 rounded-xl bg-secondary/50 border border-border/50 gap-1">
+            {SEAT_TABS.map(({ key, label, icon: Icon }) => {
+              const active = pickerEntityType === key;
+              const count = seatTypeCounts[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setPickerEntityType(key)}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 h-11 sm:h-12 px-2 sm:px-3 rounded-lg text-sm sm:text-base font-extrabold transition-all duration-200 ${
+                    active
+                      ? "bg-gradient-to-l from-primary to-amber-500 text-primary-foreground shadow-md shadow-primary/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/80"
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${active ? "opacity-100" : "opacity-70"}`} />
+                  <span>{label}</span>
+                  <span
+                    className={`min-w-6 h-6 px-1.5 rounded-full inline-flex items-center justify-center text-[11px] font-display font-bold ${
+                      active
+                        ? "bg-white/25 text-primary-foreground"
+                        : "bg-background/80 text-muted-foreground border border-border/60"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-amber-500/5 to-transparent px-4 py-3 flex items-center gap-3">
-            <DiningTableIcon className="w-14 h-auto flex-shrink-0" />
+            {pickerEntityType === "room" ? (
+              <RoomIcon className="w-14 h-auto flex-shrink-0" />
+            ) : pickerEntityType === "person" ? (
+              <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center flex-shrink-0">
+                <UserRound className="w-6 h-6 text-primary" />
+              </div>
+            ) : (
+              <DiningTableIcon className="w-14 h-auto flex-shrink-0" />
+            )}
             <div className="min-w-0">
-              <p className="font-extrabold text-sm sm:text-base">قاعة الطاولات</p>
+              <p className="font-extrabold text-sm sm:text-base">
+                {pickerEntityType === "room"
+                  ? "قاعة الغرف"
+                  : pickerEntityType === "person"
+                    ? "قائمة الأشخاص"
+                    : "قاعة الطاولات"}
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {needsBranchPick
-                  ? "اختر فرعاً أولاً لعرض طاولات ذلك الفرع فقط"
-                  : `طاولات ${branchLabel} — اختر طاولة متاحة للطلب`}
+                  ? "اختر فرعاً أولاً لعرض عناصر ذلك الفرع فقط"
+                  : pickerEntityType === "person"
+                    ? `${branchLabel} — اختر شخصاً موجوداً للطلب`
+                    : pickerEntityType === "room"
+                      ? `غرف ${branchLabel} — اختر غرفة متاحة للطلب`
+                      : `طاولات ${branchLabel} — اختر طاولة متاحة للطلب`}
               </p>
             </div>
           </div>
@@ -809,19 +937,96 @@ export default function POS() {
             <div className="rounded-3xl border border-dashed border-amber-500/40 bg-amber-500/10 py-14 text-center text-amber-700 dark:text-amber-300">
               <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
               <p className="font-bold">اختر فرعاً من أعلى الشاشة أولاً</p>
-              <p className="text-xs mt-1 opacity-80">حتى لا تظهر طاولات الفروع الأخرى مكررة</p>
+              <p className="text-xs mt-1 opacity-80">حتى لا تظهر عناصر الفروع الأخرى مكررة</p>
             </div>
-          ) : branchTables.length === 0 ? (
+          ) : pickerSeats.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
-              <Armchair className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="font-bold">لا توجد طاولات لهذا الفرع</p>
+              {pickerEntityType === "room" ? (
+                <RoomIcon className="w-20 h-auto mx-auto mb-3 opacity-50" />
+              ) : pickerEntityType === "person" ? (
+                <UserRound className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              ) : (
+                <Armchair className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              )}
+              <p className="font-bold">
+                {pickerEntityType === "room"
+                  ? "لا توجد غرف لهذا الفرع"
+                  : pickerEntityType === "person"
+                    ? "لا يوجد أشخاص لهذا الفرع"
+                    : "لا توجد طاولات لهذا الفرع"}
+              </p>
+            </div>
+          ) : pickerEntityType === "person" ? (
+            <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain">
+              <div className="divide-y divide-border/50">
+                {pickerSeats.map((person, idx) => {
+                  const presence = personPresence(person.status);
+                  const meta = PERSON_STATUS_META[presence];
+                  const isAvailable = presence === "available";
+                  const isSelected = selectedTableId === person.id;
+                  const name = String(person.number);
+                  return (
+                    <motion.button
+                      key={person.id}
+                      type="button"
+                      disabled={!isAvailable}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(idx * 0.025, 0.3) }}
+                      onClick={() => {
+                        if (!isAvailable) return;
+                        setSelectedTableId(person.id);
+                        setIsTablePickerOpen(false);
+                      }}
+                      className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors ${
+                        isSelected ? "bg-primary/10" : "hover:bg-primary/5"
+                      } ${isAvailable ? "cursor-pointer" : "opacity-45 cursor-not-allowed"}`}
+                    >
+                      <div
+                        className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center text-sm sm:text-base font-extrabold border flex-shrink-0 ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-secondary/80 text-foreground border-border/60"
+                        }`}
+                      >
+                        {personInitials(name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-extrabold text-sm sm:text-base truncate">{name}</p>
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] sm:text-xs text-muted-foreground">
+                          {person.location && (
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <MapPin className="w-3 h-3 text-primary/80" />
+                              {person.location}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1">
+                            <Users className="w-3 h-3 text-primary/80" />
+                            <span className="font-display">{person.capacity}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold flex-shrink-0 ${meta.chip}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                        {meta.label}
+                      </div>
+                      {isSelected && (
+                        <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain pe-1">
-              {branchTables.map((table, idx) => {
+              {pickerSeats.map((table, idx) => {
                 const meta = TABLE_STATUS_META[table.status] ?? TABLE_STATUS_META.available;
                 const isAvailable = table.status === "available";
                 const isSelected = selectedTableId === table.id;
+                const isRoom = pickerEntityType === "room";
                 return (
                   <motion.button
                     key={table.id}
@@ -856,17 +1061,26 @@ export default function POS() {
                       </div>
 
                       <div className="relative w-full max-w-[8.5rem] sm:max-w-[10rem] mx-auto group-hover:scale-105 transition-transform duration-300">
-                        <DiningTableIcon
-                          number={table.number}
-                          className="w-full h-auto drop-shadow-md"
-                        />
+                        {isRoom ? (
+                          <RoomIcon
+                            number={table.number}
+                            className="w-full h-auto drop-shadow-md"
+                          />
+                        ) : (
+                          <DiningTableIcon
+                            number={table.number}
+                            className="w-full h-auto drop-shadow-md"
+                          />
+                        )}
                       </div>
 
                       <div className="w-full space-y-1.5">
                         <div className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold text-foreground">
                           <Users className="w-3.5 h-3.5 text-primary" />
                           <span className="font-display">{table.capacity}</span>
-                          <span className="text-muted-foreground font-medium">مقاعد</span>
+                          <span className="text-muted-foreground font-medium">
+                            {isRoom ? "سعة" : "مقاعد"}
+                          </span>
                         </div>
                         {table.location && (
                           <div className="flex items-center justify-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground">
@@ -908,7 +1122,7 @@ export default function POS() {
               {invoiceNumber}
             </p>
             {selectedTable && (
-              <p className="text-muted-foreground">طاولة رقم {selectedTable.number}</p>
+              <p className="text-muted-foreground">{seatLabel(selectedTable)}</p>
             )}
             <p className="text-2xl font-bold text-primary font-display">
               {formatMoneyAmount(total)}
@@ -922,8 +1136,15 @@ export default function POS() {
           <>
             {orderType === "dine_in" && selectedTable && (
               <div className="mb-4 px-4 py-2 bg-primary/10 rounded-xl text-primary text-sm font-semibold flex items-center gap-2">
-                <Table2 className="w-4 h-4" />
-                طاولة رقم {selectedTable.number} — {selectedTable.location}
+                {(selectedTable.type ?? "table") === "room" ? (
+                  <DoorOpen className="w-4 h-4" />
+                ) : (selectedTable.type ?? "table") === "person" ? (
+                  <UserRound className="w-4 h-4" />
+                ) : (
+                  <Table2 className="w-4 h-4" />
+                )}
+                {seatLabel(selectedTable)}
+                {selectedTable.location ? ` — ${selectedTable.location}` : ""}
               </div>
             )}
             <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
