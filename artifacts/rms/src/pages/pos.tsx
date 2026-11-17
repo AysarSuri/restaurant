@@ -10,6 +10,7 @@ import {
   useGetCards,
   useGetBranches,
   useGetDevicePrinters,
+  useGetOrders,
   getGetTablesQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
@@ -20,12 +21,13 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
-  DoorOpen, UserRound, Lock, Wallet, Printer,
+  DoorOpen, UserRound, Lock, Wallet, Printer, PencilLine, Undo2,
 } from "lucide-react";
 import type { MenuItem } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useCurrency } from "@/hooks/use-currency";
 import { useBranch } from "@/lib/branch-context";
+import { useI18n } from "@/i18n";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { MultilingualKeyboard } from "@/components/multilingual-keyboard";
@@ -40,25 +42,24 @@ type SeatEntityType = "table" | "room" | "person";
 
 const SEAT_TABS: {
   key: SeatEntityType;
-  label: string;
-  labelPlural: string;
+  labelKey: string;
   icon: typeof Armchair;
 }[] = [
-  { key: "table", label: "طاولات", labelPlural: "طاولات", icon: Armchair },
-  { key: "room", label: "غرفات", labelPlural: "غرف", icon: DoorOpen },
-  { key: "person", label: "أشخاص", labelPlural: "أشخاص", icon: UserRound },
+  { key: "table", labelKey: "seat.tables", icon: Armchair },
+  { key: "room", labelKey: "seat.roomsTab", icon: DoorOpen },
+  { key: "person", labelKey: "pos.persons", icon: UserRound },
 ];
 
 const PERSON_STATUS_META = {
   available: {
-    label: "موجود",
+    labelKey: "seat.present",
     chip: "bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/40",
     card: "bg-emerald-500/10",
     ring: "ring-emerald-500/70 border-emerald-500",
     glow: "from-emerald-500/45 via-emerald-400/15 to-transparent",
   },
   occupied: {
-    label: "مو موجود",
+    labelKey: "seat.absent",
     chip: "bg-slate-500 text-white border-slate-600 shadow-sm shadow-slate-500/40",
     card: "bg-slate-500/10",
     ring: "ring-slate-500/70 border-slate-500",
@@ -76,12 +77,15 @@ const personInitials = (name: string) => {
   return `${parts[0][0]}${parts[1][0]}`;
 };
 
-function seatLabel(seat: { type?: string | null; number: string | number } | undefined | null) {
-  if (!seat) return "اختر رقم الطاولة";
+function seatLabel(
+  seat: { type?: string | null; number: string | number } | undefined | null,
+  t: (key: string, params?: Record<string, string | number>) => string
+) {
+  if (!seat) return t("tables.chooseNumber");
   const type = (seat.type ?? "table") as SeatEntityType;
   if (type === "person") return String(seat.number);
-  if (type === "room") return `غرفة ${seat.number}`;
-  return `طاولة ${seat.number}`;
+  if (type === "room") return t("tables.roomN", { n: seat.number });
+  return t("tables.tableN", { n: seat.number });
 }
 
 const INVOICE_SEQ_KEY = "rms-invoice-seq";
@@ -141,7 +145,20 @@ interface CartItem extends MenuItem {
 
 type OrderType = "dine_in" | "takeaway" | "delivery";
 
+function menuItemDisplayName(
+  item: Pick<MenuItem, "name" | "nameAr">,
+  locale: string
+) {
+  if (locale === "en") {
+    const english = item.name?.trim();
+    return english || item.nameAr;
+  }
+  const arabic = item.nameAr?.trim();
+  return arabic || item.name;
+}
+
 export default function POS() {
+  const { t, locale } = useI18n();
   const { selectedBranchId, branchLabel } = useBranch();
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
@@ -154,6 +171,26 @@ export default function POS() {
   const { data: paymentCards } = useGetCards();
   const { data: branches } = useGetBranches();
   const { data: devicePrinters } = useGetDevicePrinters();
+  const { data: pendingOrders } = useGetOrders(
+    { status: "pending" },
+    {
+      query: {
+        queryKey: ["/api/orders", { status: "pending" }],
+        refetchInterval: 8_000,
+        staleTime: 4_000,
+      },
+    }
+  );
+  const { data: preparingOrders } = useGetOrders(
+    { status: "preparing" },
+    {
+      query: {
+        queryKey: ["/api/orders", { status: "preparing" }],
+        refetchInterval: 8_000,
+        staleTime: 4_000,
+      },
+    }
+  );
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
   const posSaveTarget =
@@ -203,6 +240,8 @@ export default function POS() {
   const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
   const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
+  /** "all" = normal seat pick; "openOrders" = seats with cashier/kitchen lists */
+  const [seatPickerMode, setSeatPickerMode] = useState<"all" | "openOrders">("all");
   const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
   const [personSearch, setPersonSearch] = useState("");
   const [isPersonSearchPadOpen, setIsPersonSearchPadOpen] = useState(false);
@@ -215,19 +254,42 @@ export default function POS() {
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
   const [now, setNow] = useState(() => new Date());
 
+  const openSeatStages = useMemo(() => {
+    const map = new Map<number, { cashier: boolean; kitchen: boolean }>();
+    const add = (orders: typeof pendingOrders, stage: "cashier" | "kitchen") => {
+      for (const order of orders ?? []) {
+        const tableId = order.tableId;
+        if (tableId == null) continue;
+        const prev = map.get(tableId) ?? { cashier: false, kitchen: false };
+        prev[stage] = true;
+        map.set(tableId, prev);
+      }
+    };
+    add(pendingOrders, "cashier");
+    add(preparingOrders, "kitchen");
+    return map;
+  }, [pendingOrders, preparingOrders]);
+
   const seatTypeCounts = useMemo(() => {
     const base = { table: 0, room: 0, person: 0 };
-    for (const t of branchTables) {
+    const source =
+      seatPickerMode === "openOrders"
+        ? branchTables.filter((t) => openSeatStages.has(t.id))
+        : branchTables;
+    for (const t of source) {
       const key = (t.type ?? "table") as SeatEntityType;
       if (key in base) base[key] += 1;
     }
     return base;
-  }, [branchTables]);
+  }, [branchTables, openSeatStages, seatPickerMode]);
 
   const pickerSeats = useMemo(() => {
     let list = branchTables.filter(
       (t) => (t.type ?? "table") === pickerEntityType
     );
+    if (seatPickerMode === "openOrders") {
+      list = list.filter((t) => openSeatStages.has(t.id));
+    }
     if (pickerEntityType === "person") {
       const q = personSearch.trim().toLowerCase();
       if (q) {
@@ -242,7 +304,7 @@ export default function POS() {
       );
     }
     return list;
-  }, [branchTables, pickerEntityType, personSearch]);
+  }, [branchTables, openSeatStages, personSearch, pickerEntityType, seatPickerMode]);
 
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const {
@@ -290,14 +352,31 @@ export default function POS() {
     }
   }, [branchTables, selectedTableId]);
 
+  const closeSeatPicker = () => {
+    setIsTablePickerOpen(false);
+    setIsPersonSearchPadOpen(false);
+    setSeatPickerMode("all");
+  };
+
+  const openSeatPicker = (mode: "all" | "openOrders" = "all") => {
+    setSeatPickerMode(mode);
+    setPersonSearch("");
+    setIsPersonSearchPadOpen(false);
+    if (mode === "openOrders") {
+      const firstOpen = branchTables.find((t) => openSeatStages.has(t.id));
+      setPickerEntityType(((firstOpen?.type ?? "table") as SeatEntityType) || "table");
+    }
+    setIsTablePickerOpen(true);
+  };
+
   const finishPersonSelection = (personId: number) => {
     setSelectedTableId(personId);
     setPersonSearch("");
     setIsPersonSearchPadOpen(false);
-    setIsTablePickerOpen(false);
+    closeSeatPicker();
   };
 
-  /** Any person can be picked; مو موجود → موجود automatically */
+  /** Any person can be picked; absent becomes present automatically */
   const selectPerson = (person: RestaurantTable) => {
     if (isUpdatingPerson) return;
     const markPresent = () => {
@@ -410,15 +489,15 @@ export default function POS() {
   }, [deliveryPhone, orderType]);
 
   const orderTypeLabels: Record<OrderType, string> = {
-    dine_in: "طاولة",
-    takeaway: "سفري",
-    delivery: "توصيل",
+    dine_in: t("order.dineIn"),
+    takeaway: t("order.takeaway"),
+    delivery: t("order.delivery"),
   };
 
   const buildDirectReceipt = (paymentLabel: string) => {
     const nowStamp = new Date();
     return {
-      restaurantName: appSettings?.restaurantName?.trim() || "المطعم",
+      restaurantName: appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
       branchName: currentBranch?.name?.trim() || branchLabel,
       mobile1: currentBranch?.mobile1,
       mobile2: currentBranch?.mobile2,
@@ -428,9 +507,9 @@ export default function POS() {
       dateLabel: formatDateAr(nowStamp),
       timeLabel: formatClock(nowStamp),
       orderTypeLabel: orderTypeLabels[orderType],
-      seatLabel: orderType === "dine_in" ? seatLabel(selectedTable) : null,
+      seatLabel: orderType === "dine_in" ? seatLabel(selectedTable, t) : null,
       items: cart.map((i) => ({
-        name: i.nameAr || i.name,
+        name: menuItemDisplayName(i, locale),
         quantity: i.cartQuantity,
         unitPrice: i.price,
         lineTotal: i.price * i.cartQuantity,
@@ -452,16 +531,16 @@ export default function POS() {
   ) => {
     const cardNote =
       paymentMethod === "card" && opts?.cardName
-        ? `بطاقة: ${opts.cardName}`
+        ? t("pos.cardLine", { name: opts.cardName })
         : undefined;
     const paymentLabel =
       paymentMethod === "cash"
-        ? "كاش"
+        ? t("pos.cash")
         : paymentMethod === "card"
           ? opts?.cardName
-            ? `كارت · ${opts.cardName}`
-            : "كارت"
-          : "تحويل";
+            ? t("pos.cardNamed", { name: opts.cardName })
+            : t("pos.cardShort")
+          : t("common.transfer");
     const receiptData = isDirectSave ? buildDirectReceipt(paymentLabel) : null;
 
     createOrder(
@@ -492,17 +571,17 @@ export default function POS() {
             try {
               printThermalReceipt(receiptData);
               toast({
-                title: "تم الحفظ والطباعة",
+                title: t("pos.savedPrinted"),
                 description: devicePrinter?.printerName?.trim()
-                  ? `ستفتح نافذة الفاتورة — اختر الطابعة «${devicePrinter.printerName.trim()}» (80×80)`
-                  : "ستفتح نافذة الفاتورة — اختر طابعة 80×80 من قائمة الطابعات",
+                  ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
+                  : t("pos.printGeneric"),
               });
             } catch {
               toast({
                 variant: "destructive",
-                title: "تم الحفظ",
+                title: t("pos.saved"),
                 description:
-                  "تعذر فتح نافذة الطباعة — افتح نقطة البيع في Chrome/Edge واسمح بالنوافذ المنبثقة",
+                  t("pos.printPopupBlocked"),
               });
             }
           }
@@ -515,8 +594,8 @@ export default function POS() {
     if (withPrint && !devicePrinter?.printerName?.trim()) {
       toast({
         variant: "destructive",
-        title: "لا توجد طابعة للجهاز",
-        description: "سجّل طابعة هذا الجهاز من الإعدادات → الطابعات قبل الطباعة",
+        title: t("pos.noPrinter"),
+        description: t("pos.registerPrinter"),
       });
       return;
     }
@@ -550,12 +629,12 @@ export default function POS() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className={`font-extrabold flex items-center min-w-0 ${isPortraitPos && !compact ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl"}`}>
                   <ShoppingCart className={`me-2 text-primary flex-shrink-0 ${isPortraitPos && !compact ? "w-6 h-6" : "w-5 h-5"}`} />
-                  <span className="truncate">{isPortraitPos && !compact ? "شاشة الطلب" : "الطلب الحالي"}</span>
+                  <span className="truncate">{isPortraitPos && !compact ? t("pos.orderPane") : t("pos.currentOrder")}</span>
                 </h2>
                 <span
                   className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-extrabold text-primary font-display tabular-nums"
                   dir="ltr"
-                  title="رقم القائمة"
+                  title={t("pos.listNumber")}
                 >
                   {invoiceNumber}
                 </span>
@@ -566,14 +645,14 @@ export default function POS() {
                       setPickerEntityType(
                         ((selectedTable?.type ?? "table") as SeatEntityType) || "table"
                       );
-                      setIsTablePickerOpen(true);
+                      openSeatPicker("all");
                     }}
                     className={`inline-flex items-center gap-2 rounded-full border-2 px-3.5 py-2 text-sm font-extrabold transition-all max-w-[14rem] ${
                       selectedTable
                         ? "border-primary/40 bg-primary/10 text-primary"
                         : "border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
                     }`}
-                    title={selectedTable ? selectedTable.location || undefined : "اختر رقم الطاولة"}
+                    title={selectedTable ? selectedTable.location || undefined : t("tables.chooseNumber")}
                   >
                     {(selectedTable?.type ?? "table") === "room" ? (
                       <DoorOpen className="w-5 h-5 flex-shrink-0" />
@@ -582,7 +661,7 @@ export default function POS() {
                     ) : (
                       <Table2 className="w-5 h-5 flex-shrink-0" />
                     )}
-                    <span className="truncate">{seatLabel(selectedTable)}</span>
+                    <span className="truncate">{seatLabel(selectedTable, t)}</span>
                   </button>
                 )}
               </div>
@@ -649,14 +728,14 @@ export default function POS() {
                       <Phone className="w-4 h-4" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground">رقم الهاتف</p>
+                      <p className="text-[10px] font-bold text-muted-foreground">{t("common.phoneNumber")}</p>
                       <p
                         className={`text-sm font-extrabold tabular-nums truncate ${
                           deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
                         }`}
                         dir="ltr"
                       >
-                        {deliveryPhone || "اضغط للإدخال"}
+                        {deliveryPhone || t("keyboard.tapToEnter")}
                       </p>
                     </div>
                     {phoneKnown === true ? (
@@ -674,13 +753,13 @@ export default function POS() {
                       <MapPin className="w-4 h-4" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground">عنوان التوصيل</p>
+                      <p className="text-[10px] font-bold text-muted-foreground">{t("pos.deliveryAddress")}</p>
                       <p
                         className={`text-sm font-extrabold truncate ${
                           deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
                         }`}
                       >
-                        {deliveryAddress || "اضغط للكتابة"}
+                        {deliveryAddress || t("keyboard.tapToType")}
                       </p>
                     </div>
                   </button>
@@ -703,7 +782,7 @@ export default function POS() {
                 className="group flex items-center gap-2 sm:gap-2.5 rounded-2xl border border-border/50 bg-gradient-to-l from-secondary/70 via-card/80 to-card/90 px-2.5 py-2 shadow-[0_6px_18px_-14px_rgba(0,0,0,0.45)] hover:border-primary/35 transition-colors"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-extrabold leading-tight">{item.nameAr}</p>
+                  <p className="truncate text-sm font-extrabold leading-tight">{menuItemDisplayName(item, locale)}</p>
                 </div>
 
                 <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-background/70 p-0.5">
@@ -711,7 +790,7 @@ export default function POS() {
                     type="button"
                     onClick={() => updateQuantity(item.id, -1)}
                     className="flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-secondary transition-colors"
-                    aria-label="إنقاص"
+                    aria-label={t("inventory.decrease")}
                   >
                     <Minus className="w-4.5 h-4.5" />
                   </button>
@@ -722,7 +801,7 @@ export default function POS() {
                     type="button"
                     onClick={() => updateQuantity(item.id, 1)}
                     className="flex h-10 w-10 items-center justify-center rounded-lg text-primary hover:bg-primary/15 transition-colors"
-                    aria-label="زيادة"
+                    aria-label={t("common.increase")}
                   >
                     <Plus className="w-4.5 h-4.5" />
                   </button>
@@ -736,7 +815,7 @@ export default function POS() {
                   type="button"
                   onClick={() => updateQuantity(item.id, -item.cartQuantity)}
                   className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-destructive/25 text-destructive hover:bg-destructive/15 transition-colors"
-                  aria-label="حذف"
+                  aria-label={t("common.delete")}
                 >
                   <Trash2 className="w-4.5 h-4.5" />
                 </button>
@@ -746,7 +825,7 @@ export default function POS() {
           {cart.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 py-16">
               <ShoppingCart className="w-16 h-16 mb-4" />
-              <p>السلة فارغة</p>
+              <p>{t("pos.emptyCart")}</p>
             </div>
           )}
         </div>
@@ -763,7 +842,7 @@ export default function POS() {
               <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
                 <Percent className="w-3.5 h-3.5" />
               </span>
-              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">خصم</span>
+              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{t("pos.discountShort")}</span>
               <span
                 className={`ms-auto font-display text-xs sm:text-sm font-extrabold tabular-nums truncate ${
                   discount > 0 ? "text-green-500" : "text-foreground"
@@ -775,7 +854,7 @@ export default function POS() {
             </button>
 
             <div className="min-w-0 flex-1 flex items-center justify-between gap-2 rounded-xl border border-border/50 bg-secondary/40 px-2.5 py-2">
-              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">المجموع</span>
+              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{t("pos.sum")}</span>
               <span className="font-display text-xs sm:text-sm font-extrabold tabular-nums truncate" dir="ltr">
                 {formatMoneyAmount(subtotal)}
               </span>
@@ -783,7 +862,7 @@ export default function POS() {
           </div>
 
           <div className="flex justify-between font-bold text-xl text-foreground pt-1 border-t border-border/50">
-            <span>الإجمالي</span>
+            <span>{t("common.total")}</span>
             <span className="text-primary font-display">{formatMoneyAmount(total)}</span>
           </div>
 
@@ -796,8 +875,8 @@ export default function POS() {
             onClick={openCheckout}
           >
             {orderType === "dine_in" && !selectedTableId
-              ? "اختر مكان الجلوس أولاً"
-              : "دفع وإصدار الفاتورة"}
+              ? t("pos.chooseSeatFirst")
+              : t("pos.payAndInvoice")}
           </Button>
         </div>
       </div>
@@ -837,10 +916,10 @@ export default function POS() {
             </Button>
             <div className="min-w-0">
               <h1 className={`font-extrabold truncate ${isPortraitPos ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl md:text-2xl xl:text-3xl"}`}>
-                نقطة البيع
+                {t("pos.title")}
               </h1>
               <p className="text-xs sm:text-sm text-primary font-display tracking-widest uppercase truncate">
-                {branchLabel} · {isPortraitPos ? "شاشة الأصناف" : "POS"}
+                {branchLabel} · {isPortraitPos ? t("pos.itemsScreen") : "POS"}
               </p>
             </div>
             <BranchSwitcher compact />
@@ -862,7 +941,7 @@ export default function POS() {
                 search ? "text-foreground" : "text-muted-foreground/70"
               }`}
             >
-              {search || "ابحث عن صنف..."}
+              {search || t("pos.searchItem")}
             </span>
             {search ? (
               <span
@@ -880,7 +959,7 @@ export default function POS() {
                   }
                 }}
                 className="absolute end-10 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary"
-                aria-label="مسح البحث"
+                aria-label={t("pos.clearSearch")}
               >
                 <X className="w-3.5 h-3.5" />
               </span>
@@ -899,14 +978,14 @@ export default function POS() {
             }`}
           >
             <Star className="w-4 h-4 text-black fill-black" />
-            مفضلة
+            {t("pos.favorites")}
           </Button>
           <Button
             variant={activeCategory === null ? "default" : "secondary"}
             onClick={() => setActiveCategory(null)}
             className="rounded-full px-4 sm:px-6 flex-shrink-0 touch-target"
           >
-            الكل
+            {t("common.all")}
           </Button>
           {categories?.map((cat) => (
             <Button
@@ -930,7 +1009,7 @@ export default function POS() {
         <div className={`flex-1 overflow-y-auto relative z-10 ${isCompactPos ? "pb-28 p-3 sm:p-4" : isPortraitPos ? "p-4 xl:p-5" : "p-3 sm:p-4 md:p-5 xl:p-6"}`}>
           {needsBranchPick && (
             <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
-              أنت تشاهد «كل الفروع». اختر فرعاً محدداً من الأعلى قبل البيع أو إنشاء طلب.
+              {t("pos.allBranchesBlock")}
             </div>
           )}
           <div
@@ -978,7 +1057,7 @@ export default function POS() {
                       {item.imageUrl ? (
                         <img
                           src={item.imageUrl}
-                          alt={item.nameAr}
+                          alt={menuItemDisplayName(item, locale)}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -986,8 +1065,9 @@ export default function POS() {
                       )}
                     </div>
                     <div className="mt-auto">
-                      <h3 className="font-extrabold text-sm sm:text-base leading-tight mb-1 line-clamp-2">{item.nameAr}</h3>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground font-display mb-2 hidden sm:block truncate">{item.name}</p>
+                      <h3 className="font-extrabold text-sm sm:text-base leading-tight mb-2 line-clamp-2">
+                        {menuItemDisplayName(item, locale)}
+                      </h3>
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-primary font-extrabold font-display text-sm sm:text-lg">
                           {formatIQD(Number(item.price))}
@@ -1004,6 +1084,47 @@ export default function POS() {
             </AnimatePresence>
           </div>
         </div>
+
+        <footer
+          className={`relative z-20 flex-shrink-0 border-t border-border/60 bg-card/85 backdrop-blur-xl safe-pb ${
+            isPortraitPos ? "px-4 py-3 xl:px-5" : "px-3 py-2.5 sm:px-5 xl:px-6"
+          }`}
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              className="group inline-flex h-12 sm:h-14 min-w-[7.5rem] flex-1 items-center justify-center gap-2 rounded-2xl border border-border/70 bg-secondary/70 px-4 text-sm sm:text-base font-extrabold text-foreground transition-all hover:border-primary/40 hover:bg-secondary active:scale-[0.98]"
+            >
+              <Undo2 className="w-5 h-5 text-muted-foreground transition-colors group-hover:text-primary" />
+              {t("common.back")}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => openSeatPicker("openOrders")}
+              className="group relative inline-flex h-12 sm:h-14 min-w-0 flex-[1.45] items-center justify-center gap-2 overflow-hidden rounded-2xl border border-primary/35 bg-gradient-to-l from-primary via-primary to-amber-500 px-4 text-sm sm:text-base font-extrabold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:brightness-110 active:scale-[0.98]"
+            >
+              <span className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.22),transparent_55%)] pointer-events-none" />
+              <PencilLine className="relative w-5 h-5" />
+              <span className="relative truncate">{t("pos.editLists")}</span>
+              {openSeatStages.size > 0 && (
+                <span className="relative ms-0.5 inline-flex min-w-6 h-6 items-center justify-center rounded-full bg-white/25 px-1.5 text-[11px] font-display font-bold tabular-nums">
+                  {openSeatStages.size}
+                </span>
+              )}
+            </button>
+
+            {selectedTable && (
+              <div className="hidden md:flex max-w-[11rem] flex-col items-end leading-tight rounded-xl border border-primary/25 bg-primary/10 px-3 py-2">
+                <span className="text-[10px] font-bold text-primary/80">{t("pos.selectedMark")}</span>
+                <span className="truncate text-xs font-extrabold text-foreground">
+                  {seatLabel(selectedTable, t)}
+                </span>
+              </div>
+            )}
+          </div>
+        </footer>
       </div>
 
       {/* ── Current order (LEFT in RTL) ── */}
@@ -1018,7 +1139,7 @@ export default function POS() {
         className="pos-cart-fab fixed bottom-4 left-1/2 -translate-x-1/2 z-30 hidden items-center gap-3 px-5 py-3 rounded-2xl bg-primary text-primary-foreground shadow-2xl shadow-primary/30 font-bold safe-pb"
       >
         <ShoppingCart className="w-5 h-5" />
-        <span>السلة ({cart.reduce((n, i) => n + i.cartQuantity, 0)})</span>
+        <span>{t("pos.cart", { count: cart.reduce((n, i) => n + i.cartQuantity, 0) })}</span>
         <span className="font-display">{formatMoneyAmount(total)}</span>
       </button>
 
@@ -1046,19 +1167,22 @@ export default function POS() {
         )}
       </AnimatePresence>
 
-      {/* ── Seat Picker: طاولات / غرفات / أشخاص ── */}
+      {/* ── Seat picker: tables / rooms / people ── */}
       <Dialog
         isOpen={isTablePickerOpen}
-        onClose={() => {
-          setIsTablePickerOpen(false);
-          setIsPersonSearchPadOpen(false);
-        }}
-        title="اختر رقم الطاولة"
+        onClose={closeSeatPicker}
+        title={seatPickerMode === "openOrders" ? t("pos.editListsTitle") : t("tables.chooseNumber")}
         maxWidth="max-w-5xl"
       >
         <div className="space-y-4">
+          {seatPickerMode === "openOrders" && (
+            <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3">
+              <p className="text-sm font-bold text-foreground">{t("pos.editLists")}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("pos.editListsHint")}</p>
+            </div>
+          )}
           <div className="flex p-1 rounded-xl bg-secondary/50 border border-border/50 gap-1">
-            {SEAT_TABS.map(({ key, label, icon: Icon }) => {
+            {SEAT_TABS.map(({ key, labelKey, icon: Icon }) => {
               const active = pickerEntityType === key;
               const count = seatTypeCounts[key];
               return (
@@ -1079,7 +1203,7 @@ export default function POS() {
                   }`}
                 >
                   <Icon className={`w-5 h-5 ${active ? "opacity-100" : "opacity-70"}`} />
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                   <span
                     className={`min-w-6 h-6 px-1.5 rounded-full inline-flex items-center justify-center text-[11px] font-display font-bold ${
                       active
@@ -1107,19 +1231,19 @@ export default function POS() {
             <div className="min-w-0">
               <p className="font-extrabold text-sm sm:text-base">
                 {pickerEntityType === "room"
-                  ? "قاعة الغرف"
+                  ? t("pos.roomHall")
                   : pickerEntityType === "person"
-                    ? "قائمة الأشخاص"
-                    : "قاعة الطاولات"}
+                    ? t("pos.personList")
+                    : t("pos.tableHall")}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {needsBranchPick
-                  ? "اختر فرعاً أولاً لعرض عناصر ذلك الفرع فقط"
+                  ? t("menu.pickBranchFirst")
                   : pickerEntityType === "person"
-                    ? `${branchLabel} — اختر شخصاً (يصبح موجود تلقائياً)`
+                    ? t("pos.pickPerson", { branch: branchLabel })
                     : pickerEntityType === "room"
-                      ? `غرف ${branchLabel} — اختر غرفة متاحة للطلب`
-                      : `طاولات ${branchLabel} — اختر طاولة متاحة للطلب`}
+                      ? t("pos.pickRoom", { branch: branchLabel })
+                      : t("pos.pickTable", { branch: branchLabel })}
               </p>
             </div>
           </div>
@@ -1127,8 +1251,13 @@ export default function POS() {
           {needsBranchPick ? (
             <div className="rounded-3xl border border-dashed border-amber-500/40 bg-amber-500/10 py-14 text-center text-amber-700 dark:text-amber-300">
               <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
-              <p className="font-bold">اختر فرعاً من أعلى الشاشة أولاً</p>
-              <p className="text-xs mt-1 opacity-80">حتى لا تظهر عناصر الفروع الأخرى مكررة</p>
+              <p className="font-bold">{t("pos.pickBranchFirstTitle")}</p>
+              <p className="text-xs mt-1 opacity-80">{t("pos.pickBranchFirstHint")}</p>
+            </div>
+          ) : seatPickerMode === "openOrders" && pickerSeats.length === 0 && !(pickerEntityType === "person" && personSearch.trim()) ? (
+            <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
+              <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="font-bold">{t("pos.noOpenSeats")}</p>
             </div>
           ) : pickerEntityType === "person" ? (
             <div className="space-y-3">
@@ -1147,10 +1276,10 @@ export default function POS() {
                         personSearch ? "text-foreground" : "text-muted-foreground/55"
                       }`}
                     >
-                      {personSearch || "ابحث عن شخص بالاسم..."}
+                      {personSearch || t("pos.searchPerson")}
                     </span>
                     <span className="block text-[11px] text-muted-foreground mt-0.5">
-                      اضغط لفتح لوحة المفاتيح
+                      {t("pos.tapKeyboard")}
                     </span>
                   </span>
                 </button>
@@ -1170,13 +1299,13 @@ export default function POS() {
                       }
                     }}
                     className="absolute end-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl border border-border/60 bg-secondary/80 text-muted-foreground hover:text-foreground hover:bg-secondary flex items-center justify-center"
-                    aria-label="مسح البحث"
+                    aria-label={t("pos.clearSearch")}
                   >
                     <X className="w-4 h-4" />
                   </span>
                 ) : (
                   <span className="absolute end-3 top-1/2 -translate-y-1/2 pointer-events-none text-[10px] font-bold text-primary/70 bg-primary/10 border border-primary/20 rounded-lg px-2 py-1">
-                    بحث
+                    {t("pos.search")}
                   </span>
                 )}
               </div>
@@ -1186,10 +1315,10 @@ export default function POS() {
                   <UserRound className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p className="font-bold">
                     {personSearch.trim()
-                      ? "لا توجد نتائج لهذا البحث"
+                      ? t("pos.noSearchResults")
                       : seatTypeCounts.person === 0
-                        ? "لا يوجد أشخاص لهذا الفرع"
-                        : "لا توجد نتائج"}
+                        ? t("pos.noPersonsForBranch")
+                        : t("common.noResults")}
                   </p>
                   {personSearch.trim() && (
                     <button
@@ -1197,7 +1326,7 @@ export default function POS() {
                       onClick={() => setPersonSearch("")}
                       className="mt-3 text-sm font-bold text-primary hover:underline"
                     >
-                      مسح البحث
+                      {t("pos.clearSearch")}
                     </button>
                   )}
                 </div>
@@ -1209,6 +1338,7 @@ export default function POS() {
                   const meta = PERSON_STATUS_META[presence];
                   const isSelected = selectedTableId === person.id;
                   const name = String(person.number);
+                  const openStage = openSeatStages.get(person.id);
                   return (
                     <motion.button
                       key={person.id}
@@ -1233,7 +1363,7 @@ export default function POS() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-extrabold text-sm sm:text-base truncate">{name}</p>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] sm:text-xs text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[11px] sm:text-xs text-muted-foreground">
                           {person.location && (
                             <span className="inline-flex items-center gap-1 truncate">
                               <MapPin className="w-3 h-3 text-primary/80" />
@@ -1244,13 +1374,23 @@ export default function POS() {
                             <Users className="w-3 h-3 text-primary/80" />
                             <span className="font-display">{person.capacity}</span>
                           </span>
+                          {openStage?.cashier && (
+                            <span className="rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold">
+                              {t("pos.openOnCashier")}
+                            </span>
+                          )}
+                          {openStage?.kitchen && (
+                            <span className="rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-extrabold">
+                              {t("pos.openOnKitchen")}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold flex-shrink-0 ${meta.chip}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                        {meta.label}
+                        {t(meta.labelKey)}
                       </div>
                       {isSelected && (
                         <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
@@ -1271,48 +1411,74 @@ export default function POS() {
               )}
               <p className="font-bold">
                 {pickerEntityType === "room"
-                  ? "لا توجد غرف لهذا الفرع"
-                  : "لا توجد طاولات لهذا الفرع"}
+                  ? t("pos.noRoomsForBranch")
+                  : t("pos.noTablesForBranch")}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain pe-1">
               {pickerSeats.map((table, idx) => {
                 const meta = TABLE_STATUS_META[table.status] ?? TABLE_STATUS_META.available;
-                const isAvailable = table.status === "available";
+                const openStage = openSeatStages.get(table.id);
+                const canPick =
+                  seatPickerMode === "openOrders" ? Boolean(openStage) : table.status === "available";
                 const isSelected = selectedTableId === table.id;
                 const isRoom = pickerEntityType === "room";
                 return (
                   <motion.button
                     key={table.id}
                     type="button"
-                    disabled={!isAvailable}
+                    disabled={!canPick}
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(idx * 0.03, 0.35) }}
-                    whileHover={isAvailable ? { y: -4 } : undefined}
-                    whileTap={isAvailable ? { scale: 0.97 } : undefined}
+                    whileHover={canPick ? { y: -4 } : undefined}
+                    whileTap={canPick ? { scale: 0.97 } : undefined}
                     onClick={() => {
-                      if (!isAvailable) return;
+                      if (!canPick) return;
                       setSelectedTableId(table.id);
-                      setIsTablePickerOpen(false);
+                      closeSeatPicker();
                     }}
                     className={`
                       group relative aspect-[4/5] rounded-[1.75rem] border-2 backdrop-blur-xl
                       overflow-hidden text-center shadow-lg shadow-black/5
                       ${meta.card} ${isSelected ? "ring-4 ring-primary/50 border-primary" : meta.ring}
                       transition-shadow duration-300
-                      ${isAvailable ? "hover:shadow-xl cursor-pointer" : "opacity-45 cursor-not-allowed grayscale-[0.35]"}
+                      ${canPick ? "hover:shadow-xl cursor-pointer" : "opacity-45 cursor-not-allowed grayscale-[0.35]"}
                     `}
                   >
                     <div className={`absolute inset-0 bg-gradient-to-br ${meta.glow}`} />
 
                     <div className="relative z-10 h-full flex flex-col items-center justify-between p-3 sm:p-4">
-                      <div
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold ${meta.chip}`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        {meta.label}
+                      <div className="w-full flex flex-col items-center gap-1.5">
+                        <div
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold ${meta.chip}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          {t(
+                            table.status === "occupied"
+                              ? "seat.occupied"
+                              : table.status === "reserved"
+                                ? "seat.reserved"
+                                : table.status === "cleaning"
+                                  ? "seat.cleaning"
+                                  : "seat.available"
+                          )}
+                        </div>
+                        {openStage && (
+                          <div className="flex flex-wrap items-center justify-center gap-1">
+                            {openStage.cashier && (
+                              <span className="rounded-full bg-amber-500/90 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-sm">
+                                {t("pos.openOnCashier")}
+                              </span>
+                            )}
+                            {openStage.kitchen && (
+                              <span className="rounded-full bg-sky-500/90 px-2 py-0.5 text-[9px] font-extrabold text-white shadow-sm">
+                                {t("pos.openOnKitchen")}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="relative w-full max-w-[8.5rem] sm:max-w-[10rem] mx-auto group-hover:scale-105 transition-transform duration-300">
@@ -1334,7 +1500,7 @@ export default function POS() {
                           <Users className="w-3.5 h-3.5 text-primary" />
                           <span className="font-display">{table.capacity}</span>
                           <span className="text-muted-foreground font-medium">
-                            {isRoom ? "سعة" : "مقاعد"}
+                            {isRoom ? t("seat.capacity") : t("seat.seats")}
                           </span>
                         </div>
                         {table.location && (
@@ -1346,7 +1512,7 @@ export default function POS() {
                         {isSelected && (
                           <div className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-extrabold">
                             <CheckCircle2 className="w-3 h-3" />
-                            محددةارة
+                            {t("pos.selectedMark")}
                           </div>
                         )}
                       </div>
@@ -1363,7 +1529,7 @@ export default function POS() {
       <Dialog
         isOpen={isCheckoutOpen}
         onClose={() => !orderSuccess && setIsCheckoutOpen(false)}
-        title={orderSuccess ? "✅ تم الطلب بنجاح" : "اختر طريقة الدفع"}
+        title={orderSuccess ? t("tableOrder.success") : t("pos.choosePayment")}
         maxWidth={isDirectSave && !orderSuccess ? "max-w-lg" : "max-w-lg"}
       >
         {orderSuccess ? (
@@ -1371,23 +1537,23 @@ export default function POS() {
             <div className="text-6xl">🎉</div>
             <p className="text-lg font-bold">
               {posSaveTarget === "kitchen"
-                ? "تم إرسال الطلب لشاشة المطبخ!"
+                ? t("pos.sentToKitchen")
                 : posSaveTarget === "none"
-                  ? "تم حفظ الطلب بنجاح!"
-                  : "تم إرسال الطلب لشاشة الكاشير!"}
+                  ? t("pos.orderSaved")
+                  : t("pos.sentToCashier")}
             </p>
             <p className="text-sm text-muted-foreground font-display" dir="ltr">
               {invoiceNumber}
             </p>
             {selectedTable && (
-              <p className="text-muted-foreground">{seatLabel(selectedTable)}</p>
+              <p className="text-muted-foreground">{seatLabel(selectedTable, t)}</p>
             )}
             <p className="text-2xl font-bold text-primary font-display">
               {formatMoneyAmount(total)}
             </p>
             <Button className="w-full touch-target" onClick={resetOrder}>
               <RefreshCw className="w-4 h-4 me-2" />
-              طلب جديد
+              {t("pos.newOrder")}
             </Button>
           </div>
         ) : isDirectSave ? (
@@ -1401,7 +1567,7 @@ export default function POS() {
                 ) : (
                   <Table2 className="w-4 h-4" />
                 )}
-                {seatLabel(selectedTable)}
+                {seatLabel(selectedTable, t)}
                 {selectedTable.location ? ` — ${selectedTable.location}` : ""}
               </div>
             )}
@@ -1421,7 +1587,7 @@ export default function POS() {
                 }`}
               >
                 <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
-                كاش
+                {t("pos.cash")}
               </button>
               <button
                 type="button"
@@ -1436,7 +1602,7 @@ export default function POS() {
                 }`}
               >
                 <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
-                كارت
+                {t("pos.cardShort")}
               </button>
             </div>
 
@@ -1444,7 +1610,7 @@ export default function POS() {
               <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Lock className="w-4 h-4" />
-                  <span className="text-sm font-bold">مجموع الفاتورة</span>
+                  <span className="text-sm font-bold">{t("pos.invoiceTotal")}</span>
                 </div>
                 <span className="font-display text-xl sm:text-2xl font-extrabold text-primary tabular-nums" dir="ltr">
                   {formatMoneyAmount(total)}
@@ -1454,7 +1620,7 @@ export default function POS() {
               <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/40">
                 <div className="flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-emerald-500" />
-                  <span className="text-sm font-bold text-foreground">مجموع الواصل</span>
+                  <span className="text-sm font-bold text-foreground">{t("pos.receivedTotal")}</span>
                 </div>
                 {checkoutPayMethod === "cash" ? (
                   <button
@@ -1478,7 +1644,7 @@ export default function POS() {
 
               {checkoutPayMethod === "cash" && (
                 <div className="px-4 py-3 flex items-center justify-between gap-3 bg-secondary/25">
-                  <span className="text-sm font-bold text-muted-foreground">الباقي</span>
+                  <span className="text-sm font-bold text-muted-foreground">{t("pos.change")}</span>
                   <span
                     className={`font-display text-lg font-extrabold tabular-nums ${
                       checkoutReceived >= total ? "text-amber-500" : "text-rose-500"
@@ -1487,7 +1653,7 @@ export default function POS() {
                   >
                     {checkoutReceived >= total
                       ? formatMoneyAmount(checkoutChange)
-                      : `نقص ${formatMoneyAmount(total - checkoutReceived)}`}
+                      : t("pos.shortage", { amount: formatMoneyAmount(total - checkoutReceived) })}
                   </span>
                 </div>
               )}
@@ -1497,13 +1663,13 @@ export default function POS() {
               <div className="space-y-2.5">
                 <p className="text-sm font-extrabold flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-sky-500" />
-                  اختر البطاقة
+                  {t("pos.chooseCard")}
                 </p>
                 {branchPaymentCards.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/30 py-8 text-center text-muted-foreground">
                     <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-45" />
-                    <p className="text-sm font-bold">لا توجد بطاقات نشطة لهذا الفرع</p>
-                    <p className="text-xs mt-1 opacity-80">أضف بطاقة من فورم البطاقات أولاً</p>
+                    <p className="text-sm font-bold">{t("pos.noActiveCards")}</p>
+                    <p className="text-xs mt-1 opacity-80">{t("pos.addCardFirst")}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[min(36vh,280px)] overflow-y-auto overscroll-contain pe-0.5">
@@ -1559,7 +1725,7 @@ export default function POS() {
                 onClick={() => confirmDirectCheckout(false)}
               >
                 <CheckCircle2 className="w-5 h-5" />
-                حفظ الفاتورة
+                {t("pos.saveInvoice")}
               </Button>
               <Button
                 className="h-14 text-sm sm:text-base touch-target gap-2"
@@ -1572,16 +1738,16 @@ export default function POS() {
                 onClick={() => confirmDirectCheckout(true)}
               >
                 <Printer className="w-5 h-5" />
-                حفظ وطباعة
+                {t("pos.saveAndPrint")}
               </Button>
             </div>
             {devicePrinter?.printerName?.trim() ? (
               <p className="text-[11px] text-center text-muted-foreground font-semibold">
-                طابعة الجهاز: {devicePrinter.printerName.trim()} · 80×80
+                {t("pos.devicePrinter", { name: devicePrinter.printerName.trim() })}
               </p>
             ) : (
               <p className="text-[11px] text-center text-amber-600 dark:text-amber-400 font-semibold">
-                لم تُسجَّل طابعة لهذا الجهاز — من الإعدادات → الطابعات
+                {t("pos.printerMissing")}
               </p>
             )}
           </div>
@@ -1596,7 +1762,7 @@ export default function POS() {
                 ) : (
                   <Table2 className="w-4 h-4" />
                 )}
-                {seatLabel(selectedTable)}
+                {seatLabel(selectedTable, t)}
                 {selectedTable.location ? ` — ${selectedTable.location}` : ""}
               </div>
             )}
@@ -1608,7 +1774,7 @@ export default function POS() {
                 isLoading={isCreating}
               >
                 <Banknote className="w-7 h-7 sm:w-8 sm:h-8 text-green-500" />
-                <span>كاش</span>
+                <span>{t("pos.cash")}</span>
               </Button>
               <Button
                 variant="outline"
@@ -1617,7 +1783,7 @@ export default function POS() {
                 isLoading={isCreating}
               >
                 <CreditCard className="w-7 h-7 sm:w-8 sm:h-8 text-blue-500" />
-                <span>بطاقة</span>
+                <span>{t("common.card")}</span>
               </Button>
               <Button
                 variant="outline"
@@ -1626,11 +1792,11 @@ export default function POS() {
                 isLoading={isCreating}
               >
                 <Phone className="w-7 h-7 sm:w-8 sm:h-8 text-purple-500" />
-                <span>تحويل</span>
+                <span>{t("common.transfer")}</span>
               </Button>
             </div>
             <div className="bg-secondary/50 p-4 rounded-xl text-center">
-              <p className="text-sm text-muted-foreground mb-1">المبلغ المطلوب</p>
+              <p className="text-sm text-muted-foreground mb-1">{t("pos.amountDue")}</p>
               <p className="text-2xl sm:text-3xl font-bold text-primary font-display">
                 {formatMoneyAmount(total)}
               </p>
@@ -1642,7 +1808,7 @@ export default function POS() {
       <Dialog
         isOpen={isReceivedPadOpen}
         onClose={() => setIsReceivedPadOpen(false)}
-        title="مجموع الواصل"
+        title={t("pos.receivedTotal")}
         maxWidth="max-w-sm"
         layer="overlay"
       >
@@ -1651,7 +1817,7 @@ export default function POS() {
           suffix={currencySymbol}
           allowDecimal={decimalPlaces > 0}
           maxDecimalPlaces={decimalPlaces}
-          label="أدخل المبلغ الواصل"
+          label={t("pos.enterReceived")}
           onCancel={() => setIsReceivedPadOpen(false)}
           onConfirm={(v) => {
             setCheckoutReceived(Math.max(0, v));
@@ -1663,7 +1829,7 @@ export default function POS() {
       <Dialog
         isOpen={isDiscountPadOpen}
         onClose={() => setIsDiscountPadOpen(false)}
-        title="خصم الفاتورة"
+        title={t("pos.invoiceDiscount")}
         maxWidth="max-w-sm"
         layer="overlay"
       >
@@ -1673,7 +1839,7 @@ export default function POS() {
           allowDecimal={decimalPlaces > 0}
           maxDecimalPlaces={decimalPlaces}
           maxValue={subtotal > 0 ? subtotal : undefined}
-          label="أدخل مبلغ الخصم"
+          label={t("pos.enterDiscount")}
           onCancel={() => setIsDiscountPadOpen(false)}
           onConfirm={(v) => {
             setDiscount(Math.max(0, Math.min(v, subtotal || v)));
@@ -1685,14 +1851,14 @@ export default function POS() {
       <Dialog
         isOpen={isPhonePadOpen}
         onClose={() => setIsPhonePadOpen(false)}
-        title="رقم هاتف التوصيل"
+        title={t("pos.deliveryPhoneTitle")}
         maxWidth="max-w-sm"
         layer="overlay"
       >
         <NumericKeypad
           mode="digits"
           value={deliveryPhone}
-          label="أدخل رقم الهاتف"
+          label={t("delivery.enterPhone")}
           allowPlus
           maxLength={15}
           onCancel={() => setIsPhonePadOpen(false)}
@@ -1759,13 +1925,13 @@ export default function POS() {
                 <div className="relative rounded-2xl border border-primary/25 bg-background/90 px-3.5 py-2.5 flex items-center gap-2.5 shadow-inner">
                   <Search className="w-5 h-5 text-primary flex-shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold text-muted-foreground mb-0.5">بحث أشخاص</p>
+                    <p className="text-[10px] font-bold text-muted-foreground mb-0.5">{t("pos.personSearchTitle")}</p>
                     <p
                       className={`truncate text-base font-extrabold ${
                         personSearch ? "text-foreground" : "text-muted-foreground/50"
                       }`}
                     >
-                      {personSearch || "اكتب للبحث..."}
+                      {personSearch || t("keyboard.typeToSearch")}
                     </p>
                   </div>
                   {personSearch ? (
@@ -1773,7 +1939,7 @@ export default function POS() {
                       type="button"
                       onClick={() => setPersonSearch("")}
                       className="w-8 h-8 rounded-xl border border-border/60 bg-secondary/70 text-muted-foreground hover:text-foreground flex items-center justify-center flex-shrink-0"
-                      aria-label="مسح"
+                      aria-label={t("common.clear")}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1785,7 +1951,7 @@ export default function POS() {
                   <div className="py-10 px-4 text-center text-muted-foreground">
                     <UserRound className="w-10 h-10 mx-auto mb-2 opacity-45" />
                     <p className="text-sm font-bold">
-                      {personSearch.trim() ? "لا توجد نتائج" : "لا يوجد أشخاص"}
+                      {personSearch.trim() ? t("common.noResults") : t("pos.noPersons")}
                     </p>
                   </div>
                 ) : (
@@ -1824,7 +1990,7 @@ export default function POS() {
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold flex-shrink-0 ${meta.chip}`}
                         >
-                          {meta.label}
+                          {t(meta.labelKey)}
                         </span>
                       </button>
                     );
@@ -1849,7 +2015,7 @@ export default function POS() {
                   <div className="min-w-0 flex-1">
                     <MultilingualKeyboard
                       value={personSearch}
-                      label="بحث عن شخص"
+                      label={t("pos.personSearch")}
                       defaultLang="ar"
                       showInput={false}
                       onChange={setPersonSearch}
@@ -1865,7 +2031,7 @@ export default function POS() {
                 <>
                   <MultilingualKeyboard
                     value={personSearch}
-                    label="بحث عن شخص"
+                    label={t("pos.personSearch")}
                     defaultLang="ar"
                     showInput={false}
                     onChange={setPersonSearch}

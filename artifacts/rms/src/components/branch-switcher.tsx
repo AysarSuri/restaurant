@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Building2, Check, ChevronDown, MapPin, Store } from "lucide-react";
 import { useGetBranches } from "@workspace/api-client-react";
 import { useBranch, type BranchSelection } from "@/lib/branch-context";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
     allowedBranchIds,
   } = useBranch();
   const { data: branches } = useGetBranches();
+  const { t, dir } = useI18n();
   const [open, setOpen] = useState(false);
 
   const options = useMemo<BranchOption[]>(() => {
@@ -36,8 +38,8 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
     if (canViewAllBranches) {
       next.push({
         id: "all",
-        label: "كل الفروع",
-        subtitle: "عرض موحّد لكل المواقع",
+        label: t("auth.allBranches"),
+        subtitle: t("branch.allSubtitle"),
         kind: "all",
       });
     }
@@ -52,7 +54,7 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
       });
     }
     return next;
-  }, [allowedBranchIds, branches, canViewAllBranches]);
+  }, [allowedBranchIds, branches, canViewAllBranches, t]);
 
   const selected = options.find((o) => o.id === selectedBranchId);
 
@@ -79,7 +81,7 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
           <Store className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
         </span>
         <div className="min-w-0 leading-tight">
-          <p className="text-[10px] font-medium tracking-wide text-muted-foreground">الفرع الحالي</p>
+          <p className="text-[10px] font-medium tracking-wide text-muted-foreground">{t("branch.current")}</p>
           <p className={cn("truncate font-bold text-foreground", compact ? "max-w-[7.5rem] text-xs" : "max-w-[11rem] text-sm")}>
             {branchLabel}
           </p>
@@ -91,14 +93,14 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
   if (!canSwitchBranch) return null;
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen} dir="rtl">
+    <DropdownMenu open={open} onOpenChange={setOpen} dir={dir}>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={triggerClass} aria-label="اختيار الفرع">
+        <button type="button" className={triggerClass} aria-label={t("branch.choose")}>
           <span className={iconWrapClass}>
             <Building2 className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
           </span>
           <div className="min-w-0 leading-tight">
-            <p className="text-[10px] font-medium tracking-wide text-muted-foreground">اختيار الفرع</p>
+            <p className="text-[10px] font-medium tracking-wide text-muted-foreground">{t("branch.choose")}</p>
             <p className={cn("truncate font-bold text-foreground", compact ? "max-w-[7.5rem] text-xs" : "max-w-[11rem] text-sm")}>
               {selected?.label ?? branchLabel}
             </p>
@@ -122,9 +124,9 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
       >
         <div className="border-b border-border/60 bg-gradient-to-l from-primary/10 via-transparent to-transparent px-3.5 py-3">
           <DropdownMenuLabel className="p-0 text-sm font-extrabold text-foreground">
-            الفروع المتاحة
+            {t("branch.available")}
           </DropdownMenuLabel>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">اختر الفرع لتصفية البيانات والعمليات</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t("branch.filterHint")}</p>
         </div>
 
         <div className="max-h-[min(18rem,50vh)] space-y-1 overflow-y-auto p-2">

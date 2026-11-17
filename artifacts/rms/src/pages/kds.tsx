@@ -4,8 +4,10 @@ import { Button, Badge } from "@/components/ui-elements";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, CheckCircle2, ChefHat, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
+import { useI18n } from "@/i18n";
 
 export default function KDS() {
+  const { t } = useI18n();
   const { data: orders, refetch } = useGetOrders({ status: "pending,preparing,ready" });
   const { mutate: updateStatus } = useUpdateOrderStatus();
 
@@ -49,8 +51,8 @@ export default function KDS() {
             <ChefHat className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-200 truncate">شاشة المطبخ (KDS)</h1>
-            <p className="text-muted-foreground font-display text-xs sm:text-sm tracking-widest uppercase">Kitchen Display System</p>
+            <h1 className="text-lg sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-amber-200 truncate">{t("kds.heading")}</h1>
+            <p className="text-muted-foreground font-display text-xs sm:text-sm tracking-widest uppercase">{t("kds.kicker")}</p>
           </div>
         </div>
         <div className="text-base sm:text-xl font-display font-bold px-4 sm:px-6 py-2 bg-secondary rounded-xl border border-white/5">
@@ -72,7 +74,7 @@ export default function KDS() {
               <div className="p-4 border-b border-current/20 flex justify-between items-start bg-black/20">
                 <div>
                   <h3 className="font-bold text-xl">#{order.orderNumber.slice(-4)}</h3>
-                  <Badge variant="outline" className="mt-1 border-current text-current">{order.type === 'dine_in' ? `طاولة ${order.tableId}` : order.type === 'takeaway' ? 'سفري' : 'توصيل'}</Badge>
+                  <Badge variant="outline" className="mt-1 border-current text-current">{order.type === "dine_in" ? t("tables.tableN", { n: order.tableId ?? "" }) : order.type === "takeaway" ? t("order.takeaway") : t("order.delivery")}</Badge>
                 </div>
                 <div className="flex items-center gap-1 text-sm font-bold opacity-80 font-display">
                   <Clock className="w-4 h-4" />
@@ -85,8 +87,8 @@ export default function KDS() {
                   <div key={idx} className="flex justify-between items-start border-b border-border/50 pb-2 last:border-0 text-foreground">
                     <span className="font-bold text-lg">{item.quantity}x</span>
                     <div className="flex-1 ms-3">
-                      <p className="font-semibold text-base">{item.menuItem?.nameAr || 'عنصر'}</p>
-                      {item.notes && <p className="text-xs text-amber-500 mt-1 bg-amber-500/10 p-1 rounded">ملاحظة: {item.notes}</p>}
+                      <p className="font-semibold text-base">{item.menuItem?.nameAr || t("kds.item")}</p>
+                      {item.notes && <p className="text-xs text-amber-500 mt-1 bg-amber-500/10 p-1 rounded">{t("common.note", { text: item.notes })}</p>}
                     </div>
                   </div>
                 ))}
@@ -96,7 +98,7 @@ export default function KDS() {
                 onClick={() => handleNextStatus(order.id, order.status)}
                 className="p-4 font-bold text-base sm:text-lg flex items-center justify-center gap-2 hover:brightness-125 transition-all bg-black/20 touch-target min-h-14"
               >
-                {order.status === 'pending' ? 'بدء التحضير' : order.status === 'preparing' ? 'جاهز للتقديم' : 'تم التقديم'}
+                {order.status === "pending" ? t("kds.start") : order.status === "preparing" ? t("kds.ready") : t("kds.served")}
                 <CheckCircle2 className="w-6 h-6" />
               </button>
             </motion.div>
@@ -105,8 +107,8 @@ export default function KDS() {
         {activeOrders.length === 0 && (
           <div className="col-span-full h-96 flex flex-col items-center justify-center text-muted-foreground opacity-50">
             <ChefHat className="w-24 h-24 mb-4" />
-            <h2 className="text-2xl font-bold">لا توجد طلبات نشطة</h2>
-            <p>المطبخ خالي حالياً</p>
+            <h2 className="text-2xl font-bold">{t("kds.none")}</h2>
+            <p>{t("kds.empty")}</p>
           </div>
         )}
       </div>

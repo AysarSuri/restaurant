@@ -804,14 +804,13 @@ export default function Tables() {
                 ? (["available", "occupied"] as const)
                 : (["available", "occupied", "reserved", "cleaning"] as const)
               ).map((s) => {
-                const m =
-                  (selectedTable.type ?? "table") === "person"
-                    ? PERSON_STATUS_META[s]
-                    : STATUS_META[s];
-                const active =
-                  (selectedTable.type ?? "table") === "person"
-                    ? personPresence(status) === s
-                    : status === s;
+                const isPerson = (selectedTable.type ?? "table") === "person";
+                const m = isPerson
+                  ? PERSON_STATUS_META[s as "available" | "occupied"]
+                  : STATUS_META[s];
+                const active = isPerson
+                  ? personPresence(status) === s
+                  : status === s;
                 return (
                   <button
                     key={s}

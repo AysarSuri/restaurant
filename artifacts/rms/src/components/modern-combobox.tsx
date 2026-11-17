@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Check, ChevronDown, Search, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,25 +40,31 @@ export function ModernCombobox({
   value,
   onChange,
   options,
-  placeholder = "اختر...",
+  placeholder,
   label,
   hint,
   icon: TriggerIcon,
   searchable = true,
-  searchPlaceholder = "بحث...",
+  searchPlaceholder,
   allowCustom = false,
-  customPlaceholder = "أو اكتب قيمة مخصصة",
-  emptyText = "لا توجد نتائج",
+  customPlaceholder,
+  emptyText,
   disabled = false,
   className,
-  dir = "rtl",
+  dir: dirProp,
 }: ModernComboboxProps) {
+  const { t, dir: localeDir } = useI18n();
+  const dir = dirProp ?? localeDir;
+  const resolvedPlaceholder = placeholder ?? t("common.choose");
+  const resolvedSearch = searchPlaceholder ?? t("common.search");
+  const resolvedCustom = customPlaceholder ?? t("settings.customValue");
+  const resolvedEmpty = emptyText ?? t("common.noResults");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [customDraft, setCustomDraft] = useState("");
 
   const selected = options.find((o) => o.value === value);
-  const displayLabel = selected?.label || (value ? value : placeholder);
+  const displayLabel = selected?.label || (value ? value : resolvedPlaceholder);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -155,7 +162,7 @@ export function ModernCombobox({
         >
           <div className="border-b border-border/60 bg-gradient-to-l from-primary/10 via-transparent to-transparent px-3.5 py-3">
             <DropdownMenuLabel className="p-0 text-sm font-extrabold text-foreground">
-              {label || "اختر خياراً"}
+              {label || t("common.chooseOption")}
             </DropdownMenuLabel>
             {hint ? <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p> : null}
           </div>
@@ -167,7 +174,7 @@ export function ModernCombobox({
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={searchPlaceholder}
+                  placeholder={resolvedSearch}
                   className="h-10 w-full rounded-xl border border-border/70 bg-background/70 pe-9 ps-3 text-sm outline-none focus:border-primary/50"
                   onKeyDown={(e) => e.stopPropagation()}
                 />
@@ -177,7 +184,7 @@ export function ModernCombobox({
 
           <div className="max-h-[min(16rem,45vh)] space-y-1 overflow-y-auto p-2">
             {filtered.length === 0 ? (
-              <p className="px-2 py-6 text-center text-xs text-muted-foreground">{emptyText}</p>
+              <p className="px-2 py-6 text-center text-xs text-muted-foreground">{resolvedEmpty}</p>
             ) : (
               filtered.map((option) => {
                 const active = value === option.value;
@@ -233,12 +240,12 @@ export function ModernCombobox({
             <>
               <DropdownMenuSeparator className="my-0 bg-border/70" />
               <div className="space-y-2 p-2">
-                <p className="px-1 text-[11px] font-semibold text-muted-foreground">{customPlaceholder}</p>
+                <p className="px-1 text-[11px] font-semibold text-muted-foreground">{resolvedCustom}</p>
                 <div className="flex gap-2">
                   <input
                     value={customDraft}
                     onChange={(e) => setCustomDraft(e.target.value)}
-                    placeholder="اكتب هنا..."
+                    placeholder={t("keyboard.typeHere")}
                     dir="ltr"
                     className="h-10 flex-1 rounded-xl border border-border/70 bg-background/70 px-3 text-sm outline-none focus:border-primary/50"
                     onKeyDown={(e) => {
@@ -254,7 +261,7 @@ export function ModernCombobox({
                     onClick={commitCustom}
                     className="h-10 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:brightness-110"
                   >
-                    اعتماد
+                    {t("common.apply")}
                   </button>
                 </div>
               </div>

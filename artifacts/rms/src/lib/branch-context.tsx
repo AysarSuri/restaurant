@@ -9,6 +9,7 @@ import React, {
 import { useQueryClient } from "@tanstack/react-query";
 import { setBranchIdGetter, useGetBranches } from "@workspace/api-client-react";
 import { useAuth, type AuthUser } from "@/App";
+import { useI18n } from "@/i18n";
 
 export type BranchSelection = number | "all";
 
@@ -26,7 +27,7 @@ const BranchContext = createContext<BranchContextType>({
   setSelectedBranchId: () => {},
   canViewAllBranches: false,
   canSwitchBranch: false,
-  branchLabel: "كل الفروع",
+  branchLabel: "",
   allowedBranchIds: "all",
 });
 
@@ -38,13 +39,14 @@ function persistUserBranch(user: AuthUser, selectedBranchId: BranchSelection, br
   const next: AuthUser = {
     ...user,
     selectedBranchId,
-    branchName: selectedBranchId === "all" ? "كل الفروع" : branchName ?? user.branchName,
+    branchName: branchName ?? user.branchName,
   };
   localStorage.setItem("rms-user", JSON.stringify(next));
   return next;
 }
 
 export function BranchProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const { user, login } = useAuth();
   const queryClient = useQueryClient();
   const { data: branches } = useGetBranches({
@@ -98,12 +100,12 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
       setSelectedState(id);
       const name =
         id === "all"
-          ? "كل الفروع"
+          ? t("auth.allBranches")
           : branches?.find((b) => b.id === id)?.name;
       login(persistUserBranch(user, id, name));
       queryClient.invalidateQueries();
     },
-    [user, allowedBranchIds, canViewAllBranches, branches, login, queryClient]
+    [user, allowedBranchIds, canViewAllBranches, branches, login, queryClient, t]
   );
 
   const canSwitchBranch =
@@ -112,9 +114,13 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
       (Array.isArray(allowedBranchIds) && allowedBranchIds.length > 1));
 
   const branchLabel = useMemo(() => {
-    if (selectedBranchId === "all") return "كل الفروع";
-    return branches?.find((b) => b.id === selectedBranchId)?.name ?? user?.branchName ?? `فرع #${selectedBranchId}`;
-  }, [selectedBranchId, branches, user?.branchName]);
+    if (selectedBranchId === "all") return t("auth.allBranches");
+    return (
+      branches?.find((b) => b.id === selectedBranchId)?.name ??
+      user?.branchName ??
+      t("branch.fallback", { n: selectedBranchId })
+    );
+  }, [selectedBranchId, branches, user?.branchName, t]);
 
   const value = useMemo(
     () => ({

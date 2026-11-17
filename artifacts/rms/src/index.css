@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme inline {
-  /* Vazirmatn supports Kurdish Sorani joining; Noto as fallback */
-  --font-sans: 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
-  --font-display: 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
+  /* Vazirmatn/Noto Arabic for RTL; Noto Sans for Badini Latin + English */
+  --font-sans: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
+  --font-display: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -144,7 +144,7 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary;
     direction: rtl;
-    font-family: 'Vazirmatn', 'Noto Sans Arabic', sans-serif;
+    font-family: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
     font-weight: 700;
     text-rendering: optimizeLegibility;
     font-feature-settings: "liga" 1, "calt" 1, "kern" 1;
@@ -251,6 +251,8 @@
 
 .pos-compact .pos-cart-fab {
   display: flex !important;
+  /* Sit above the POS menu footer action bar */
+  bottom: 5.75rem !important;
 }
 
 .pos-expansive {

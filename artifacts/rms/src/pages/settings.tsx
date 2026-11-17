@@ -10,6 +10,7 @@ import {
   useGetBranches,
   getGetSettingsQueryKey,
   getGetDevicePrintersQueryKey,
+  type AppSettings,
   type DevicePrinter,
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
@@ -54,15 +55,16 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 import type { PosSaveTarget } from "@workspace/api-client-react";
+import { useI18n } from "@/i18n";
 
 type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
 
-const TABS: { id: TabId; label: string; icon: typeof Store; hint: string }[] = [
-  { id: "restaurant", label: "اسم المطعم", icon: Store, hint: "الهوية الأساسية" },
-  { id: "sales", label: "البيع", icon: ShoppingBag, hint: "مسار الطلبات" },
-  { id: "printers", label: "الطابعات", icon: Printer, hint: "80×80 لكل جهاز" },
-  { id: "currency", label: "العملة", icon: Coins, hint: "د.ع / $ / €" },
-  { id: "themes", label: "الثيمات", icon: Palette, hint: "لون المشروع" },
+const TABS: { id: TabId; labelKey: string; icon: typeof Store; hintKey: string }[] = [
+  { id: "restaurant", labelKey: "settings.restaurantName", icon: Store, hintKey: "cards.identity" },
+  { id: "sales", labelKey: "settings.sales", icon: ShoppingBag, hintKey: "settings.orderPath" },
+  { id: "printers", labelKey: "settings.printers", icon: Printer, hintKey: "settings.printer80" },
+  { id: "currency", labelKey: "settings.currency", icon: Coins, hintKey: "settings.currencyHint" },
+  { id: "themes", labelKey: "settings.themes", icon: Palette, hintKey: "settings.themeHint" },
 ];
 
 const DECIMAL_OPTIONS = [0, 1, 2, 3, 4];
@@ -78,6 +80,7 @@ const PRINTER_PRESETS = [
 ];
 
 export default function SettingsPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
   const { data: settings } = useGetSettings();
@@ -114,7 +117,7 @@ export default function SettingsPage() {
     setSaveErr("");
     setSaveMsg(message);
     toast({
-      title: "تم الحفظ",
+      title: t("common.saved"),
       description: message,
     });
     window.requestAnimationFrame(() => {
@@ -132,7 +135,7 @@ export default function SettingsPage() {
     setSaveErr(message);
     toast({
       variant: "destructive",
-      title: "تعذر الحفظ",
+      title: t("common.saveFailed"),
       description: message,
     });
     window.requestAnimationFrame(() => {
@@ -191,8 +194,8 @@ export default function SettingsPage() {
     const opts: ComboboxOption[] = [
       {
         value: "",
-        label: "بدون فرع محدد",
-        subtitle: "الجهاز غير مرتبط بفرع",
+        label: t("branch.noneSpecified"),
+        subtitle: t("branch.deviceNotLinked"),
         icon: Monitor,
       },
     ];
@@ -200,12 +203,12 @@ export default function SettingsPage() {
       opts.push({
         value: String(b.id),
         label: b.name,
-        subtitle: b.address?.trim() || "فرع نشط",
+        subtitle: b.address?.trim() || t("settings.branchActive"),
         icon: Building2,
       });
     }
     return opts;
-  }, [activeBranches]);
+  }, [activeBranches, t]);
 
   const printerOptions = useMemo<ComboboxOption[]>(() => {
     const seen = new Set<string>();
@@ -215,7 +218,7 @@ export default function SettingsPage() {
       opts.push({
         value: name,
         label: name,
-        subtitle: "طابعة حرارية 80×80",
+        subtitle: t("settings.thermal80"),
         icon: Printer,
       });
     }
@@ -227,7 +230,7 @@ export default function SettingsPage() {
         opts.push({
           value: n,
           label: n,
-          subtitle: "طابعة محفوظة مسبقاً",
+          subtitle: t("settings.savedPrinterName"),
           icon: Printer,
         });
       }
@@ -236,14 +239,14 @@ export default function SettingsPage() {
       opts.unshift({
         value: printerName.trim(),
         label: printerName.trim(),
-        subtitle: "القيمة الحالية",
+        subtitle: t("settings.currentValue"),
         icon: Printer,
       });
     }
     return opts;
-  }, [printers, printerName]);
+  }, [printers, printerName, t]);
 
-  const syncSettings = (next: Record<string, unknown>) => {
+  const syncSettings = (next: AppSettings) => {
     queryClient.setQueryData(getGetSettingsQueryKey(), (prev: any) => ({
       ...(prev ?? {}),
       ...next,
@@ -254,7 +257,7 @@ export default function SettingsPage() {
     const preset = CURRENCY_PRESETS.find((p) => p.code === code);
     if (!preset) return;
     setCurrencyCode(code);
-    setCurrencyName(preset.name);
+    setCurrencyName(t(code === "usd" ? "currency.usd" : code === "eur" ? "currency.eur" : "currency.iqd"));
     setCurrencySymbol(preset.symbol);
     setDecimalPlaces(preset.decimalPlaces);
   };
@@ -266,11 +269,11 @@ export default function SettingsPage() {
     const name = currencyName.trim();
     const symbol = currencySymbol.trim();
     if (!name) {
-      notifySaveErr("اسم العملة مطلوب");
+      notifySaveErr(t("settings.currencyNameRequired"));
       return;
     }
     if (!symbol) {
-      notifySaveErr("رمز العملة مطلوب");
+      notifySaveErr(t("settings.symbolRequired"));
       return;
     }
     const decimals = clampDecimalPlaces(decimalPlaces);
@@ -290,10 +293,10 @@ export default function SettingsPage() {
           setCurrencyName(res.currencyName);
           setCurrencySymbol(res.currencySymbol);
           setDecimalPlaces(clampDecimalPlaces(res.decimalPlaces));
-          notifySaveOk("تم حفظ إعدادات العملة");
+          notifySaveOk(t("settings.savedCurrency"));
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ العملة"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.saveCurrencyFailed")),
       }
     );
   };
@@ -310,7 +313,7 @@ export default function SettingsPage() {
     setSaveErr("");
     const name = restaurantName.trim();
     if (!name) {
-      notifySaveErr("اسم المطعم مطلوب");
+      notifySaveErr(t("settings.restaurantNameRequired"));
       return;
     }
     saveSettings(
@@ -318,10 +321,10 @@ export default function SettingsPage() {
       {
         onSuccess: (res) => {
           syncSettings(res);
-          notifySaveOk("تم حفظ اسم المطعم");
+          notifySaveOk(t("settings.savedRestaurantName"));
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ اسم المطعم"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.saveRestaurantFailed")),
       }
     );
   };
@@ -346,10 +349,10 @@ export default function SettingsPage() {
               : "cashier"
           );
           setCashierSendToKitchen(res.cashierSendToKitchen !== false);
-          notifySaveOk("تم حفظ إعدادات البيع");
+          notifySaveOk(t("settings.savedSales"));
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ إعدادات البيع"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.saveSalesFailed")),
       }
     );
   };
@@ -365,10 +368,10 @@ export default function SettingsPage() {
       {
         onSuccess: (res) => {
           syncSettings(res);
-          notifySaveOk("تم حفظ لون الثيم");
+          notifySaveOk(t("settings.savedTheme"));
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ الثيم"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.saveThemeFailed")),
       }
     );
   };
@@ -379,11 +382,11 @@ export default function SettingsPage() {
     setSaveErr("");
     const name = deviceName.trim();
     if (!name) {
-      notifySaveErr("أدخل اسم الجهاز");
+      notifySaveErr(t("settings.enterDeviceName"));
       return;
     }
     if (!printerName.trim()) {
-      notifySaveErr("اختر أو اكتب اسم الطابعة");
+      notifySaveErr(t("settings.typeOrPickPrinter"));
       return;
     }
     setStoredDeviceName(name);
@@ -404,12 +407,12 @@ export default function SettingsPage() {
           });
           notifySaveOk(
             myDevicePrinter
-              ? "تم تحديث طابعة هذا الجهاز (طابعة واحدة فقط لكل جهاز)"
-              : "تم حفظ طابعة هذا الجهاز (80×80)"
+              ? t("settings.printerUpdatedOne")
+              : t("settings.printerSaved80")
           );
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر حفظ الطابعة"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.savePrinterFailed")),
       }
     );
   };
@@ -428,10 +431,10 @@ export default function SettingsPage() {
       {
         onSuccess: (updated) => {
           syncPrinters((list) => list.map((p) => (p.id === updated.id ? updated : p)));
-          notifySaveOk("تم تحديث إعدادات الطابعة");
+          notifySaveOk(t("settings.savedPrinter"));
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر تحديث الطابعة"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.updatePrinterFailed")),
       }
     );
   };
@@ -444,10 +447,10 @@ export default function SettingsPage() {
         onSuccess: () => {
           syncPrinters((list) => list.filter((p) => p.id !== deleteTarget.id));
           setDeleteTarget(null);
-          notifySaveOk("تم حذف الجهاز بنجاح");
+          notifySaveOk(t("settings.deviceDeleted"));
         },
         onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || "تعذر حذف الجهاز"),
+          notifySaveErr(err?.data?.message || err?.message || t("settings.deleteDeviceFailed")),
       }
     );
   };
@@ -460,25 +463,25 @@ export default function SettingsPage() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-bold text-primary mb-2">
             <SettingsIcon className="w-3.5 h-3.5" />
-            System Settings
+            {t("settings.kicker")}
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">الإعدادات</h2>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t("settings.title")}</h2>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            اسم المطعم، مسار البيع، طابعات 80×80 لكل جهاز، العملة، وثيم المشروع.
+            {t("settings.subtitle")}
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3">
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          const Icon = t.icon;
+        {TABS.map((tabItem) => {
+          const active = tab === tabItem.id;
+          const Icon = tabItem.icon;
           return (
             <button
-              key={t.id}
+              key={tabItem.id}
               type="button"
               onClick={() => {
-                setTab(t.id);
+                setTab(tabItem.id);
                 clearSaveFlash();
                 setSaveMsg("");
                 setSaveErr("");
@@ -498,8 +501,8 @@ export default function SettingsPage() {
                   <Icon className="w-5 h-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-extrabold text-sm sm:text-base truncate">{t.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{t.hint}</p>
+                  <p className="font-extrabold text-sm sm:text-base truncate">{t(tabItem.labelKey)}</p>
+                  <p className="text-[11px] text-muted-foreground">{t(tabItem.hintKey)}</p>
                 </div>
                 {active && <Check className="w-4 h-4 text-primary ms-auto flex-shrink-0" />}
               </div>
@@ -536,9 +539,9 @@ export default function SettingsPage() {
                 <ShoppingBag className="w-5 h-5" />
               </span>
               <div>
-                <h3 className="font-extrabold text-lg">عند الحفظ من نقطة البيع</h3>
+                <h3 className="font-extrabold text-lg">{t("settings.onSaveFromPos")}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  اختر أين يذهب الطلب مباشرة بعد الضغط على الحفظ في شاشة البيع أو طلب الطاولة.
+                  {t("settings.posSaveHint")}
                 </p>
               </div>
             </div>
@@ -564,15 +567,15 @@ export default function SettingsPage() {
                     <Wallet className="w-5 h-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-extrabold">إلى شاشة الكاشير</p>
-                    <p className="text-[11px] text-muted-foreground">الحالة: بانتظار الدفع</p>
+                    <p className="font-extrabold">{t("settings.toCashier")}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("settings.statusAwaitingPay")}</p>
                   </div>
                   {posSaveTarget === "cashier" && (
                     <Check className="w-4 h-4 text-amber-500 flex-shrink-0" />
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  يظهر الطلب في شاشة الكاشير أولاً لاستلام الدفع، ثم يمكن إرساله للمطبخ حسب الخيار أدناه.
+                  {t("settings.toCashierBody")}
                 </p>
               </button>
 
@@ -596,15 +599,15 @@ export default function SettingsPage() {
                     <ChefHat className="w-5 h-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-extrabold">إلى شاشة المطبخ</p>
-                    <p className="text-[11px] text-muted-foreground">الحالة: قيد التحضير</p>
+                    <p className="font-extrabold">{t("settings.toKitchen")}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("settings.statusPreparing")}</p>
                   </div>
                   {posSaveTarget === "kitchen" && (
                     <Check className="w-4 h-4 text-orange-500 flex-shrink-0" />
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  يتخطى الطلب شاشة الكاشير ويظهر مباشرة في شاشة المطبخ للتحضير فوراً.
+                  {t("settings.toKitchenBody")}
                 </p>
               </button>
 
@@ -628,15 +631,15 @@ export default function SettingsPage() {
                     <Save className="w-5 h-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-extrabold">حفظ تلقائي فقط</p>
-                    <p className="text-[11px] text-muted-foreground">الحالة: مدفوع / محفوظ</p>
+                    <p className="font-extrabold">{t("settings.saveOnly")}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("settings.statusPaid")}</p>
                   </div>
                   {posSaveTarget === "none" && (
                     <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  يُحفظ الطلب مباشرة من نقطة البيع دون إرساله إلى شاشة الكاشير أو شاشة المطبخ.
+                  {t("settings.saveOnlyBody")}
                 </p>
               </button>
             </div>
@@ -648,9 +651,9 @@ export default function SettingsPage() {
                 <Wallet className="w-5 h-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <h3 className="font-extrabold text-lg">عند الحفظ من شاشة الكاشير</h3>
+                <h3 className="font-extrabold text-lg">{t("settings.onCashierSave")}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  بعد تأكيد الدفع في الكاشير: هل يُرسل الطلب إلى شاشة المطبخ؟
+                  {t("settings.cashierKitchenQuestion")}
                 </p>
               </div>
             </div>
@@ -675,11 +678,11 @@ export default function SettingsPage() {
                   <ChefHat className="w-5 h-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-extrabold">إرسال للمطبخ عند حفظ الكاشير</p>
+                  <p className="font-extrabold">{t("settings.sendKitchenOnCashier")}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {cashierSendToKitchen
-                      ? "مفعّل — الطلب ينتقل للمطبخ بعد الدفع"
-                      : "معطّل — الطلب يُحفظ كمدفوع دون المطبخ"}
+                      ? t("settings.kitchenOn")
+                      : t("settings.kitchenOff")}
                   </p>
                 </div>
                 <span
@@ -701,26 +704,26 @@ export default function SettingsPage() {
           <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
             <div className="flex items-center gap-2">
               <ArrowLeftRight className="w-4 h-4 text-primary" />
-              <h3 className="font-extrabold">معاينة المسار الحالي</h3>
+              <h3 className="font-extrabold">{t("settings.pathPreview")}</h3>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="inline-flex items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/40 px-3 py-1.5 font-bold">
                 <ShoppingBag className="w-3.5 h-3.5" />
-                نقطة البيع
+                {t("pos.title")}
               </span>
               <span className="text-muted-foreground">←</span>
               {posSaveTarget === "cashier" ? (
                 <>
                   <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-bold text-amber-600 dark:text-amber-400">
                     <Wallet className="w-3.5 h-3.5" />
-                    الكاشير
+                    {t("settings.cashierShort")}
                   </span>
                   {cashierSendToKitchen && (
                     <>
                       <span className="text-muted-foreground">←</span>
                       <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
                         <ChefHat className="w-3.5 h-3.5" />
-                        المطبخ
+                        {t("settings.kitchenShort")}
                       </span>
                     </>
                   )}
@@ -728,23 +731,23 @@ export default function SettingsPage() {
               ) : posSaveTarget === "kitchen" ? (
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
                   <ChefHat className="w-3.5 h-3.5" />
-                  المطبخ
+                  {t("settings.kitchenShort")}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-bold text-emerald-600 dark:text-emerald-400">
                   <Save className="w-3.5 h-3.5" />
-                  حفظ فقط
+                  {t("settings.saveOnlyShort")}
                 </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               {posSaveTarget === "kitchen"
-                ? "الطلبات من نقطة البيع تذهب مباشرة لشاشة المطبخ."
+                ? t("settings.directKitchenHint")
                 : posSaveTarget === "none"
-                  ? "الطلبات تُحفظ مباشرة من نقطة البيع دون الظهور في الكاشير أو المطبخ."
+                  ? t("settings.directSaveHint")
                   : cashierSendToKitchen
-                    ? "الطلبات تمر بالكاشير أولاً، ثم تُرسل للمطبخ بعد تأكيد الدفع."
-                    : "الطلبات تظهر في الكاشير فقط، ولن تُرسل للمطبخ عند الحفظ."}
+                    ? t("settings.cashierThenKitchenHint")
+                    : t("settings.cashierOnlyHint")}
             </p>
           </Card>
 
@@ -755,7 +758,7 @@ export default function SettingsPage() {
               onClick={handleSaveSales}
             >
               <Save className="w-4 h-4" />
-              حفظ إعدادات البيع
+              {t("settings.saveSales")}
             </Button>
           </div>
         </div>
@@ -764,25 +767,25 @@ export default function SettingsPage() {
       {tab === "restaurant" && (
         <Card className="p-5 sm:p-6 border border-border/60 space-y-5 max-w-2xl">
           <div>
-            <h3 className="font-extrabold text-lg">اسم المطعم</h3>
+            <h3 className="font-extrabold text-lg">{t("settings.restaurantName")}</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              يظهر في الواجهة والهوية العامة للنظام.
+              {t("settings.nameAppears")}
             </p>
           </div>
           <div>
-            <label className="block text-sm font-semibold mb-1.5">الاسم *</label>
+            <label className="block text-sm font-semibold mb-1.5">{t("settings.nameStar")}</label>
             <Input
               value={restaurantName}
               onChange={(e) => setRestaurantName(e.target.value)}
-              placeholder="مثال: مطعم الذواقة"
+              placeholder={t("settings.nameExample")}
             />
           </div>
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-transparent to-transparent p-4">
-            <p className="text-[11px] text-muted-foreground mb-1">معاينة</p>
+            <p className="text-[11px] text-muted-foreground mb-1">{t("common.preview")}</p>
             <p className="text-xl font-extrabold">{restaurantName.trim() || "—"}</p>
           </div>
           <Button className="gap-2" isLoading={savingSettings} onClick={handleSaveRestaurant}>
-            <Save className="w-4 h-4" /> حفظ الاسم
+            <Save className="w-4 h-4" /> {t("settings.saveName")}
           </Button>
         </Card>
       )}
@@ -793,11 +796,11 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-extrabold text-lg">هذا الجهاز</h3>
-                  <Badge variant="default">طابعة 80×80</Badge>
+                  <h3 className="font-extrabold text-lg">{t("settings.thisDevice")}</h3>
+                  <Badge variant="default">{t("settings.printer80Badge")}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  طابعة واحدة فقط لكل جهاز (80×80). الحفظ يحدّث طابعة هذا الجهاز ولا يضيف ثانية.
+                  {t("settings.onePrinterBody")}
                 </p>
               </div>
               <Monitor className="w-8 h-8 text-primary opacity-80" />
@@ -805,41 +808,41 @@ export default function SettingsPage() {
 
             {myDevicePrinter && (
               <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3.5 py-2.5 text-sm font-bold text-amber-700 dark:text-amber-300">
-                هذا الجهاز لديه طابعة مسجّلة مسبقاً — لن يُسمح بطابعة ثانية، سيتم التحديث فقط.
+                {t("settings.alreadyRegistered")}
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-1.5">اسم الجهاز *</label>
+                <label className="block text-sm font-semibold mb-1.5">{t("settings.deviceNameStar")}</label>
                 <Input
                   value={deviceName}
                   onChange={(e) => setDeviceName(e.target.value)}
-                  placeholder="مثال: كاشير الفرع 1 - جهاز 2"
+                  placeholder={t("settings.deviceNameExample")}
                 />
               </div>
               <ModernCombobox
-                label="الفرع"
-                hint="ربط الجهاز بفرع"
+                label={t("common.branch")}
+                hint={t("settings.linkBranch")}
                 icon={Building2}
                 value={deviceBranchId === "" ? "" : String(deviceBranchId)}
                 onChange={(v) => setDeviceBranchId(v ? Number(v) : "")}
                 options={branchOptions}
-                placeholder="اختر الفرع"
-                searchPlaceholder="ابحث عن فرع..."
+                placeholder={t("auth.selectBranch")}
+                searchPlaceholder={t("branch.search")}
               />
               <div className="md:col-span-2">
                 <ModernCombobox
-                  label="اسم الطابعة"
-                  hint="80×80 · واحدة لكل جهاز"
+                  label={t("settings.printerName")}
+                  hint={t("settings.printerPerDevice")}
                   icon={Printer}
                   value={printerName}
                   onChange={setPrinterName}
                   options={printerOptions}
-                  placeholder="اختر اسم الطابعة"
-                  searchPlaceholder="ابحث عن طابعة..."
+                  placeholder={t("settings.pickPrinterName")}
+                  searchPlaceholder={t("settings.searchPrinter")}
                   allowCustom
-                  customPlaceholder="أو اكتب اسم الطابعة كما في ويندوز"
+                  customPlaceholder={t("settings.customPrinterHint")}
                   dir="ltr"
                 />
               </div>
@@ -848,11 +851,11 @@ export default function SettingsPage() {
             <Button className="gap-2" isLoading={upserting} onClick={handleRegisterDevice}>
               {myDevicePrinter ? (
                 <>
-                  <Save className="w-4 h-4" /> تحديث طابعة هذا الجهاز
+                  <Save className="w-4 h-4" /> {t("settings.updateDevicePrinter")}
                 </>
               ) : (
                 <>
-                  <Plus className="w-4 h-4" /> حفظ طابعة هذا الجهاز
+                  <Plus className="w-4 h-4" /> {t("settings.saveDevicePrinter")}
                 </>
               )}
             </Button>
@@ -860,24 +863,24 @@ export default function SettingsPage() {
 
           <div>
             <div className="flex items-center justify-between gap-3 mb-3">
-              <h3 className="font-extrabold text-lg">الأجهزة المسجّلة</h3>
+              <h3 className="font-extrabold text-lg">{t("settings.registeredDevices")}</h3>
               <button
                 type="button"
                 className="text-xs font-bold text-primary inline-flex items-center gap-1"
                 onClick={() => queryClient.invalidateQueries({ queryKey: getGetDevicePrintersQueryKey() })}
               >
-                <RefreshCw className="w-3.5 h-3.5" /> تحديث
+                <RefreshCw className="w-3.5 h-3.5" /> {t("common.update")}
               </button>
             </div>
 
             {printersLoading && !printers ? (
-              <p className="text-muted-foreground text-sm py-8 text-center">جاري التحميل...</p>
+              <p className="text-muted-foreground text-sm py-8 text-center">{t("common.loading")}</p>
             ) : (printers ?? []).length === 0 ? (
               <Card className="p-8 text-center border border-dashed border-border/70">
                 <Printer className="w-10 h-10 mx-auto text-primary mb-3 opacity-80" />
-                <p className="font-bold">لا توجد أجهزة بعد</p>
+                <p className="font-bold">{t("settings.noDevices")}</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  سجّل هذا الجهاز من النموذج أعلاه.
+                  {t("settings.registerAbove")}
                 </p>
               </Card>
             ) : (
@@ -895,19 +898,19 @@ export default function SettingsPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-extrabold truncate">{row.deviceName}</p>
-                            {isMine && <Badge variant="default">هذا الجهاز</Badge>}
+                            {isMine && <Badge variant="default">{t("settings.thisDevice")}</Badge>}
                             <Badge variant="outline">80×80</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                             <Building2 className="w-3.5 h-3.5" />
-                            {row.branchName || "بدون فرع"}
+                            {row.branchName || t("branch.none")}
                           </p>
                         </div>
                         <button
                           type="button"
                           className="w-9 h-9 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 flex items-center justify-center"
                           onClick={() => setDeleteTarget(row)}
-                          title="حذف"
+                          title={t("common.delete")}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -915,7 +918,7 @@ export default function SettingsPage() {
 
                       <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          اسم الجهاز
+                          {t("settings.deviceName")}
                         </label>
                         <Input
                           value={row.deviceName}
@@ -929,12 +932,12 @@ export default function SettingsPage() {
                           onBlur={(e) =>
                             handleUpdateRow(row, { deviceName: e.target.value.trim() || row.deviceName })
                           }
-                          placeholder="اسم الجهاز"
+                          placeholder={t("settings.deviceName")}
                         />
                       </div>
                       <ModernCombobox
-                        label="اسم الطابعة"
-                        hint="80×80"
+                        label={t("settings.printerName")}
+                        hint={t("settings.hint80")}
                         icon={Printer}
                         value={row.printerName || ""}
                         onChange={(v) => {
@@ -950,22 +953,22 @@ export default function SettingsPage() {
                                 {
                                   value: row.printerName,
                                   label: row.printerName,
-                                  subtitle: "القيمة الحالية",
+                                  subtitle: t("settings.currentValue"),
                                   icon: Printer,
                                 },
                                 ...printerOptions,
                               ]
                             : printerOptions
                         }
-                        placeholder="اختر الطابعة"
-                        searchPlaceholder="ابحث عن طابعة..."
+                        placeholder={t("settings.pickPrinter")}
+                        searchPlaceholder={t("settings.searchPrinter")}
                         allowCustom
-                        customPlaceholder="أو اكتب اسم طابعة مخصص"
+                        customPlaceholder={t("settings.customPrinterName")}
                         disabled={updatingPrinter}
                         dir="ltr"
                       />
                       <ModernCombobox
-                        label="الفرع"
+                        label={t("common.branch")}
                         icon={Building2}
                         value={row.branchId ? String(row.branchId) : ""}
                         onChange={(v) =>
@@ -974,8 +977,8 @@ export default function SettingsPage() {
                           })
                         }
                         options={branchOptions}
-                        placeholder="اختر الفرع"
-                        searchPlaceholder="ابحث عن فرع..."
+                        placeholder={t("auth.selectBranch")}
+                        searchPlaceholder={t("branch.search")}
                         disabled={updatingPrinter}
                       />
                     </Card>
@@ -991,9 +994,9 @@ export default function SettingsPage() {
         <div className="space-y-5 max-w-3xl">
           <Card className="p-5 sm:p-6 border border-border/60 space-y-5">
             <div>
-              <h3 className="font-extrabold text-lg">عملة المشروع</h3>
+              <h3 className="font-extrabold text-lg">{t("settings.projectCurrency")}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                اختر دينار عراقي أو دولار أو يورو، أو عرّف عملة مخصصة مع عدد الخانات العشرية.
+                {t("settings.currencyIntro")}
               </p>
             </div>
 
@@ -1016,9 +1019,9 @@ export default function SettingsPage() {
                         {preset.symbol}
                       </span>
                       <div className="min-w-0">
-                        <p className="font-extrabold">{preset.name}</p>
+                        <p className="font-extrabold">{t(preset.code === "usd" ? "currency.usd" : preset.code === "eur" ? "currency.eur" : "currency.iqd")}</p>
                         <p className="text-[11px] text-muted-foreground">
-                          {preset.hint} · {preset.decimalPlaces} خانات عشرية
+                          {preset.hint} · {t("settings.decimalCount", { n: preset.decimalPlaces })}
                         </p>
                       </div>
                       {active && <Check className="w-4 h-4 text-primary ms-auto" />}
@@ -1040,8 +1043,8 @@ export default function SettingsPage() {
                     <Coins className="w-5 h-5" />
                   </span>
                   <div>
-                    <p className="font-extrabold">عملة مخصصة</p>
-                    <p className="text-[11px] text-muted-foreground">اسم ورمز و Decimal Places حسب اختيارك</p>
+                    <p className="font-extrabold">{t("settings.customCurrency")}</p>
+                    <p className="text-[11px] text-muted-foreground">{t("settings.customCurrencyHint")}</p>
                   </div>
                   {currencyCode === "custom" && <Check className="w-4 h-4 text-primary ms-auto" />}
                 </div>
@@ -1050,25 +1053,25 @@ export default function SettingsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-1.5">اسم العملة *</label>
+                <label className="block text-sm font-semibold mb-1.5">{t("settings.currencyNameStar")}</label>
                 <Input
                   value={currencyName}
                   onChange={(e) => {
                     setCurrencyName(e.target.value);
                     if (currencyCode !== "custom") setCurrencyCode("custom");
                   }}
-                  placeholder="مثال: دينار عراقي"
+                  placeholder={t("settings.currencyNameExample")}
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1.5">رمز العملة *</label>
+                <label className="block text-sm font-semibold mb-1.5">{t("settings.symbolStar")}</label>
                 <Input
                   value={currencySymbol}
                   onChange={(e) => {
                     setCurrencySymbol(e.target.value);
                     if (currencyCode !== "custom") setCurrencyCode("custom");
                   }}
-                  placeholder="د.ع / $ / €"
+                  placeholder={t("settings.currencyHint")}
                   dir="ltr"
                 />
               </div>
@@ -1096,12 +1099,12 @@ export default function SettingsPage() {
                 })}
               </div>
               <p className="text-[11px] text-muted-foreground mt-2">
-                0 بدون كسور · 2 مناسب للدولار واليورو · حتى 4 كحد أقصى
+                {t("settings.decimalHint")}
               </p>
             </div>
 
             <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-transparent to-transparent p-4">
-              <p className="text-[11px] text-muted-foreground mb-1">معاينة</p>
+              <p className="text-[11px] text-muted-foreground mb-1">{t("common.preview")}</p>
               <p className="text-2xl font-extrabold font-display" dir="ltr">
                 {formatMoney(12345.6789, {
                   currencyCode,
@@ -1114,7 +1117,7 @@ export default function SettingsPage() {
             </div>
 
             <Button className="gap-2" isLoading={savingSettings} onClick={handleSaveCurrency}>
-              <Save className="w-4 h-4" /> حفظ العملة
+              <Save className="w-4 h-4" /> {t("settings.saveCurrency")}
             </Button>
           </Card>
         </div>
@@ -1124,9 +1127,9 @@ export default function SettingsPage() {
         <div className="space-y-5 max-w-3xl">
           <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
             <div>
-              <h3 className="font-extrabold text-lg">ثيمات المشروع</h3>
+              <h3 className="font-extrabold text-lg">{t("settings.projectThemes")}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                اختر لوناً أساسياً للهوية — يُطبَّق فوراً على الأزرار والشارات والعناصر الرئيسية.
+                {t("settings.themeIntro")}
               </p>
             </div>
 
@@ -1148,10 +1151,28 @@ export default function SettingsPage() {
                       className="block h-10 w-full rounded-xl mb-2 border border-black/10"
                       style={{ background: `hsl(${preset.primary})` }}
                     />
-                    <p className="font-bold text-sm">{preset.label}</p>
+                    <p className="font-bold text-sm">{t(
+                      preset.id === "emerald"
+                        ? "settings.emerald"
+                        : preset.id === "sky"
+                          ? "settings.sky"
+                          : preset.id === "blue"
+                            ? "settings.blue"
+                            : preset.id === "rose"
+                              ? "settings.rose"
+                              : preset.id === "violet"
+                                ? "settings.purple"
+                                : preset.id === "orange"
+                                  ? "settings.orange"
+                                  : preset.id === "teal"
+                                    ? "settings.teal"
+                                    : preset.id === "slate"
+                                      ? "settings.slate"
+                                      : "settings.gold"
+                    )}</p>
                     {active && (
                       <p className="text-[10px] text-primary font-bold mt-0.5 flex items-center gap-1">
-                        <Check className="w-3 h-3" /> مفعّل
+                        <Check className="w-3 h-3" /> {t("settings.enabled")}
                       </p>
                     )}
                   </button>
@@ -1160,7 +1181,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="rounded-2xl border border-border/70 bg-secondary/30 p-4 space-y-3">
-              <p className="font-bold text-sm">لون مخصص</p>
+              <p className="font-bold text-sm">{t("settings.customColor")}</p>
               <div className="flex flex-wrap items-center gap-3">
                 <input
                   type="color"
@@ -1173,7 +1194,7 @@ export default function SettingsPage() {
                     }
                   }}
                   className="h-12 w-16 rounded-xl border border-border bg-transparent cursor-pointer"
-                  title="اختيار لون"
+                  title={t("settings.chooseColor")}
                 />
                 <div className="flex-1 min-w-[12rem]">
                   <Input
@@ -1191,14 +1212,14 @@ export default function SettingsPage() {
                   isLoading={savingSettings}
                   onClick={() => handleSaveTheme(themePrimary.trim())}
                 >
-                  <Save className="w-4 h-4" /> حفظ اللون
+                  <Save className="w-4 h-4" /> {t("settings.saveColor")}
                 </Button>
               </div>
               <div
                 className="h-14 rounded-xl border border-border/60 flex items-center justify-center font-bold text-primary-foreground"
                 style={{ background: `linear-gradient(90deg, hsl(${themePrimary}), hsl(${themePrimary}) 60%, #d97706)` }}
               >
-                معاينة اللون الأساسي
+                {t("settings.colorPreview")}
               </div>
             </div>
           </Card>
@@ -1208,7 +1229,7 @@ export default function SettingsPage() {
       <Dialog
         isOpen={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}
-        title="حذف الجهاز"
+        title={t("settings.deleteDevice")}
         maxWidth="max-w-md"
       >
         <div className="space-y-5 text-center">
@@ -1216,15 +1237,15 @@ export default function SettingsPage() {
             <AlertTriangle className="w-8 h-8" />
           </div>
           <div>
-            <p className="font-bold text-lg">حذف «{deleteTarget?.deviceName}»؟</p>
-            <p className="text-sm text-muted-foreground mt-1">سيتم إزالة ربط الطابعة لهذا الجهاز.</p>
+            <p className="font-bold text-lg">{t("settings.deleteDeviceAsk", { name: deleteTarget?.deviceName ?? "" })}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("settings.deleteDeviceHint")}</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)}>
-              إلغاء
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" className="flex-1" isLoading={deleting} onClick={handleDelete}>
-              حذف
+              {t("common.delete")}
             </Button>
           </div>
         </div>

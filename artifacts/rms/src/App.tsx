@@ -26,6 +26,7 @@ import Cashier from "@/pages/cashier";
 import TableOrder from "@/pages/table-order";
 import { BranchProvider } from "@/lib/branch-context";
 import { applyBrandPrimary } from "@/lib/brand-theme";
+import { LocaleProvider } from "@/i18n";
 import { useGetSettings } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
@@ -249,21 +250,23 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <BranchProvider>
-            <TooltipProvider>
-              <BrandThemeSync />
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <Router />
-              </WouterRouter>
-              <Toaster />
-            </TooltipProvider>
-          </BranchProvider>
-        </QueryClientProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <LocaleProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            <BranchProvider>
+              <TooltipProvider>
+                <BrandThemeSync />
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <Router />
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </BranchProvider>
+          </QueryClientProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </LocaleProvider>
   );
 }
 

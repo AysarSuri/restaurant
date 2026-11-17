@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Delete, Check, Eraser } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 type AmountProps = {
   mode?: "amount";
@@ -46,7 +47,8 @@ function formatAmountDisplay(raw: string, suffix?: string) {
 }
 
 export function NumericKeypad(props: NumericKeypadProps) {
-  const { onCancel, label = "أدخل القيمة" } = props;
+  const { t } = useI18n();
+  const { onCancel, label = t("settings.enterValue") } = props;
   const isDigits = props.mode === "digits";
 
   const [raw, setRaw] = useState(() => {
@@ -110,7 +112,7 @@ export function NumericKeypad(props: NumericKeypadProps) {
 
   const display = isDigits
     ? raw || "—"
-    : formatAmountDisplay(raw, props.mode !== "digits" ? props.suffix : undefined);
+    : formatAmountDisplay(raw, !isDigits ? props.suffix : undefined);
 
   const confirm = () => {
     if (isDigits) {
@@ -163,7 +165,7 @@ export function NumericKeypad(props: NumericKeypadProps) {
                           ? "bg-muted/30 border-border/30 text-muted-foreground/35 cursor-not-allowed"
                           : "bg-background/80 border-border/50 text-foreground hover:border-primary/40 hover:bg-primary/10 shadow-[0_8px_20px_-14px_rgba(0,0,0,0.45)]"
                     }`}
-                    aria-label={isBack ? "حذف" : key}
+                    aria-label={isBack ? t("common.delete") : key}
                   >
                     {isBack ? (
                       <Delete className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -186,7 +188,7 @@ export function NumericKeypad(props: NumericKeypadProps) {
               className="h-12 sm:h-14 rounded-2xl border border-border/50 bg-secondary/60 text-sm sm:text-base font-bold text-muted-foreground hover:text-foreground hover:border-border flex items-center justify-center gap-2"
             >
               <Eraser className="w-4 h-4" />
-              مسح
+              {t("common.clear")}
             </motion.button>
             <motion.button
               type="button"
@@ -196,7 +198,7 @@ export function NumericKeypad(props: NumericKeypadProps) {
               className="h-12 sm:h-14 rounded-2xl border border-primary/40 bg-primary text-primary-foreground text-sm sm:text-base font-extrabold shadow-lg shadow-primary/25 hover:brightness-105 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Check className="w-4 h-4" />
-              تأكيد
+              {t("common.confirm")}
             </motion.button>
           </div>
 
@@ -206,7 +208,7 @@ export function NumericKeypad(props: NumericKeypadProps) {
               onClick={onCancel}
               className="w-full py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
             >
-              إلغاء
+              {t("common.cancel")}
             </button>
           )}
         </div>

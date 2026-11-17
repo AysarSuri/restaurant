@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, Delete, Eraser, X } from "lucide-react";
+import { useI18n } from "@/i18n";
 
-export type KeyboardLang = "ar" | "en" | "ckb";
+export type KeyboardLang = "ar" | "en" | "ku";
 
 export interface MultilingualKeyboardProps {
   value: string;
@@ -17,10 +18,10 @@ export interface MultilingualKeyboardProps {
   showInput?: boolean;
 }
 
-const LANGS: { id: KeyboardLang; label: string; short: string; dir: "rtl" | "ltr" }[] = [
-  { id: "ar", label: "العربية", short: "ع", dir: "rtl" },
-  { id: "en", label: "English", short: "EN", dir: "ltr" },
-  { id: "ckb", label: "کوردی ناوەندی", short: "کورد", dir: "rtl" },
+const LANGS: { id: KeyboardLang; labelKey: string; short: string; dir: "rtl" | "ltr" }[] = [
+  { id: "ar", labelKey: "lang.ar", short: "ع", dir: "rtl" },
+  { id: "en", labelKey: "lang.en", short: "EN", dir: "ltr" },
+  { id: "ku", labelKey: "lang.ku", short: "KU", dir: "ltr" },
 ];
 
 /** Arabic — common PC / phone letter rows */
@@ -54,26 +55,26 @@ const EN_SHIFT = [
 ];
 
 /**
- * Central Kurdish (Sorani) — Windows-like Arabic-script layout
- * Includes پ چ ڕ ژ ڤ گ ک ڵ ۆ ە ێ ئ
+ * Badini Kurdish (Kurmanji Latin / Hawar) — used in Duhok–Zakho
+ * Extra letters: ê î û ş ç ḧ ẍ
  */
 const CKB_ROWS = [
-  ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "٠"],
-  ["ق", "و", "ە", "ر", "ت", "ی", "ێ", "وو", "ۆ", "پ"],
-  ["ا", "س", "د", "ف", "گ", "ه", "ژ", "ک", "ل", "ڵ"],
-  ["ز", "خ", "ج", "ڤ", "ب", "ن", "م", "چ", "ڕ", "ئ"],
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+  ["q", "w", "e", "r", "t", "y", "u", "î", "o", "p", "û"],
+  ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ê", "ş"],
+  ["z", "x", "c", "v", "b", "n", "m", "ç", "ḧ", "ẍ"],
 ];
 
 const CKB_SHIFT = [
-  ["!", "@", "#", "$", "%", "^", "&", "*", ")", "("],
-  ["ء", "ؤ", "ة", "ث", "ذ", "ض", "ص", "ط", "ظ", "غ"],
-  ["أ", "ش", "ع", "ح", "ة", "ھ", "؛", ":", '"', "،"],
-  ["ـ", "؟", ".", ",", "ي", "ى", "ك", "ة", "لا", "آ"],
+  ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
+  ["Q", "W", "E", "R", "T", "Y", "U", "Î", "O", "P", "Û"],
+  ["A", "S", "D", "F", "G", "H", "J", "K", "L", "Ê", "Ş"],
+  ["Z", "X", "C", "V", "B", "N", "M", "Ç", "Ḧ", "Ẍ"],
 ];
 
 function rowsFor(lang: KeyboardLang, shift: boolean) {
   if (lang === "en") return shift ? EN_SHIFT : EN_ROWS;
-  if (lang === "ckb") return shift ? CKB_SHIFT : CKB_ROWS;
+  if (lang === "ku") return shift ? CKB_SHIFT : CKB_ROWS;
   return shift ? AR_SHIFT : AR_ROWS;
 }
 
@@ -82,10 +83,13 @@ export function MultilingualKeyboard({
   onConfirm,
   onCancel,
   onChange,
-  label = "أدخل النص",
+  label,
   defaultLang = "ar",
   showInput = true,
 }: MultilingualKeyboardProps) {
+  const { t } = useI18n();
+  const resolvedLabel = label ?? t("settings.enterText");
+  const langs = LANGS.map((item) => ({ ...item, label: t(item.labelKey) }));
   const [text, setText] = useState(value || "");
   const [lang, setLang] = useState<KeyboardLang>(defaultLang);
   const [shift, setShift] = useState(false);
@@ -100,7 +104,7 @@ export function MultilingualKeyboard({
     return () => window.clearTimeout(id);
   }, []);
 
-  const langMeta = LANGS.find((l) => l.id === lang) ?? LANGS[0];
+  const langMeta = langs.find((l) => l.id === lang) ?? langs[0];
   const rows = useMemo(() => rowsFor(lang, shift), [lang, shift]);
 
   const commitText = (next: string) => {
@@ -122,7 +126,7 @@ export function MultilingualKeyboard({
 
   const press = (key: string) => {
     updateText((prev) => prev + key);
-    if (shift && lang === "en") setShift(false);
+    if (shift && (lang === "en" || lang === "ku")) setShift(false);
     focusInput();
   };
 
@@ -147,7 +151,7 @@ export function MultilingualKeyboard({
         <div className="relative px-4 sm:px-5 pt-4 sm:pt-5 space-y-3">
           <div className="flex items-center justify-end">
             <div className="inline-flex items-center gap-2.5 sm:gap-3 rounded-2xl border border-border/60 bg-background/80 p-1.5 shadow-sm">
-              {LANGS.map((l) => {
+              {langs.map((l) => {
                 const active = lang === l.id;
                 return (
                   <button
@@ -174,8 +178,8 @@ export function MultilingualKeyboard({
                   type="button"
                   onClick={onCancel}
                   className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border-2 border-rose-500/45 bg-rose-500/15 text-rose-600 dark:text-rose-400 hover:bg-rose-500/25 hover:border-rose-500 flex items-center justify-center flex-shrink-0 transition-colors"
-                  aria-label="إغلاق"
-                  title="إغلاق"
+                  aria-label={t("common.close")}
+                  title={t("common.close")}
                 >
                   <X className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2.5} />
                 </button>
@@ -207,10 +211,10 @@ export function MultilingualKeyboard({
                 }}
                 dir={langMeta.dir}
                 className="min-w-0 flex-1 bg-transparent border-0 outline-none text-lg sm:text-xl font-bold text-foreground placeholder:text-muted-foreground/30 caret-primary"
-                aria-label={label}
+                aria-label={resolvedLabel}
               />
               <p className="flex-shrink-0 text-[10px] sm:text-[11px] font-semibold text-muted-foreground whitespace-nowrap">
-                {langMeta.label} · حاسوب أو شاشة · Enter للتأكيد
+                {t("keyboard.hint", { lang: langMeta.label })}
               </p>
             </div>
           ) : (
@@ -232,7 +236,7 @@ export function MultilingualKeyboard({
               }}
               dir={langMeta.dir}
               className="sr-only"
-              aria-label={label}
+              aria-label={resolvedLabel}
             />
           )}
         </div>
@@ -274,7 +278,7 @@ export function MultilingualKeyboard({
               onClick={space}
               className="flex-1 h-14 rounded-2xl border border-border/50 bg-background/80 text-muted-foreground text-sm sm:text-base font-bold hover:text-foreground hover:border-primary/35 flex items-center justify-center"
             >
-              مسافة
+              {t("keyboard.space")}
             </motion.button>
 
             <motion.button
@@ -282,7 +286,7 @@ export function MultilingualKeyboard({
               whileTap={{ scale: 0.96 }}
               onClick={backspace}
               className="h-14 px-4 sm:px-5 rounded-2xl border border-destructive/25 bg-destructive/10 text-destructive flex-shrink-0 flex items-center justify-center"
-              aria-label="حذف"
+              aria-label={t("common.delete")}
             >
               <Delete className="w-6 h-6" />
             </motion.button>
@@ -296,7 +300,7 @@ export function MultilingualKeyboard({
                 onClick={onCancel}
                 className="h-14 rounded-2xl border-2 border-rose-500/50 bg-rose-500/15 text-rose-600 dark:text-rose-400 text-sm sm:text-base font-extrabold hover:bg-rose-500/25 hover:border-rose-500 flex items-center justify-center"
               >
-                إلغاء
+                {t("common.cancel")}
               </motion.button>
             )}
             <motion.button
@@ -306,7 +310,7 @@ export function MultilingualKeyboard({
               className="h-14 rounded-2xl border border-border/50 bg-secondary/60 text-sm sm:text-base font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-2"
             >
               <Eraser className="w-5 h-5" />
-              مسح
+              {t("common.clear")}
             </motion.button>
             <motion.button
               type="button"
@@ -315,7 +319,7 @@ export function MultilingualKeyboard({
               className="h-14 rounded-2xl border border-primary/40 bg-primary text-primary-foreground text-sm sm:text-base font-extrabold shadow-lg shadow-primary/25 flex items-center justify-center gap-2"
             >
               <Check className="w-5 h-5" />
-              تأكيد
+              {t("common.confirm")}
             </motion.button>
           </div>
         </div>

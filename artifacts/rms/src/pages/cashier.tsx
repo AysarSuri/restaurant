@@ -12,17 +12,22 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
+import { useI18n } from "@/i18n";
 
 const formatIQD = (v: number | string) =>
   new Intl.NumberFormat("en-IQ").format(Math.round(Number(v)));
 
-const elapsed = (dateStr: string) => {
+const elapsed = (
+  dateStr: string,
+  t: (key: string, params?: Record<string, string | number>) => string
+) => {
   const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
-  if (mins < 60) return `${mins} د`;
-  return `${Math.floor(mins / 60)} س ${mins % 60} د`;
+  if (mins < 60) return t("cashier.minutes", { n: mins });
+  return t("cashier.hours", { h: Math.floor(mins / 60), m: mins % 60 });
 };
 
 export default function Cashier() {
+  const { t } = useI18n();
   const { user, logout } = useAuth();
   const [, navigate] = useLocation();
 
@@ -67,9 +72,9 @@ export default function Cashier() {
   };
 
   const orderTypeLabel = (type: string, tableId?: number | null) => {
-    if (type === "dine_in") return tableId ? `طاولة ${tableId}` : "داخلي";
-    if (type === "takeaway") return "سفري";
-    return "توصيل";
+    if (type === "dine_in") return tableId ? t("tables.tableN", { n: tableId }) : t("order.inside");
+    if (type === "takeaway") return t("order.takeaway");
+    return t("order.delivery");
   };
 
   const urgencyColor = (createdAt: string) => {
@@ -88,7 +93,7 @@ export default function Cashier() {
             <ShoppingBag className="w-5 h-5 text-amber-400" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-bold truncate">شاشة الكاشير</h1>
+            <h1 className="text-lg sm:text-xl font-bold truncate">{t("cashier.title")}</h1>
             <p className="text-[10px] sm:text-xs text-primary font-display uppercase tracking-widest truncate">
               {user?.name} — Cashier
             </p>
@@ -98,7 +103,7 @@ export default function Cashier() {
           <button
             onClick={() => { refetchPending(); refetchPaid(); }}
             className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center hover:bg-secondary/70 transition-colors"
-            title="تحديث"
+            title={t("common.update")}
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -107,7 +112,7 @@ export default function Cashier() {
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive px-3 py-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            خروج
+            {t("common.exit")}
           </button>
         </div>
       </header>
@@ -129,7 +134,7 @@ export default function Cashier() {
                 <Bell className="w-4 h-4 text-amber-400" />
               </motion.div>
               <span className="text-amber-300 text-sm font-bold flex-shrink-0">
-                {tableOrders.length > 1 ? `${tableOrders.length} طلبات طاولة جديدة` : "طلب طاولة جديد"}
+                {tableOrders.length > 1 ? t("cashier.newTableOrders", { n: tableOrders.length }) : t("cashier.newTableOrder")}
               </span>
               <div className="flex-1 flex gap-2 overflow-x-auto pb-0.5 pt-1">
                 <AnimatePresence>
@@ -144,10 +149,10 @@ export default function Cashier() {
                     >
                       <Table2 className="w-3.5 h-3.5 text-amber-400" />
                       <span className="text-sm font-bold text-amber-200">
-                        طاولة {(order as any).table?.number ?? order.tableId}
+                        {t("tables.tableN", { n: (order as any).table?.number ?? order.tableId })}
                       </span>
                       <span className="text-xs text-amber-400 font-display">
-                        {formatIQD(order.total ?? 0)} د.ع
+                        {formatIQD(order.total ?? 0)} {t("common.iqd")}
                       </span>
                       <ChefHat className="w-3.5 h-3.5 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       <button
@@ -174,7 +179,7 @@ export default function Cashier() {
           <div className="p-3 sm:p-4 border-b border-border/50 flex items-center justify-between">
             <h2 className="font-bold text-base sm:text-lg flex items-center gap-2 flex-wrap">
               <Clock className="w-5 h-5 text-amber-400" />
-              طلبات تنتظر المراجعة
+              {t("cashier.awaiting")}
               {pendingOrders && pendingOrders.length > 0 && (
                 <span className="bg-amber-500/20 text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full">
                   {pendingOrders.length}
@@ -187,8 +192,8 @@ export default function Cashier() {
             {!pendingOrders || pendingOrders.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 py-16">
                 <CheckCircle2 className="w-16 h-16 mb-4 text-green-500/50" />
-                <p className="text-lg font-semibold">لا توجد طلبات جديدة</p>
-                <p className="text-sm">جميع الطلبات تمت معالجتها</p>
+                <p className="text-lg font-semibold">{t("cashier.noNew")}</p>
+                <p className="text-sm">{t("cashier.allProcessed")}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
@@ -221,10 +226,10 @@ export default function Cashier() {
                         <div className="text-left">
                           <div className="flex items-center gap-1 text-sm font-display text-amber-400">
                             <Clock className="w-3.5 h-3.5" />
-                            {elapsed(order.createdAt)}
+                            {elapsed(order.createdAt, t)}
                           </div>
                           <div className="text-lg font-bold text-primary font-display mt-1">
-                            {formatIQD(order.total ?? 0)} د.ع
+                            {formatIQD(order.total ?? 0)} {t("common.iqd")}
                           </div>
                         </div>
                       </div>
@@ -233,13 +238,13 @@ export default function Cashier() {
                       <div className="p-4 space-y-1.5">
                         {(order.items ?? []).slice(0, 3).map((item: any, idx: number) => (
                           <div key={idx} className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{item.menuItem?.nameAr || "صنف"}</span>
+                            <span className="text-muted-foreground">{item.menuItem?.nameAr || t("common.item")}</span>
                             <span className="font-bold">×{item.quantity}</span>
                           </div>
                         ))}
                         {(order.items ?? []).length > 3 && (
                           <p className="text-xs text-muted-foreground">
-                            +{(order.items ?? []).length - 3} أصناف أخرى...
+                            {t("cashier.moreItems", { n: (order.items ?? []).length - 3 })}
                           </p>
                         )}
                       </div>
@@ -250,7 +255,7 @@ export default function Cashier() {
                         className="w-full p-3 bg-primary/90 hover:bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 transition-colors"
                       >
                         <ChefHat className="w-4 h-4" />
-                        إرسال للمطبخ
+                        {t("cashier.sendKitchen")}
                       </button>
                     </motion.div>
                   ))}
@@ -265,7 +270,7 @@ export default function Cashier() {
           <div className="p-3 sm:p-4 border-b border-border/50">
             <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              مدفوعة اليوم
+              {t("cashier.paidToday")}
               {todayPaidOrders && (
                 <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-0.5 rounded-full">
                   {todayPaidOrders.length}
@@ -278,7 +283,7 @@ export default function Cashier() {
               <div key={order.id} className="bg-card/50 rounded-xl p-3 border border-border/30">
                 <div className="flex justify-between items-center">
                   <span className="font-display font-bold text-sm">#{order.orderNumber?.slice(-4)}</span>
-                  <span className="text-xs text-green-400 font-semibold">مدفوع ✓</span>
+                  <span className="text-xs text-green-400 font-semibold">{t("cashier.paid")}</span>
                 </div>
                 <div className="flex justify-between items-center mt-1">
                   <span className="text-xs text-muted-foreground">{orderTypeLabel(order.type, order.tableId)}</span>
@@ -289,7 +294,7 @@ export default function Cashier() {
               </div>
             ))}
             {(!todayPaidOrders || todayPaidOrders.length === 0) && (
-              <p className="text-center text-xs text-muted-foreground py-8 opacity-50">لا يوجد مدفوعات اليوم</p>
+              <p className="text-center text-xs text-muted-foreground py-8 opacity-50">{t("cashier.noPayments")}</p>
             )}
           </div>
         </div>
@@ -299,7 +304,7 @@ export default function Cashier() {
       <Dialog
         isOpen={!!selectedOrder && !paymentDialog}
         onClose={() => setSelectedOrder(null)}
-        title={`طلب #${selectedOrder?.orderNumber?.slice(-4)}`}
+        title={t("cashier.orderN", { n: selectedOrder?.orderNumber?.slice(-4) ?? "" })}
       >
         {selectedOrder && (
           <div className="space-y-4">
@@ -309,7 +314,7 @@ export default function Cashier() {
               </Badge>
               <Badge variant="warning">
                 <Clock className="w-3 h-3 me-1" />
-                {elapsed(selectedOrder.createdAt)}
+                {elapsed(selectedOrder.createdAt, t)}
               </Badge>
             </div>
 
@@ -320,7 +325,7 @@ export default function Cashier() {
                   <div className="flex gap-4">
                     <span className="text-muted-foreground">×{item.quantity}</span>
                     <span className="font-display font-bold text-primary">
-                      {formatIQD((item.price ?? item.menuItem?.price ?? 0) * item.quantity)} د.ع
+                      {formatIQD((item.price ?? item.menuItem?.price ?? 0) * item.quantity)} {t("common.iqd")}
                     </span>
                   </div>
                 </div>
@@ -328,8 +333,8 @@ export default function Cashier() {
             </div>
 
             <div className="flex justify-between font-bold text-xl border-t border-border/50 pt-3">
-              <span>الإجمالي</span>
-              <span className="text-primary font-display">{formatIQD(selectedOrder.total ?? 0)} د.ع</span>
+              <span>{t("common.total")}</span>
+              <span className="text-primary font-display">{formatIQD(selectedOrder.total ?? 0)} {t("common.iqd")}</span>
             </div>
 
             <Button className="w-full h-12 gap-2" onClick={() => setPaymentDialog(selectedOrder)}>
@@ -338,7 +343,7 @@ export default function Cashier() {
               ) : (
                 <CheckCircle2 className="w-5 h-5" />
               )}
-              {cashierSendToKitchen ? "تأكيد الدفع وإرسال للمطبخ" : "تأكيد الدفع والحفظ"}
+              {cashierSendToKitchen ? t("pos.confirmPayKitchen") : t("pos.confirmPaySave")}
             </Button>
           </div>
         )}
@@ -348,24 +353,24 @@ export default function Cashier() {
       <Dialog
         isOpen={!!paymentDialog}
         onClose={() => setPaymentDialog(null)}
-        title="اختر طريقة الدفع"
+        title={t("pos.choosePayment")}
       >
         {paymentDialog && (
           <div className="space-y-4">
             <div className="bg-secondary/50 rounded-xl p-4 text-center">
               <p className="text-sm text-muted-foreground mb-1">
-                طلب #{paymentDialog.orderNumber?.slice(-4)} — {orderTypeLabel(paymentDialog.type, paymentDialog.tableId)}
+                {t("cashier.orderN", { n: paymentDialog.orderNumber?.slice(-4) ?? "" })} — {orderTypeLabel(paymentDialog.type, paymentDialog.tableId)}
               </p>
               <p className="text-3xl font-bold text-primary font-display">
-                {formatIQD(paymentDialog.total ?? 0)} د.ع
+                {formatIQD(paymentDialog.total ?? 0)} {t("common.iqd")}
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               {[
-                { method: "cash" as const, label: "كاش", icon: Banknote, color: "text-green-500" },
-                { method: "card" as const, label: "بطاقة", icon: CreditCard, color: "text-blue-500" },
-                { method: "transfer" as const, label: "تحويل", icon: Phone, color: "text-purple-500" },
+                { method: "cash" as const, label: t("pos.cash"), icon: Banknote, color: "text-green-500" },
+                { method: "card" as const, label: t("common.card"), icon: CreditCard, color: "text-blue-500" },
+                { method: "transfer" as const, label: t("common.transfer"), icon: Phone, color: "text-purple-500" },
               ].map(({ method, label, icon: Icon, color }) => (
                 <Button
                   key={method}
@@ -382,8 +387,8 @@ export default function Cashier() {
 
             <p className="text-xs text-center text-muted-foreground">
               {cashierSendToKitchen
-                ? "سيتم إرسال الطلب لشاشة المطبخ فور تأكيد الدفع"
-                : "سيتم حفظ الطلب كمدفوع دون إرساله لشاشة المطبخ"}
+                ? t("cashier.payWillKitchen")
+                : t("cashier.payWillSave")}
             </p>
           </div>
         )}

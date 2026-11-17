@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Button, Input, Card } from "./ui-elements";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 export interface Column<T> {
   key: keyof T | string;
@@ -25,6 +26,7 @@ interface CrudTableProps<T> {
 export function CrudTable<T extends { id: number }>({
   title, titleEn, data, columns, onAdd, onEdit, onDelete, searchKey, isLoading, headerActions
 }: CrudTableProps<T>) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
 
   const filteredData = React.useMemo(() => {
@@ -49,7 +51,7 @@ export function CrudTable<T extends { id: number }>({
             <div className="relative flex-1 min-w-[160px] max-w-xs">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="بحث..."
+                placeholder={t("common.search")}
                 className="pr-10 h-9 rounded-full bg-secondary/50 border-transparent text-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -59,7 +61,7 @@ export function CrudTable<T extends { id: number }>({
           {headerActions}
           {onAdd && (
             <Button onClick={onAdd} className="rounded-full h-9 text-sm flex-shrink-0">
-              <Plus className="w-4 h-4 me-1.5" /> إضافة
+              <Plus className="w-4 h-4 me-1.5" /> {t("common.add")}
             </Button>
           )}
         </div>
@@ -72,7 +74,7 @@ export function CrudTable<T extends { id: number }>({
             <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
           </div>
         ) : filteredData.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">لا توجد بيانات للعرض</div>
+          <div className="text-center py-12 text-muted-foreground text-sm">{t("common.noData")}</div>
         ) : (
           filteredData.map((item) => (
             <div key={item.id} className="p-4 flex flex-col gap-2 hover:bg-secondary/30 transition-colors">
@@ -90,12 +92,12 @@ export function CrudTable<T extends { id: number }>({
                 <div className="flex gap-2 pt-1">
                   {onEdit && (
                     <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5" onClick={() => onEdit(item)}>
-                      <Edit className="w-3.5 h-3.5" /> تعديل
+                      <Edit className="w-3.5 h-3.5" /> {t("common.edit")}
                     </Button>
                   )}
                   {onDelete && (
                     <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)}>
-                      <Trash2 className="w-3.5 h-3.5" /> حذف
+                      <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
                     </Button>
                   )}
                 </div>
@@ -116,7 +118,7 @@ export function CrudTable<T extends { id: number }>({
                 </TableHead>
               ))}
               {(onEdit || onDelete) && (
-                <TableHead className="text-end text-primary font-bold">الإجراءات</TableHead>
+                <TableHead className="text-end text-primary font-bold">{t("common.actions")}</TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -130,7 +132,7 @@ export function CrudTable<T extends { id: number }>({
             ) : filteredData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length + 1} className="text-center py-10 text-muted-foreground">
-                  لا توجد بيانات للعرض
+                  {t("common.noData")}
                 </TableCell>
               </TableRow>
             ) : (

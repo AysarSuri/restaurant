@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Delete, CornerDownLeft } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 interface VirtualKeyboardProps {
   value: string;
@@ -24,6 +25,7 @@ const ROWS_UPPER = [
 ];
 
 export default function VirtualKeyboard({ value, onChange, onEnter, label }: VirtualKeyboardProps) {
+  const { t } = useI18n();
   const [shift, setShift] = useState(false);
   const rows = shift ? ROWS_UPPER : ROWS_LOWER;
 
@@ -112,7 +114,7 @@ export default function VirtualKeyboard({ value, onChange, onEnter, label }: Vir
               style={{ height: "65px" }}
             >
               <CornerDownLeft className="w-5 h-5" />
-              تسجيل الدخول
+              {t("auth.login")}
             </motion.button>
           )}
         </div>

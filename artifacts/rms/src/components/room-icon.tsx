@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import { useI18n } from "@/i18n";
 
 type RoomIconProps = {
   className?: string;
@@ -8,6 +9,7 @@ type RoomIconProps = {
 
 /** Cozy private room — teal sofa + clear flat TV on the right */
 export function RoomIcon({ className = "", number }: RoomIconProps) {
+  const { t } = useI18n();
   const uid = useId().replace(/:/g, "");
   const wall = `wall-${uid}`;
   const sky = `sky-${uid}`;
@@ -30,7 +32,7 @@ export function RoomIcon({ className = "", number }: RoomIconProps) {
       aria-hidden={!number}
       role={number ? "img" : "presentation"}
     >
-      {number != null && <title>{`غرفة ${number}`}</title>}
+      {number != null && <title>{t("tables.roomN", { n: number })}</title>}
 
       {/* Wall */}
       <rect x="6" y="8" width="148" height="72" rx="8" fill={`url(#${wall})`} />

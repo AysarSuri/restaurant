@@ -11,6 +11,7 @@ import {
 import type { MenuItem } from "@workspace/api-client-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
+import { useI18n } from "@/i18n";
 
 interface CartItem extends MenuItem {
   cartQuantity: number;
@@ -20,6 +21,7 @@ interface CartItem extends MenuItem {
 const formatIQD = (v: number) => new Intl.NumberFormat("en-IQ").format(Math.round(v));
 
 export default function TableOrder() {
+  const { t } = useI18n();
   const { user, logout } = useAuth();
   const [, navigate] = useLocation();
 
@@ -96,7 +98,7 @@ export default function TableOrder() {
       {/* Cart Header */}
       <div className="p-4 border-b border-border/50 flex items-center gap-2 flex-shrink-0">
         <ShoppingCart className="w-5 h-5 text-primary" />
-        <h2 className="font-bold flex-1">قائمة طلبي</h2>
+        <h2 className="font-bold flex-1">{t("tableOrder.myList")}</h2>
         {cart.length > 0 && (
           <span className="w-6 h-6 bg-primary rounded-full text-xs font-bold text-primary-foreground flex items-center justify-center">
             {totalItems}
@@ -136,7 +138,7 @@ export default function TableOrder() {
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <span className="text-primary font-bold font-display text-sm">{formatIQD(item.price * item.cartQuantity)} د.ع</span>
+                <span className="text-primary font-bold font-display text-sm">{formatIQD(item.price * item.cartQuantity)} {t("common.iqd")}</span>
               </div>
             </motion.div>
           ))}
@@ -145,7 +147,7 @@ export default function TableOrder() {
         {cart.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground opacity-40">
             <ShoppingCart className="w-14 h-14 mb-3" />
-            <p className="text-sm text-center">اضغط على أي صنف لإضافته</p>
+            <p className="text-sm text-center">{t("tableOrder.tapItem")}</p>
           </div>
         )}
       </div>
@@ -163,8 +165,8 @@ export default function TableOrder() {
           </div>
         )}
         <div className="flex justify-between font-bold text-lg border-t border-border/50 pt-2">
-          <span className="text-primary font-display">{formatIQD(subtotal)} د.ع</span>
-          <span>الإجمالي</span>
+          <span className="text-primary font-display">{formatIQD(subtotal)} {t("common.iqd")}</span>
+          <span>{t("common.total")}</span>
         </div>
         <motion.button
           whileTap={{ scale: 0.97 }}
@@ -173,12 +175,12 @@ export default function TableOrder() {
           className="w-full h-14 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-primary/25"
         >
           {isPending ? <RefreshCw className="w-5 h-5 animate-spin" /> : (
-            <><ChefHat className="w-5 h-5" /> إرسال الطلب للكاشير</>
+            <><ChefHat className="w-5 h-5" /> {t("tableOrder.sendCashier")}</>
           )}
         </motion.button>
         {cart.length > 0 && (
           <button onClick={() => setCart([])} className="w-full text-xs text-muted-foreground hover:text-destructive transition-colors py-1">
-            مسح الطلب
+            {t("tableOrder.clear")}
           </button>
         )}
       </div>
@@ -196,10 +198,10 @@ export default function TableOrder() {
           </div>
           <div className="min-w-0">
             <h1 className="text-base md:text-xl font-bold leading-tight truncate">
-              طلب طاولة {tableNumber ?? "—"}
+              {t("tableOrder.tableLine", { n: tableNumber ?? "—" })}
             </h1>
             <p className="text-xs text-muted-foreground truncate">
-              {tableInfo?.location ?? ""} — سعة {tableInfo?.capacity ?? "—"} أشخاص
+              {t("tableOrder.capacityLine", { location: tableInfo?.location ?? "", capacity: tableInfo?.capacity ?? "—" })}
             </p>
           </div>
         </div>
@@ -208,7 +210,7 @@ export default function TableOrder() {
           {/* Total pill — hidden on tiny screens */}
           {subtotal > 0 && (
             <div className="hidden sm:flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20">
-              <span className="text-sm font-bold text-primary font-display">{formatIQD(subtotal)} د.ع</span>
+              <span className="text-sm font-bold text-primary font-display">{formatIQD(subtotal)} {t("common.iqd")}</span>
             </div>
           )}
           <button
@@ -216,7 +218,7 @@ export default function TableOrder() {
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive transition-colors px-2 py-2 rounded-xl hover:bg-destructive/10"
           >
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">خروج</span>
+            <span className="hidden sm:inline">{t("common.exit")}</span>
           </button>
         </div>
       </header>
@@ -234,7 +236,7 @@ export default function TableOrder() {
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="ابحث عن صنف..."
+                  placeholder={t("pos.searchItem")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pr-10 pl-4 h-10 rounded-xl bg-secondary/50 border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
@@ -246,7 +248,7 @@ export default function TableOrder() {
                   className={`px-3 md:px-4 py-1.5 rounded-full text-sm font-semibold flex-shrink-0 transition-all
                     ${activeCategory === null ? "bg-primary text-primary-foreground shadow-md shadow-primary/25" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
                 >
-                  الكل
+                  {t("common.all")}
                 </button>
                 {categories?.map((cat) => (
                   <button
@@ -293,7 +295,7 @@ export default function TableOrder() {
                         </div>
                         <h3 className="font-bold text-xs md:text-sm mb-0.5 md:mb-1 leading-tight line-clamp-2">{item.nameAr}</h3>
                         <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5 md:mb-1 hidden sm:block">{item.name}</p>
-                        <p className="text-primary font-bold font-display text-xs md:text-sm">{formatIQD(Number(item.price))} د.ع</p>
+                        <p className="text-primary font-bold font-display text-xs md:text-sm">{formatIQD(Number(item.price))} {t("common.iqd")}</p>
                       </motion.div>
                     );
                   })}
@@ -303,7 +305,7 @@ export default function TableOrder() {
               {filteredItems?.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-40">
                   <Search className="w-12 h-12 mb-3" />
-                  <p>لا توجد أصناف مطابقة</p>
+                  <p>{t("tableOrder.noMatch")}</p>
                 </div>
               )}
             </div>
@@ -330,26 +332,26 @@ export default function TableOrder() {
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <h2 className="text-2xl md:text-3xl font-bold">تم إرسال الطلب!</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">{t("tableOrder.sent")}</h2>
             {orderNum && (
               <p className="text-muted-foreground mt-1">
-                رقم الطلب: <span className="font-display font-bold text-primary">{orderNum}</span>
+                {t("tableOrder.orderNumber", { n: orderNum })}
               </p>
             )}
-            <p className="text-muted-foreground mt-2 text-sm md:text-base">سيقوم الكاشير بمراجعة طلبك وإرساله للمطبخ</p>
+            <p className="text-muted-foreground mt-2 text-sm md:text-base">{t("tableOrder.cashierWillReview")}</p>
           </motion.div>
 
           <div className="bg-card/60 rounded-2xl p-4 md:p-5 border border-border/50 w-full max-w-sm text-right space-y-2">
-            <p className="text-sm font-bold text-muted-foreground mb-3">تفاصيل الطلب — طاولة {tableNumber}</p>
+            <p className="text-sm font-bold text-muted-foreground mb-3">{t("tableOrder.details", { n: tableNumber ?? "" })}</p>
             {cart.map((i) => (
               <div key={i.id} className="flex justify-between text-sm">
-                <span className="text-primary font-display">{formatIQD(i.price * i.cartQuantity)} د.ع</span>
+                <span className="text-primary font-display">{formatIQD(i.price * i.cartQuantity)} {t("common.iqd")}</span>
                 <span>{i.nameAr} × {i.cartQuantity}</span>
               </div>
             ))}
             <div className="flex justify-between font-bold pt-2 border-t border-border/50">
-              <span className="text-primary font-display text-lg">{formatIQD(subtotal)} د.ع</span>
-              <span>الإجمالي</span>
+              <span className="text-primary font-display text-lg">{formatIQD(subtotal)} {t("common.iqd")}</span>
+              <span>{t("common.total")}</span>
             </div>
           </div>
 
@@ -358,7 +360,7 @@ export default function TableOrder() {
             className="flex items-center gap-2 h-12 px-8 rounded-xl bg-secondary hover:bg-secondary/70 border border-border text-foreground font-semibold transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
-            طلب جديد
+            {t("pos.newOrder")}
           </button>
         </div>
       )}
@@ -375,11 +377,11 @@ export default function TableOrder() {
               className="lg:hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-primary text-primary-foreground px-6 py-3.5 rounded-2xl shadow-2xl shadow-primary/40 font-bold text-sm"
             >
               <ShoppingCart className="w-5 h-5" />
-              <span>عرض الطلب</span>
+              <span>{t("tableOrder.view")}</span>
               <span className="bg-primary-foreground/20 text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
                 {totalItems}
               </span>
-              <span className="font-display">{formatIQD(subtotal)} د.ع</span>
+              <span className="font-display">{formatIQD(subtotal)} {t("common.iqd")}</span>
             </motion.button>
           )}
         </AnimatePresence>
