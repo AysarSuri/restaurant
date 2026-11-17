@@ -827,8 +827,8 @@ export default function POS() {
         <header
           className={`relative z-10 flex flex-col gap-3 border-b border-border/50 bg-card/60 backdrop-blur-xl ${
             isPortraitPos
-              ? "p-4 xl:p-5"
-              : "p-3 sm:p-4 md:p-5 xl:p-6 sm:flex-row sm:items-center sm:justify-between"
+              ? "px-4 py-2.5 xl:px-5 xl:py-3"
+              : "px-3 py-2 sm:px-4 sm:py-2.5 md:px-5 md:py-3 xl:px-6 xl:py-3.5 sm:flex-row sm:items-center sm:justify-between"
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
