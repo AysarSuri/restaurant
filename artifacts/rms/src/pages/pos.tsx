@@ -306,6 +306,20 @@ export default function POS() {
     return list;
   }, [branchTables, openSeatStages, personSearch, pickerEntityType, seatPickerMode]);
 
+  /** Unified edit-lists rows: all open cashier/kitchen seats in one list */
+  const editListSeats = useMemo(() => {
+    const typeOrder: Record<SeatEntityType, number> = { table: 0, room: 1, person: 2 };
+    return branchTables
+      .filter((t) => openSeatStages.has(t.id))
+      .slice()
+      .sort((a, b) => {
+        const ta = typeOrder[((a.type ?? "table") as SeatEntityType)] ?? 0;
+        const tb = typeOrder[((b.type ?? "table") as SeatEntityType)] ?? 0;
+        if (ta !== tb) return ta - tb;
+        return String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" });
+      });
+  }, [branchTables, openSeatStages]);
+
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const {
     format: formatMoneyAmount,
@@ -1175,12 +1189,120 @@ export default function POS() {
         maxWidth="max-w-5xl"
       >
         <div className="space-y-4">
-          {seatPickerMode === "openOrders" && (
-            <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3">
-              <p className="text-sm font-bold text-foreground">{t("pos.editLists")}</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("pos.editListsHint")}</p>
-            </div>
-          )}
+          {seatPickerMode === "openOrders" ? (
+            <>
+              <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3">
+                <p className="text-sm font-bold text-foreground">{t("pos.editLists")}</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("pos.editListsHint")}</p>
+              </div>
+
+              {needsBranchPick ? (
+                <div className="rounded-3xl border border-dashed border-amber-500/40 bg-amber-500/10 py-14 text-center text-amber-700 dark:text-amber-300">
+                  <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
+                  <p className="font-bold">{t("pos.pickBranchFirstTitle")}</p>
+                  <p className="text-xs mt-1 opacity-80">{t("pos.pickBranchFirstHint")}</p>
+                </div>
+              ) : editListSeats.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
+                  <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-bold">{t("pos.noOpenSeats")}</p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border/60 bg-card/70 overflow-hidden max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain shadow-sm">
+                  <div className="divide-y divide-border/50">
+                    {editListSeats.map((seat, idx) => {
+                      const seatType = (seat.type ?? "table") as SeatEntityType;
+                      const openStage = openSeatStages.get(seat.id);
+                      const isSelected = selectedTableId === seat.id;
+                      const typeLabel =
+                        seatType === "room"
+                          ? t("seat.room")
+                          : seatType === "person"
+                            ? t("seat.person")
+                            : t("seat.table");
+                      return (
+                        <motion.button
+                          key={seat.id}
+                          type="button"
+                          disabled={isUpdatingPerson}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: Math.min(idx * 0.02, 0.28) }}
+                          onClick={() => {
+                            if (seatType === "person") {
+                              selectPerson(seat);
+                              return;
+                            }
+                            setSelectedTableId(seat.id);
+                            closeSeatPicker();
+                          }}
+                          className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors cursor-pointer ${
+                            isSelected ? "bg-primary/10" : "hover:bg-primary/5"
+                          } ${isUpdatingPerson ? "opacity-60" : ""}`}
+                        >
+                          <div
+                            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border flex-shrink-0 overflow-hidden ${
+                              isSelected
+                                ? "bg-primary/15 border-primary/40 text-primary"
+                                : "bg-secondary/80 border-border/60 text-foreground"
+                            }`}
+                          >
+                            {seatType === "room" ? (
+                              <RoomIcon className="w-10 h-auto" />
+                            ) : seatType === "person" ? (
+                              <UserRound className="w-6 h-6 text-primary" />
+                            ) : (
+                              <DiningTableIcon className="w-10 h-auto" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-extrabold text-sm sm:text-base truncate">
+                                {seatLabel(seat, t)}
+                              </p>
+                              <span className="inline-flex items-center rounded-full border border-border/60 bg-secondary/70 px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                                {typeLabel}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] sm:text-xs text-muted-foreground">
+                              {seat.location ? (
+                                <span className="inline-flex items-center gap-1 truncate">
+                                  <MapPin className="w-3 h-3 text-primary/80" />
+                                  {seat.location}
+                                </span>
+                              ) : null}
+                              <span className="inline-flex items-center gap-1">
+                                <Users className="w-3 h-3 text-primary/80" />
+                                <span className="font-display">{seat.capacity}</span>
+                              </span>
+                              {openStage?.cashier && (
+                                <span className="rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold">
+                                  {t("pos.openOnCashier")}
+                                </span>
+                              )}
+                              {openStage?.kitchen && (
+                                <span className="rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-extrabold">
+                                  {t("pos.openOnKitchen")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {isSelected ? (
+                            <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                          ) : (
+                            <span className="w-5 h-5 rounded-full border border-border/70 flex-shrink-0" />
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
           <div className="flex p-1 rounded-xl bg-secondary/50 border border-border/50 gap-1">
             {SEAT_TABS.map(({ key, labelKey, icon: Icon }) => {
               const active = pickerEntityType === key;
@@ -1253,11 +1375,6 @@ export default function POS() {
               <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
               <p className="font-bold">{t("pos.pickBranchFirstTitle")}</p>
               <p className="text-xs mt-1 opacity-80">{t("pos.pickBranchFirstHint")}</p>
-            </div>
-          ) : seatPickerMode === "openOrders" && pickerSeats.length === 0 && !(pickerEntityType === "person" && personSearch.trim()) ? (
-            <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
-              <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="font-bold">{t("pos.noOpenSeats")}</p>
             </div>
           ) : pickerEntityType === "person" ? (
             <div className="space-y-3">
@@ -1420,8 +1537,7 @@ export default function POS() {
               {pickerSeats.map((table, idx) => {
                 const meta = TABLE_STATUS_META[table.status] ?? TABLE_STATUS_META.available;
                 const openStage = openSeatStages.get(table.id);
-                const canPick =
-                  seatPickerMode === "openOrders" ? Boolean(openStage) : table.status === "available";
+                const canPick = table.status === "available";
                 const isSelected = selectedTableId === table.id;
                 const isRoom = pickerEntityType === "room";
                 return (
@@ -1521,6 +1637,8 @@ export default function POS() {
                 );
               })}
             </div>
+          )}
+            </>
           )}
         </div>
       </Dialog>
