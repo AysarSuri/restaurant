@@ -292,7 +292,7 @@ export default function Login() {
   const [selection, setSelection] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState<BranchPick | null>(null);
   const [pin, setPin] = useState("");
-  const [showPin, setShowPin] = useState(true);
+  const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState("");
   const pinInputRef = useRef<HTMLInputElement>(null);
   const pinInputDesktopRef = useRef<HTMLInputElement>(null);
@@ -634,7 +634,7 @@ export default function Login() {
                 onClick={() => setShowPin((v) => !v)}
                 className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-40 disabled:pointer-events-none"
               >
-                {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
@@ -779,7 +779,7 @@ export default function Login() {
                     onClick={() => setShowPin((v) => !v)}
                     className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-40 disabled:pointer-events-none"
                   >
-                    {showPin ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
