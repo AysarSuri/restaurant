@@ -21,8 +21,16 @@ export const menuItemsTable = pgTable("menu_items", {
   nameKu: text("name_ku"),
   description: text("description"),
   descriptionAr: text("description_ar"),
+  /** Selling price per minor unit («عدد») */
   price: numeric("price", { precision: 12, scale: 2 }).notNull(),
+  /** Cost per minor unit («عدد»); null = without cost */
   cost: numeric("cost", { precision: 12, scale: 2 }),
+  /** Major pack unit name, e.g. كرتون */
+  majorUnit: text("major_unit"),
+  /** Always «عدد» when cost mode is on */
+  minorUnit: text("minor_unit"),
+  /** How many minor units in one major unit */
+  subunitQty: integer("subunit_qty"),
   imageUrl: text("image_url"),
   isAvailable: boolean("is_available").default(true).notNull(),
   /** Favorite items appear first in POS */

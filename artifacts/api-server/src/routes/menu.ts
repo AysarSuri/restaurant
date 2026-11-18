@@ -4,6 +4,7 @@ import {
   menuCategoriesTable,
   menuItemsTable,
   menuItemBranchesTable,
+  itemUnitsTable,
 } from "@workspace/db/schema";
 import { eq, asc, inArray, ne, and, or, sql } from "drizzle-orm";
 import { parseBranchScope } from "../lib/branch-scope";
@@ -11,6 +12,56 @@ import {
   persistCategoryImageDataUrl,
   persistMenuItemImageDataUrl,
 } from "../lib/category-image";
+
+const LOCKED_MINOR_UNIT = "عدد";
+
+const DEFAULT_ITEM_UNITS = [
+  { nameAr: "كرتون", name: "Carton" },
+  { nameAr: "صندوق", name: "Box" },
+  { nameAr: "كيس", name: "Bag" },
+  { nameAr: "علبة", name: "Can" },
+  { nameAr: "باكيت", name: "Pack" },
+  { nameAr: "دزينة", name: "Dozen" },
+];
+
+function normalizeCostUnitFields(body: {
+  cost?: unknown;
+  majorUnit?: unknown;
+  subunitQty?: unknown;
+}) {
+  const rawCost = body.cost;
+  const hasCost =
+    rawCost !== null &&
+    rawCost !== undefined &&
+    rawCost !== "" &&
+    Number.isFinite(Number(rawCost)) &&
+    Number(rawCost) > 0;
+
+  if (!hasCost) {
+    return {
+      cost: null as string | null,
+      majorUnit: null as string | null,
+      minorUnit: null as string | null,
+      subunitQty: null as number | null,
+    };
+  }
+
+  const majorUnit = String(body.majorUnit ?? "").trim();
+  const subunitQty = Math.floor(Number(body.subunitQty));
+  if (!majorUnit) {
+    return { error: "اختر الوحدة الكبرى" as const };
+  }
+  if (!Number.isFinite(subunitQty) || subunitQty < 1) {
+    return { error: "عدد الكمية الفرعية يجب أن يكون 1 أو أكثر" as const };
+  }
+
+  return {
+    cost: Number(rawCost).toFixed(2),
+    majorUnit,
+    minorUnit: LOCKED_MINOR_UNIT,
+    subunitQty,
+  };
+}
 
 async function findDuplicateMenuItemName(
   nameAr: string,
@@ -45,6 +96,53 @@ async function findDuplicateMenuItemName(
 }
 
 const router: IRouter = Router();
+
+async function ensureDefaultItemUnits() {
+  const existing = await db.select({ id: itemUnitsTable.id }).from(itemUnitsTable).limit(1);
+  if (existing.length > 0) return;
+  await db.insert(itemUnitsTable).values(
+    DEFAULT_ITEM_UNITS.map((u) => ({
+      nameAr: u.nameAr,
+      name: u.name,
+      isActive: true,
+    }))
+  );
+}
+
+// GET /menu/units
+router.get("/units", async (_req, res) => {
+  await ensureDefaultItemUnits();
+  const units = await db
+    .select()
+    .from(itemUnitsTable)
+    .where(eq(itemUnitsTable.isActive, true))
+    .orderBy(asc(itemUnitsTable.nameAr));
+  res.json(units);
+});
+
+// POST /menu/units
+router.post("/units", async (req, res) => {
+  const nameAr = String(req.body?.nameAr ?? "").trim();
+  const name = String(req.body?.name ?? "").trim() || null;
+  if (!nameAr) {
+    res.status(400).json({ success: false, message: "اسم الوحدة مطلوب" });
+    return;
+  }
+  const [dup] = await db
+    .select({ id: itemUnitsTable.id })
+    .from(itemUnitsTable)
+    .where(sql`lower(trim(${itemUnitsTable.nameAr})) = ${nameAr.toLowerCase()}`)
+    .limit(1);
+  if (dup) {
+    res.status(400).json({ success: false, message: "اسم الوحدة مستخدم مسبقاً" });
+    return;
+  }
+  const [created] = await db
+    .insert(itemUnitsTable)
+    .values({ nameAr, name, isActive: true })
+    .returning();
+  res.status(201).json(created);
+});
 
 async function getBranchIdsForItems(itemIds: number[]) {
   const map = new Map<number, number[]>();
@@ -183,6 +281,9 @@ router.get("/items", async (req, res) => {
       descriptionAr: menuItemsTable.descriptionAr,
       price: menuItemsTable.price,
       cost: menuItemsTable.cost,
+      majorUnit: menuItemsTable.majorUnit,
+      minorUnit: menuItemsTable.minorUnit,
+      subunitQty: menuItemsTable.subunitQty,
       imageUrl: menuItemsTable.imageUrl,
       isAvailable: menuItemsTable.isAvailable,
       isFavorite: menuItemsTable.isFavorite,
@@ -234,6 +335,9 @@ router.get("/items/:id", async (req, res) => {
       descriptionAr: menuItemsTable.descriptionAr,
       price: menuItemsTable.price,
       cost: menuItemsTable.cost,
+      majorUnit: menuItemsTable.majorUnit,
+      minorUnit: menuItemsTable.minorUnit,
+      subunitQty: menuItemsTable.subunitQty,
       imageUrl: menuItemsTable.imageUrl,
       isAvailable: menuItemsTable.isAvailable,
       isFavorite: menuItemsTable.isFavorite,
@@ -268,6 +372,8 @@ router.post("/items", async (req, res) => {
     descriptionAr,
     price,
     cost,
+    majorUnit,
+    subunitQty,
     imageUrl,
     isAvailable,
     isFavorite,
@@ -295,6 +401,12 @@ router.post("/items", async (req, res) => {
     return;
   }
 
+  const unitFields = normalizeCostUnitFields({ cost, majorUnit, subunitQty });
+  if ("error" in unitFields) {
+    res.status(400).json({ success: false, message: unitFields.error });
+    return;
+  }
+
   let savedImage: string | null = null;
   try {
     savedImage = persistMenuItemImageDataUrl(imageUrl);
@@ -313,7 +425,10 @@ router.post("/items", async (req, res) => {
       description,
       descriptionAr,
       price: price.toString(),
-      cost: cost?.toString(),
+      cost: unitFields.cost,
+      majorUnit: unitFields.majorUnit,
+      minorUnit: unitFields.minorUnit,
+      subunitQty: unitFields.subunitQty,
       imageUrl: savedImage,
       isAvailable: isAvailable ?? true,
       isFavorite: isFavorite ?? false,
@@ -341,6 +456,8 @@ router.put("/items/:id", async (req, res) => {
     descriptionAr,
     price,
     cost,
+    majorUnit,
+    subunitQty,
     imageUrl,
     isAvailable,
     isFavorite,
@@ -383,6 +500,27 @@ router.put("/items/:id", async (req, res) => {
     return;
   }
 
+  const costTouched =
+    cost !== undefined || majorUnit !== undefined || subunitQty !== undefined;
+  let unitPatch: Record<string, unknown> = {};
+  if (costTouched) {
+    const unitFields = normalizeCostUnitFields({
+      cost: cost === undefined ? existing.cost : cost,
+      majorUnit: majorUnit === undefined ? existing.majorUnit : majorUnit,
+      subunitQty: subunitQty === undefined ? existing.subunitQty : subunitQty,
+    });
+    if ("error" in unitFields) {
+      res.status(400).json({ success: false, message: unitFields.error });
+      return;
+    }
+    unitPatch = {
+      cost: unitFields.cost,
+      majorUnit: unitFields.majorUnit,
+      minorUnit: unitFields.minorUnit,
+      subunitQty: unitFields.subunitQty,
+    };
+  }
+
   let nextImage = existing.imageUrl;
   if (imageUrl !== undefined) {
     try {
@@ -407,7 +545,7 @@ router.put("/items/:id", async (req, res) => {
       description,
       descriptionAr,
       price: price?.toString(),
-      cost: cost?.toString(),
+      ...unitPatch,
       imageUrl: nextImage,
       isAvailable,
       ...(isFavorite !== undefined ? { isFavorite: Boolean(isFavorite) } : {}),

@@ -9,19 +9,28 @@ import {
   useUpdateMenuCategory,
   useDeleteMenuCategory,
   useGetBranches,
+  useGetItemUnits,
+  useCreateItemUnit,
+  getGetItemUnitsQueryKey,
   type MenuCategory,
   type MenuItem,
+  type ItemUnit,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CrudTable } from "@/components/crud-table";
 import { Dialog, Input, Button } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import {
+  BadgeDollarSign,
   Building2,
   Check,
+  CircleSlash,
   Eye,
   EyeOff,
   FolderPlus,
   ImagePlus,
+  Lock,
+  Package,
   Pencil,
   Plus,
   Star,
@@ -29,6 +38,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+
+const LOCKED_MINOR_UNIT = "عدد";
 
 const CATEGORY_IMAGE_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp,image/gif";
 const CATEGORY_IMAGE_MAX = 4 * 1024 * 1024;
@@ -93,12 +104,15 @@ export default function Menu() {
   const { data: branches } = useGetBranches({
     query: { staleTime: 60_000, refetchOnMount: false },
   });
+  const queryClient = useQueryClient();
   const { mutate: create } = useCreateMenuItem();
   const { mutate: update } = useUpdateMenuItem();
   const { mutate: remove } = useDeleteMenuItem();
   const { mutate: createCategory, isPending: isCreatingCategory } = useCreateMenuCategory();
   const { mutate: updateCategory, isPending: isUpdatingCategory } = useUpdateMenuCategory();
   const { mutate: deleteCategory, isPending: isDeletingCategory } = useDeleteMenuCategory();
+  const { data: itemUnits } = useGetItemUnits();
+  const { mutate: createItemUnit, isPending: isCreatingUnit } = useCreateItemUnit();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
@@ -108,6 +122,10 @@ export default function Menu() {
   const [categoryForm, setCategoryForm] = useState<CategoryFormState>(EMPTY_CATEGORY_FORM);
   const [editForm, setEditForm] = useState<CategoryFormState>(EMPTY_CATEGORY_FORM);
   const [categoryError, setCategoryError] = useState("");
+  const [isUnitDialogOpen, setIsUnitDialogOpen] = useState(false);
+  const [newUnitNameAr, setNewUnitNameAr] = useState("");
+  const [newUnitNameEn, setNewUnitNameEn] = useState("");
+  const [unitError, setUnitError] = useState("");
   const addImageInputRef = useRef<HTMLInputElement>(null);
   const editImageInputRef = useRef<HTMLInputElement>(null);
   const [formError, setFormError] = useState("");
@@ -116,6 +134,10 @@ export default function Menu() {
     nameAr: "",
     name: "",
     price: 0,
+    costMode: "none" as "none" | "with",
+    cost: 0,
+    majorUnit: "",
+    subunitQty: 1,
     categoryId: 0,
     isAvailable: true,
     isFavorite: false,
@@ -129,19 +151,52 @@ export default function Menu() {
     return (categories ?? []).map((c) => ({
       value: String(c.id),
       label: c.nameAr,
-      subtitle: c.name?.trim() || "تصنيف قائمة",
+      subtitle: c.name?.trim() || "تصنيف أصناف",
       icon: Tags,
     }));
   }, [categories]);
 
+  const costModeOptions = useMemo<ComboboxOption[]>(
+    () => [
+      {
+        value: "none",
+        label: "بدون تكلفة",
+        subtitle: "لا يُسجَّل سعر تكلفة للصنف",
+        icon: CircleSlash,
+      },
+      {
+        value: "with",
+        label: "تكلفة",
+        subtitle: "تفاصيل الوحدات وتكلفة العدد",
+        icon: BadgeDollarSign,
+      },
+    ],
+    []
+  );
+
+  const majorUnitOptions = useMemo<ComboboxOption[]>(() => {
+    return (itemUnits ?? []).map((u) => ({
+      value: u.nameAr,
+      label: u.nameAr,
+      subtitle: u.name?.trim() || undefined,
+      icon: Package,
+    }));
+  }, [itemUnits]);
+
   const handleOpen = (item?: MenuItem) => {
     setFormError("");
     if (item) {
+      const hasCost =
+        item.cost != null && item.cost !== "" && Number(item.cost) > 0;
       setEditing(item);
       setFormData({
         nameAr: item.nameAr,
         name: item.name,
-        price: item.price,
+        price: Number(item.price) || 0,
+        costMode: hasCost ? "with" : "none",
+        cost: hasCost ? Number(item.cost) : 0,
+        majorUnit: item.majorUnit?.trim() || "",
+        subunitQty: Math.max(1, Number(item.subunitQty) || 1),
         categoryId: item.categoryId,
         isAvailable: item.isAvailable,
         isFavorite: item.isFavorite === true,
@@ -155,6 +210,10 @@ export default function Menu() {
         nameAr: "",
         name: "",
         price: 0,
+        costMode: "none",
+        cost: 0,
+        majorUnit: "",
+        subunitQty: 1,
         categoryId: categories?.[0]?.id || 0,
         isAvailable: true,
         isFavorite: false,
@@ -164,6 +223,38 @@ export default function Menu() {
       });
     }
     setIsOpen(true);
+  };
+
+  const openAddUnitDialog = () => {
+    setNewUnitNameAr("");
+    setNewUnitNameEn("");
+    setUnitError("");
+    setIsUnitDialogOpen(true);
+  };
+
+  const handleCreateUnit = () => {
+    const nameAr = newUnitNameAr.trim();
+    if (!nameAr) {
+      setUnitError("اسم الوحدة مطلوب");
+      return;
+    }
+    setUnitError("");
+    createItemUnit(
+      { data: { nameAr, name: newUnitNameEn.trim() || undefined } },
+      {
+        onSuccess: (created: ItemUnit) => {
+          queryClient.setQueryData<ItemUnit[]>(getGetItemUnitsQueryKey(), (prev) => [
+            ...(prev ?? []),
+            created,
+          ]);
+          setFormData((f) => ({ ...f, majorUnit: created.nameAr }));
+          setIsUnitDialogOpen(false);
+        },
+        onError: (err: any) => {
+          setUnitError(err?.data?.message || err?.message || "تعذر إضافة الوحدة");
+        },
+      }
+    );
   };
 
   const toggleBranch = (id: number) => {
@@ -239,12 +330,30 @@ export default function Menu() {
       setFormError("اسم الصنف مكرر — اختر اسماً عربياً أو إنجليزياً مختلفاً");
       return;
     }
+    if (formData.costMode === "with") {
+      if (!formData.majorUnit.trim()) {
+        setFormError("اختر الوحدة الكبرى");
+        return;
+      }
+      if (!(Number(formData.subunitQty) >= 1)) {
+        setFormError("عدد الكمية الفرعية يجب أن يكون 1 أو أكثر");
+        return;
+      }
+      if (!(Number(formData.cost) > 0)) {
+        setFormError("أدخل تكلفة بوحدة الصغرى (عدد)");
+        return;
+      }
+    }
     setFormError("");
 
+    const withCost = formData.costMode === "with";
     const data = {
       nameAr: formData.nameAr.trim(),
       name: formData.name.trim(),
       price: formData.price,
+      cost: withCost ? Number(formData.cost) : null,
+      majorUnit: withCost ? formData.majorUnit.trim() : null,
+      subunitQty: withCost ? Math.floor(Number(formData.subunitQty)) : null,
       categoryId: formData.categoryId,
       isAvailable: formData.isAvailable,
       isFavorite: formData.isFavorite,
@@ -495,8 +604,8 @@ export default function Menu() {
   return (
     <>
       <CrudTable<MenuItem>
-        title="إدارة المنيو"
-        titleEn="Menu Management"
+        title="إدارة الأصناف"
+        titleEn="Items Management"
         data={items}
         columns={columns}
         isLoading={isLoading}
@@ -612,7 +721,7 @@ export default function Menu() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
-                      السعر (د.ع) *
+                      السعر بوحدة الصغرى ({LOCKED_MINOR_UNIT}) — د.ع *
                     </label>
                     <Input
                       type="number"
@@ -640,6 +749,133 @@ export default function Menu() {
                     />
                   </div>
                 </div>
+
+                {/* Cost mode */}
+                <div>
+                  <ModernCombobox
+                    value={formData.costMode}
+                    onChange={(v) =>
+                      setFormData((f) => ({
+                        ...f,
+                        costMode: v === "with" ? "with" : "none",
+                        cost: v === "with" ? f.cost : 0,
+                        majorUnit: v === "with" ? f.majorUnit : "",
+                        subunitQty: v === "with" ? Math.max(1, f.subunitQty) : 1,
+                      }))
+                    }
+                    options={costModeOptions}
+                    label="التكلفة"
+                    placeholder="بدون تكلفة"
+                    icon={BadgeDollarSign}
+                    searchable={false}
+                  />
+                </div>
+
+                {formData.costMode === "with" ? (
+                  <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-extrabold text-amber-800 dark:text-amber-200">
+                        تفاصيل الوحدات والتكلفة
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openAddUnitDialog}
+                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-primary/35 bg-primary/10 text-primary text-[11px] font-extrabold hover:bg-primary/15"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        إضافة وحدات
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <ModernCombobox
+                        value={formData.majorUnit}
+                        onChange={(v) =>
+                          setFormData((f) => ({ ...f, majorUnit: v }))
+                        }
+                        options={majorUnitOptions}
+                        label="الوحدة الكبرى *"
+                        placeholder="اختر الوحدة الكبرى..."
+                        searchPlaceholder="بحث عن وحدة..."
+                        emptyText="لا توجد وحدات — أضف وحدة أولاً"
+                        icon={Package}
+                        searchable
+                      />
+                      <div>
+                        <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                          الوحدة الصغرى
+                        </label>
+                        <div className="h-11 rounded-xl border border-border/70 bg-secondary/50 px-3 flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-sm">{LOCKED_MINOR_UNIT}</span>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
+                            <Lock className="w-3 h-3" />
+                            ثابت
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                          عدد كمية فرعية *
+                        </label>
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={formData.subunitQty}
+                          onChange={(e) =>
+                            setFormData((f) => ({
+                              ...f,
+                              subunitQty: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                            }))
+                          }
+                          className="h-11"
+                          dir="ltr"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1 font-semibold">
+                          كم «{LOCKED_MINOR_UNIT}» داخل الوحدة الكبرى
+                          {formData.majorUnit ? ` (${formData.majorUnit})` : ""}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                          تكلفة بوحدة الصغرى ({LOCKED_MINOR_UNIT}) — د.ع *
+                        </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={formData.cost}
+                          onChange={(e) =>
+                            setFormData((f) => ({
+                              ...f,
+                              cost: Number(e.target.value),
+                            }))
+                          }
+                          className="h-11"
+                          dir="ltr"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    {formData.majorUnit && Number(formData.subunitQty) > 0 ? (
+                      <p className="text-[11px] font-bold text-muted-foreground">
+                        1 {formData.majorUnit} = {formData.subunitQty} {LOCKED_MINOR_UNIT}
+                        {Number(formData.cost) > 0
+                          ? ` · تكلفة الكبرى ≈ ${new Intl.NumberFormat("en-IQ").format(
+                              Number(formData.cost) * Number(formData.subunitQty)
+                            )} د.ع`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border/70 bg-secondary/30 px-3 py-2.5 text-[11px] text-muted-foreground font-semibold">
+                    لن تُحفظ تكلفة أو وحدات لهذا الصنف
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -1024,6 +1260,60 @@ export default function Menu() {
           <div className="flex justify-end">
             <Button variant="ghost" onClick={() => setIsCategoryOpen(false)}>
               إغلاق
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={isUnitDialogOpen}
+        onClose={() => !isCreatingUnit && setIsUnitDialogOpen(false)}
+        title="إضافة وحدة"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
+              اسم الوحدة (عربي) *
+            </label>
+            <Input
+              value={newUnitNameAr}
+              onChange={(e) => setNewUnitNameAr(e.target.value)}
+              placeholder="مثال: كرتون"
+              className="h-11"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
+              الاسم (إنجليزي)
+            </label>
+            <Input
+              value={newUnitNameEn}
+              onChange={(e) => setNewUnitNameEn(e.target.value)}
+              placeholder="e.g. Carton"
+              className="h-11"
+            />
+          </div>
+          {unitError ? (
+            <p className="text-xs font-semibold text-destructive">{unitError}</p>
+          ) : null}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 h-11"
+              onClick={() => setIsUnitDialogOpen(false)}
+              disabled={isCreatingUnit}
+            >
+              إلغاء
+            </Button>
+            <Button
+              className="flex-1 h-11 gap-1.5"
+              onClick={handleCreateUnit}
+              isLoading={isCreatingUnit}
+            >
+              <Plus className="w-4 h-4" />
+              حفظ الوحدة
             </Button>
           </div>
         </div>

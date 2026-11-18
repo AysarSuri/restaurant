@@ -43,7 +43,14 @@ export interface MenuItem {
   description?: string;
   descriptionAr?: string;
   price: number;
-  cost?: number;
+  /** Cost per minor unit («عدد») */
+  cost?: number | null;
+  /** Major pack unit, e.g. كرتون */
+  majorUnit?: string | null;
+  /** Always «عدد» when cost is set */
+  minorUnit?: string | null;
+  /** Minor units count inside one major unit */
+  subunitQty?: number | null;
   imageUrl?: string;
   isAvailable: boolean;
   /** Favorite — shown first in POS */
@@ -67,7 +74,9 @@ export interface CreateMenuItemBody {
   description?: string;
   descriptionAr?: string;
   price: number;
-  cost?: number;
+  cost?: number | null;
+  majorUnit?: string | null;
+  subunitQty?: number | null;
   imageUrl?: string;
   isAvailable?: boolean;
   isFavorite?: boolean;
@@ -76,6 +85,19 @@ export interface CreateMenuItemBody {
   preparationTime?: number;
   calories?: number;
   sortOrder?: number;
+}
+
+export interface ItemUnit {
+  id: number;
+  nameAr: string;
+  name?: string | null;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface CreateItemUnitBody {
+  nameAr: string;
+  name?: string;
 }
 
 export type RestaurantTableType =

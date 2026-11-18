@@ -5,5 +5,6 @@ export * from "./cards";
 export * from "./settings";
 export * from "./delivery-contacts";
 export * from "./shifts";
+export * from "./item-units";
 export { setBaseUrl, setAuthTokenGetter, setBranchIdGetter } from "./custom-fetch";
 export type { AuthTokenGetter, BranchIdGetter } from "./custom-fetch";
