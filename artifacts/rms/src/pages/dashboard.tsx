@@ -117,20 +117,9 @@ export default function Dashboard() {
         </div>
       </Dialog>
 
-      <div className="mb-4 sm:mb-6 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">{t("home.title")}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("home.subtitle")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setLogoutOpen(true)}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm font-bold hover:bg-destructive/20 transition-colors flex-shrink-0"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>{t("auth.logout")}</span>
-        </button>
-      </div>
+      <p className="mb-3 text-xs sm:text-sm font-semibold text-muted-foreground">
+        {t("home.title")}
+      </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4">
         {items.map((item, idx) => {
@@ -160,13 +149,13 @@ export default function Dashboard() {
             >
               <span
                 className="
-                  w-14 h-14 sm:w-16 sm:h-16 rounded-2xl
+                  w-16 h-16 sm:w-[4.75rem] sm:h-[4.75rem] rounded-2xl
                   bg-primary text-primary-foreground
                   flex items-center justify-center shadow-md shadow-primary/25
                   transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-3
                 "
               >
-                <Icon className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.25} />
+                <Icon className="w-9 h-9 sm:w-10 sm:h-10" strokeWidth={2.25} />
               </span>
               <span className="text-[13px] sm:text-[15px] font-extrabold text-center leading-snug line-clamp-2">
                 {label}
@@ -192,15 +181,15 @@ export default function Dashboard() {
         >
           <span
             className="
-              w-14 h-14 sm:w-16 sm:h-16 rounded-2xl
-              bg-primary text-primary-foreground
-              flex items-center justify-center shadow-md shadow-primary/25
+              w-16 h-16 sm:w-[4.75rem] sm:h-[4.75rem] rounded-2xl
+              bg-rose-600 text-white
+              flex items-center justify-center shadow-md shadow-rose-600/30
               transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-3
             "
           >
-            <LogOut className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.25} />
+            <LogOut className="w-9 h-9 sm:w-10 sm:h-10 text-white" strokeWidth={2.25} />
           </span>
-          <span className="text-[13px] sm:text-[15px] font-extrabold text-center leading-snug line-clamp-2">
+          <span className="text-[13px] sm:text-[15px] font-extrabold text-center leading-snug line-clamp-2 text-rose-700 dark:text-rose-400">
             {t("auth.logout")}
           </span>
         </motion.button>
