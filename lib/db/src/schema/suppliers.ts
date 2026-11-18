@@ -1,0 +1,85 @@
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  numeric,
+  timestamp,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { menuItemsTable } from "./menuItems";
+
+/** Supplier master data */
+export const suppliersTable = pgTable("suppliers", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  /** Opening balance: + we owe them, − they owe us */
+  openingBalance: numeric("opening_balance", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/** Purchase invoice header */
+export const supplierPurchasesTable = pgTable("supplier_purchases", {
+  id: serial("id").primaryKey(),
+  invoiceNo: text("invoice_no").notNull(),
+  invoiceDate: text("invoice_date").notNull(),
+  invoiceTime: text("invoice_time").notNull(),
+  supplierId: integer("supplier_id")
+    .notNull()
+    .references(() => suppliersTable.id, { onDelete: "restrict" }),
+  notes: text("notes"),
+  totalQty: numeric("total_qty", { precision: 14, scale: 3 }).default("0").notNull(),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/** Purchase invoice lines */
+export const supplierPurchaseItemsTable = pgTable("supplier_purchase_items", {
+  id: serial("id").primaryKey(),
+  purchaseId: integer("purchase_id")
+    .notNull()
+    .references(() => supplierPurchasesTable.id, { onDelete: "cascade" }),
+  menuItemId: integer("menu_item_id")
+    .notNull()
+    .references(() => menuItemsTable.id, { onDelete: "restrict" }),
+  qty: numeric("qty", { precision: 14, scale: 3 }).notNull(),
+  /** major | minor */
+  unitKind: text("unit_kind").notNull(),
+  unitLabel: text("unit_label").notNull(),
+  price: numeric("price", { precision: 14, scale: 2 }).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+});
+
+/**
+ * Supplier cash / adjustment movement.
+ * amountType: paid (مدفوع) | received (واصل) | discount (خصم)
+ */
+export const supplierMovementsTable = pgTable("supplier_movements", {
+  id: serial("id").primaryKey(),
+  invoiceNo: text("invoice_no").notNull(),
+  movementDate: text("movement_date").notNull(),
+  movementTime: text("movement_time").notNull(),
+  supplierId: integer("supplier_id")
+    .notNull()
+    .references(() => suppliersTable.id, { onDelete: "restrict" }),
+  amountType: text("amount_type").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSupplierSchema = createInsertSchema(suppliersTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type Supplier = typeof suppliersTable.$inferSelect;

@@ -751,23 +751,23 @@ export default function Menu() {
           </Button>
         }
         toolbar={
-          <div className="flex flex-col xl:flex-row gap-3 xl:items-end">
-            <div className="xl:flex-[1.65] min-w-0">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap xl:flex-nowrap gap-2">
+            <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-[1.4]">
               <ModernCombobox
                 value={filterItemId}
                 onChange={setFilterItemId}
                 options={filterItemOptions}
                 label="بحث حسب الصنف"
                 placeholder="ابحث واختر صنفاً"
-                hint="بحث بالاسم العربي أو الإنجليزي"
                 icon={Package}
                 searchable
                 searchPlaceholder="اكتب للبحث عن صنف..."
                 emptyText="لا يوجد صنف مطابق"
-                className="w-full"
+                size="sm"
+                className="w-full min-w-0"
               />
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 xl:flex-[1.2] min-w-0">
+            <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-1">
               <ModernCombobox
                 value={filterCategoryId}
                 onChange={setFilterCategoryId}
@@ -779,6 +779,8 @@ export default function Menu() {
                 size="sm"
                 className="w-full min-w-0"
               />
+            </div>
+            <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-1">
               <ModernCombobox
                 value={filterBranchId}
                 onChange={setFilterBranchId}
@@ -790,6 +792,8 @@ export default function Menu() {
                 size="sm"
                 className="w-full min-w-0"
               />
+            </div>
+            <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-1">
               <ModernCombobox
                 value={filterVisibility}
                 onChange={(v) =>
@@ -803,6 +807,8 @@ export default function Menu() {
                 size="sm"
                 className="w-full min-w-0"
               />
+            </div>
+            <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-1">
               <ModernCombobox
                 value={filterFavorite}
                 onChange={(v) =>

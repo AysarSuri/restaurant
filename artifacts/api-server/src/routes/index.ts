@@ -13,6 +13,7 @@ import settingsRouter from "./settings";
 import deliveryContactsRouter from "./delivery-contacts";
 import reportsRouter from "./reports";
 import shiftsRouter from "./shifts";
+import suppliersRouter from "./suppliers";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use("/settings", settingsRouter);
 router.use("/delivery-contacts", deliveryContactsRouter);
 router.use("/reports", reportsRouter);
 router.use("/shifts", shiftsRouter);
+router.use("/suppliers", suppliersRouter);
 
 export default router;

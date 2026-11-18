@@ -13,3 +13,4 @@ export * from "./cards";
 export * from "./settings";
 export * from "./deliveryContacts";
 export * from "./shifts";
+export * from "./suppliers";
