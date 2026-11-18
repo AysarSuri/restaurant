@@ -63,6 +63,9 @@ export interface SupplierPurchase {
   notes?: string | null;
   totalQty: number;
   totalAmount: number;
+  paidAmount: number;
+  discountAmount: number;
+  remainingAmount: number;
   items: SupplierPurchaseItem[];
   createdAt?: string;
 }
@@ -73,6 +76,8 @@ export interface CreateSupplierPurchaseBody {
   invoiceTime: string;
   supplierId: number;
   notes?: string;
+  paidAmount?: number;
+  discountAmount?: number;
   items: Array<{
     menuItemId: number;
     qty: number;

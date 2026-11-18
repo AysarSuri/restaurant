@@ -36,6 +36,8 @@ type ModernComboboxProps = {
   dir?: "rtl" | "ltr";
   /** Compact trigger for denser filter rows */
   size?: "md" | "sm";
+  labelClassName?: string;
+  valueClassName?: string;
 };
 
 export function ModernCombobox({
@@ -55,6 +57,8 @@ export function ModernCombobox({
   className,
   dir: dirProp,
   size = "md",
+  labelClassName,
+  valueClassName,
 }: ModernComboboxProps) {
   const { t, dir: localeDir } = useI18n();
   const dir = dirProp ?? localeDir;
@@ -97,7 +101,8 @@ export function ModernCombobox({
           <label
             className={cn(
               "block font-semibold text-foreground",
-              compact ? "text-[11px] text-muted-foreground" : "text-sm"
+              compact ? "text-[11px] text-muted-foreground" : "text-sm",
+              labelClassName
             )}
           >
             {label}
@@ -148,7 +153,8 @@ export function ModernCombobox({
                 className={cn(
                   "block truncate font-bold",
                   compact ? "text-xs" : "text-sm",
-                  selected || value ? "text-foreground" : "text-muted-foreground"
+                  selected || value ? "text-foreground" : "text-muted-foreground",
+                  valueClassName
                 )}
                 dir={selected || !value ? dir : "ltr"}
               >

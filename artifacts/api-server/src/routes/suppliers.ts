@@ -78,6 +78,16 @@ async function isDuplicateSupplierName(name: string, excludeId?: number) {
   return rows.length > 0;
 }
 
+async function nextSupplierCode(): Promise<string> {
+  const rows = await db.select({ code: suppliersTable.code }).from(suppliersTable);
+  let max = 0;
+  for (const row of rows) {
+    const match = String(row.code ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
 function mapSupplier(row: typeof suppliersTable.$inferSelect) {
   return {
     id: row.id,
@@ -110,7 +120,7 @@ async function computeBalances(supplierIds: number[]) {
   const purchases = await db
     .select({
       supplierId: supplierPurchasesTable.supplierId,
-      total: sql<string>`coalesce(sum(${supplierPurchasesTable.totalAmount}), 0)`,
+      total: sql<string>`coalesce(sum(${supplierPurchasesTable.remainingAmount}), 0)`,
     })
     .from(supplierPurchasesTable)
     .where(inArray(supplierPurchasesTable.supplierId, supplierIds))
@@ -158,18 +168,19 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const code = String(req.body?.code ?? "").trim();
   const name = String(req.body?.name ?? "").trim();
   const notes = String(req.body?.notes ?? "").trim() || null;
   const openingBalance = money(req.body?.openingBalance);
 
-  if (!code) return res.status(400).json({ message: "كود المورد مطلوب" });
   if (!name) return res.status(400).json({ message: "اسم المورد مطلوب" });
-  if (await isDuplicateSupplierCode(code)) {
-    return res.status(400).json({ message: "كود المورد مكرر" });
-  }
   if (await isDuplicateSupplierName(name)) {
-    return res.status(400).json({ message: "اسم المورد مكرر" });
+    return res.status(400).json({ message: "اسم المورد مكرر — اختر اسماً مختلفاً" });
+  }
+
+  let code = await nextSupplierCode();
+  // Rare race: bump until unique
+  while (await isDuplicateSupplierCode(code)) {
+    code = String(Number(code) + 1);
   }
 
   const [row] = await db
@@ -194,7 +205,7 @@ router.put("/:id", async (req, res) => {
     return res.status(400).json({ message: "كود المورد مكرر" });
   }
   if (await isDuplicateSupplierName(name, id)) {
-    return res.status(400).json({ message: "اسم المورد مكرر" });
+    return res.status(400).json({ message: "اسم المورد مكرر — اختر اسماً مختلفاً" });
   }
 
   const [row] = await db
@@ -314,6 +325,9 @@ async function enrichPurchases(rows: (typeof supplierPurchasesTable.$inferSelect
       notes: r.notes,
       totalQty: num(r.totalQty),
       totalAmount: num(r.totalAmount),
+      paidAmount: num(r.paidAmount),
+      discountAmount: num(r.discountAmount),
+      remainingAmount: num(r.remainingAmount),
       items: itemsMap.get(r.id) ?? [],
       createdAt: r.createdAt,
     };
@@ -407,6 +421,17 @@ router.post("/purchases", async (req, res) => {
     totalAmount += amount;
   }
 
+  const discountAmount = Math.max(0, num(req.body?.discountAmount));
+  const paidAmount = Math.max(0, num(req.body?.paidAmount));
+  if (discountAmount + paidAmount > totalAmount + 0.001) {
+    return res
+      .status(400)
+      .json({ message: "مجموع الدفع والخصم لا يمكن أن يتجاوز مجموع الفاتورة" });
+  }
+  const remainingAmount = Number(
+    Math.max(0, totalAmount - discountAmount - paidAmount).toFixed(2)
+  );
+
   const [purchase] = await db
     .insert(supplierPurchasesTable)
     .values({
@@ -417,6 +442,9 @@ router.post("/purchases", async (req, res) => {
       notes,
       totalQty: qtyStr(totalQty),
       totalAmount: money(totalAmount),
+      paidAmount: money(paidAmount),
+      discountAmount: money(discountAmount),
+      remainingAmount: money(remainingAmount),
     })
     .returning();
 
@@ -600,6 +628,8 @@ router.get("/statement/:supplierId", async (req, res) => {
       time: p.invoiceTime,
       apply: () => {
         const amount = num(p.totalAmount);
+        const discount = num(p.discountAmount);
+        const paid = num(p.paidAmount);
         running += amount;
         lines.push({
           id: `purchase-${p.id}`,
@@ -612,6 +642,34 @@ router.get("/statement/:supplierId", async (req, res) => {
           credit: 0,
           balance: Number(running.toFixed(2)),
         });
+        if (discount > 0) {
+          running -= discount;
+          lines.push({
+            id: `purchase-discount-${p.id}`,
+            kind: "purchase",
+            date: p.invoiceDate,
+            time: p.invoiceTime,
+            invoiceNo: p.invoiceNo,
+            description: "خصم فاتورة شراء",
+            debit: 0,
+            credit: discount,
+            balance: Number(running.toFixed(2)),
+          });
+        }
+        if (paid > 0) {
+          running -= paid;
+          lines.push({
+            id: `purchase-paid-${p.id}`,
+            kind: "purchase",
+            date: p.invoiceDate,
+            time: p.invoiceTime,
+            invoiceNo: p.invoiceNo,
+            description: "دفع على فاتورة شراء",
+            debit: 0,
+            credit: paid,
+            balance: Number(running.toFixed(2)),
+          });
+        }
       },
     });
   }

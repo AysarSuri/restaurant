@@ -82,6 +82,24 @@ type PurchaseLine = {
 
 const EMPTY_SUPPLIER = { code: "", name: "", openingBalance: 0, notes: "" };
 
+function nextSupplierCode(list: Supplier[] | undefined): string {
+  let max = 0;
+  for (const s of list ?? []) {
+    const match = String(s.code ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const e = error as { data?: { message?: string }; message?: string } | null;
+  const fromData = e?.data?.message?.trim();
+  if (fromData) return fromData;
+  const raw = e?.message?.trim() || "";
+  const stripped = raw.replace(/^HTTP\s+\d+\s+[^:]*:\s*/i, "").trim();
+  return stripped || fallback;
+}
+
 export default function SuppliersPage() {
   const queryClient = useQueryClient();
   const [section, setSection] = useState<Section>("hub");
@@ -105,6 +123,7 @@ export default function SuppliersPage() {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [supplierForm, setSupplierForm] = useState(EMPTY_SUPPLIER);
   const [supplierError, setSupplierError] = useState("");
+  const [supplierNameFilterId, setSupplierNameFilterId] = useState("");
 
   // ── purchase ──
   const [purchaseForm, setPurchaseForm] = useState({
@@ -113,6 +132,8 @@ export default function SuppliersPage() {
     invoiceTime: nowTime(),
     supplierId: "",
     notes: "",
+    paidAmount: 0,
+    discountAmount: 0,
   });
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([
     { key: crypto.randomUUID(), menuItemId: "", qty: 1, unitKind: "minor" as SupplierUnitKind, price: 0 },
@@ -120,6 +141,7 @@ export default function SuppliersPage() {
   const [purchaseError, setPurchaseError] = useState("");
 
   // ── movement ──
+  const [movementFormOpen, setMovementFormOpen] = useState(false);
   const [movementForm, setMovementForm] = useState({
     invoiceNo: "",
     movementDate: todayDate(),
@@ -147,6 +169,25 @@ export default function SuppliersPage() {
       })),
     [suppliers]
   );
+
+  const supplierNameSearchOptions = useMemo<ComboboxOption[]>(
+    () => [
+      {
+        value: "",
+        label: "كل الموردين",
+        subtitle: "عرض بدون فلتر",
+        icon: Truck,
+      },
+      ...supplierOptions,
+    ],
+    [supplierOptions]
+  );
+
+  const filteredNameSuppliers = useMemo(() => {
+    const list = suppliers ?? [];
+    if (!supplierNameFilterId) return list;
+    return list.filter((s) => String(s.id) === supplierNameFilterId);
+  }, [suppliers, supplierNameFilterId]);
 
   const menuOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -177,8 +218,14 @@ export default function SuppliersPage() {
       totalQty += qty;
       totalAmount += qty * price;
     }
-    return { totalQty, totalAmount };
-  }, [purchaseLines]);
+    const discountAmount = Math.max(0, Number(purchaseForm.discountAmount) || 0);
+    const paidAmount = Math.max(0, Number(purchaseForm.paidAmount) || 0);
+    const remainingAmount = Math.max(
+      0,
+      Number((totalAmount - discountAmount - paidAmount).toFixed(2))
+    );
+    return { totalQty, totalAmount, discountAmount, paidAmount, remainingAmount };
+  }, [purchaseLines, purchaseForm.discountAmount, purchaseForm.paidAmount]);
 
   const invalidateAll = () => {
     void queryClient.invalidateQueries({ queryKey: getGetSuppliersQueryKey() });
@@ -194,7 +241,10 @@ export default function SuppliersPage() {
 
   const openNewSupplier = () => {
     setEditingSupplier(null);
-    setSupplierForm(EMPTY_SUPPLIER);
+    setSupplierForm({
+      ...EMPTY_SUPPLIER,
+      code: nextSupplierCode(suppliers),
+    });
     setSupplierError("");
     setSupplierFormOpen(true);
   };
@@ -214,11 +264,19 @@ export default function SuppliersPage() {
   const saveSupplier = () => {
     const code = supplierForm.code.trim();
     const name = supplierForm.name.trim();
-    if (!code) return setSupplierError("كود المورد مطلوب");
     if (!name) return setSupplierError("اسم المورد مطلوب");
+    const nameTaken = (suppliers ?? []).some(
+      (s) =>
+        s.name.trim().toLowerCase() === name.toLowerCase() &&
+        s.id !== editingSupplier?.id
+    );
+    if (nameTaken) {
+      return setSupplierError("اسم المورد مكرر — اختر اسماً مختلفاً");
+    }
+    if (editingSupplier && !code) return setSupplierError("كود المورد مطلوب");
     setSupplierError("");
     const body = {
-      code,
+      code: editingSupplier ? code : nextSupplierCode(suppliers),
       name,
       openingBalance: Number(supplierForm.openingBalance) || 0,
       notes: supplierForm.notes.trim(),
@@ -231,7 +289,7 @@ export default function SuppliersPage() {
             setSupplierFormOpen(false);
             invalidateAll();
           },
-          onError: (e: any) => setSupplierError(e?.message || "تعذر الحفظ"),
+          onError: (e) => setSupplierError(apiErrorMessage(e, "تعذر الحفظ")),
         }
       );
     } else {
@@ -240,7 +298,7 @@ export default function SuppliersPage() {
           setSupplierFormOpen(false);
           invalidateAll();
         },
-        onError: (e: any) => setSupplierError(e?.message || "تعذر الحفظ"),
+        onError: (e) => setSupplierError(apiErrorMessage(e, "تعذر الحفظ")),
       });
     }
   };
@@ -280,6 +338,12 @@ export default function SuppliersPage() {
     if (items.length === 0) return setPurchaseError("أضف صنفاً واحداً على الأقل");
     if (items.some((i) => !(i.qty > 0))) return setPurchaseError("تحقق من الكميات");
     setPurchaseError("");
+    if (
+      purchaseTotals.discountAmount + purchaseTotals.paidAmount >
+      purchaseTotals.totalAmount + 0.001
+    ) {
+      return setPurchaseError("مجموع الدفع والخصم لا يمكن أن يتجاوز مجموع الفاتورة");
+    }
     createPurchase(
       {
         invoiceNo: purchaseForm.invoiceNo.trim(),
@@ -287,6 +351,8 @@ export default function SuppliersPage() {
         invoiceTime: purchaseForm.invoiceTime,
         supplierId: Number(purchaseForm.supplierId),
         notes: purchaseForm.notes.trim(),
+        paidAmount: purchaseTotals.paidAmount,
+        discountAmount: purchaseTotals.discountAmount,
         items,
       },
       {
@@ -297,6 +363,8 @@ export default function SuppliersPage() {
             invoiceTime: nowTime(),
             supplierId: purchaseForm.supplierId,
             notes: "",
+            paidAmount: 0,
+            discountAmount: 0,
           });
           setPurchaseLines([
             {
@@ -309,9 +377,23 @@ export default function SuppliersPage() {
           ]);
           invalidateAll();
         },
-        onError: (e: any) => setPurchaseError(e?.message || "تعذر حفظ فاتورة الشراء"),
+        onError: (e) => setPurchaseError(apiErrorMessage(e, "تعذر حفظ فاتورة الشراء")),
       }
     );
+  };
+
+  const openNewMovement = () => {
+    setMovementForm({
+      invoiceNo: "",
+      movementDate: todayDate(),
+      movementTime: nowTime(),
+      supplierId: "",
+      amountType: "paid",
+      amount: 0,
+      notes: "",
+    });
+    setMovementError("");
+    setMovementFormOpen(true);
   };
 
   const saveMovement = () => {
@@ -331,18 +413,19 @@ export default function SuppliersPage() {
       },
       {
         onSuccess: () => {
-          setMovementForm((f) => ({
-            ...f,
+          setMovementFormOpen(false);
+          setMovementForm({
             invoiceNo: "",
-            amount: 0,
-            notes: "",
             movementDate: todayDate(),
             movementTime: nowTime(),
+            supplierId: "",
             amountType: "paid",
-          }));
+            amount: 0,
+            notes: "",
+          });
           invalidateAll();
         },
-        onError: (e: any) => setMovementError(e?.message || "تعذر حفظ الحركة"),
+        onError: (e) => setMovementError(apiErrorMessage(e, "تعذر حفظ الحركة")),
       }
     );
   };
@@ -381,6 +464,43 @@ export default function SuppliersPage() {
       "تقرير ديون الموردين",
       `<div class="meta">إجمالي باقي عندنا: ${fmtMoney(debts.totalOwedByUs)} — إجمالي باقي عنده: ${fmtMoney(debts.totalOwedToUs)}</div>
        <table><thead><tr><th>كود المورد</th><th>اسم المورد</th><th>مبلغ الدين</th><th>البيان</th></tr></thead><tbody>${rows}</tbody></table>`
+    );
+  };
+
+  const printSupplierNamesReport = () => {
+    const list = filteredNameSuppliers;
+    if (list.length === 0) return;
+    const rows = list
+      .map(
+        (s) =>
+          `<tr>
+            <td>${s.code}</td>
+            <td>${s.name}</td>
+            <td>${fmtMoney(Number(s.openingBalance) || 0)}</td>
+            <td class="${(Number(s.balance) || 0) > 0 ? "pos" : (Number(s.balance) || 0) < 0 ? "neg" : ""}">${fmtMoney(Number(s.balance) || 0)}</td>
+            <td>${balanceLabel(Number(s.balance) || 0)}</td>
+            <td>${s.notes?.trim() || "—"}</td>
+          </tr>`
+      )
+      .join("");
+    printBlock(
+      "تقرير أسماء الموردين",
+      `<div class="meta">عدد الموردين: ${list.length}${
+        supplierNameFilterId ? " (بعد الفلتر)" : ""
+      }</div>
+       <table>
+         <thead>
+           <tr>
+             <th>كود المورد</th>
+             <th>اسم المورد</th>
+             <th>رصيد افتتاحي</th>
+             <th>الرصيد الحالي</th>
+             <th>البيان</th>
+             <th>ملاحظة</th>
+           </tr>
+         </thead>
+         <tbody>${rows}</tbody>
+       </table>`
     );
   };
 
@@ -454,7 +574,7 @@ export default function SuppliersPage() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-full"
+              className="rounded-full h-12 px-5 text-[15px] font-bold touch-manipulation"
               onClick={() => setSection("hub")}
             >
               العودة للقائمة
@@ -464,7 +584,7 @@ export default function SuppliersPage() {
       </div>
 
       {section === "hub" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
           {hubCards.map((card) => {
             const Icon = card.icon;
             return (
@@ -472,13 +592,21 @@ export default function SuppliersPage() {
                 key={card.id}
                 type="button"
                 onClick={() => setSection(card.id)}
-                className="group text-start rounded-3xl border border-border/60 bg-card/80 p-5 hover:border-primary/40 hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                className="
+                  group text-start rounded-3xl border-2 border-border/70 bg-card/90
+                  min-h-[9.5rem] sm:min-h-[10.5rem] p-5 sm:p-6
+                  hover:border-primary/50 hover:bg-primary/5 hover:shadow-lg
+                  active:scale-[0.98] active:bg-primary/10
+                  transition-all touch-manipulation select-none
+                "
               >
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 mb-4 group-hover:scale-105 transition-transform">
-                  <Icon className="w-6 h-6" />
+                <span className="inline-flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 mb-4 group-hover:scale-105 transition-transform">
+                  <Icon className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.25} />
                 </span>
-                <h2 className="text-lg font-extrabold">{card.title}</h2>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{card.desc}</p>
+                <h2 className="text-[15px] font-bold leading-snug">{card.title}</h2>
+                <p className="text-[13px] text-muted-foreground mt-2 leading-relaxed font-semibold">
+                  {card.desc}
+                </p>
               </button>
             );
           })}
@@ -487,27 +615,67 @@ export default function SuppliersPage() {
 
       {/* ── Names ── */}
       {section === "names" ? (
-        <Card className="p-4 sm:p-6 border border-border/50 space-y-4">
+        <Card className="p-4 sm:p-6 border border-border/50 space-y-4 overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-xl font-extrabold">أسماء الموردين</h2>
-              <p className="text-xs text-muted-foreground font-semibold">
+              <h2 className="text-[15px] font-bold">أسماء الموردين</h2>
+              <p className="text-[13px] text-muted-foreground font-semibold mt-0.5">
                 كود المورد · اسم المورد · رصيد افتتاحي · ملاحظة
               </p>
             </div>
-            <Button type="button" className="rounded-full" onClick={openNewSupplier}>
-              <Plus className="w-4 h-4 me-1.5" /> إضافة مورد
+            <Button
+              type="button"
+              className="rounded-full h-12 px-5 text-[15px] font-bold touch-manipulation"
+              onClick={openNewSupplier}
+            >
+              <Plus className="w-5 h-5 me-1.5" /> إضافة مورد
             </Button>
           </div>
+
+          <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-amber-500/5 to-transparent p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="flex-1 min-w-0 sm:max-w-sm">
+                <ModernCombobox
+                  value={supplierNameFilterId}
+                  onChange={setSupplierNameFilterId}
+                  options={supplierNameSearchOptions}
+                  label="بحث حسب المورد"
+                  placeholder="ابحث واختر مورداً"
+                  icon={Truck}
+                  searchable
+                  searchPlaceholder="اكتب اسم أو كود المورد..."
+                  emptyText="لا يوجد مورد مطابق"
+                  labelClassName="text-[15px] font-bold text-foreground"
+                  valueClassName="text-[15px] font-bold"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full h-12 px-5 text-[15px] font-bold border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground touch-manipulation"
+                disabled={filteredNameSuppliers.length === 0}
+                onClick={printSupplierNamesReport}
+              >
+                <FileText className="w-5 h-5 me-1.5" /> تقرير أسماء المورد
+              </Button>
+            </div>
+          </div>
+
           {loadingSuppliers ? (
             <div className="py-12 flex justify-center">
               <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
             </div>
           ) : (suppliers ?? []).length === 0 ? (
-            <p className="text-center text-muted-foreground py-10 text-sm">لا يوجد موردون بعد</p>
+            <p className="text-center text-muted-foreground py-10 text-[15px] font-bold">
+              لا يوجد موردون بعد
+            </p>
+          ) : filteredNameSuppliers.length === 0 ? (
+            <p className="text-center text-muted-foreground py-10 text-[15px] font-bold">
+              لا توجد نتائج للبحث
+            </p>
           ) : (
             <div className="overflow-auto rounded-2xl border border-border/40">
-              <table className="w-full text-sm">
+              <table className="w-full text-[15px]">
                 <thead className="bg-secondary/50 text-primary">
                   <tr>
                     <th className="text-start p-3 font-bold">كود المورد</th>
@@ -519,20 +687,20 @@ export default function SuppliersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(suppliers ?? []).map((s) => (
+                  {filteredNameSuppliers.map((s) => (
                     <tr key={s.id} className="border-t border-border/30">
                       <td className="p-3 font-mono font-bold">{s.code}</td>
-                      <td className="p-3 font-extrabold">{s.name}</td>
-                      <td className="p-3" dir="ltr">
+                      <td className="p-3 font-bold">{s.name}</td>
+                      <td className="p-3 font-bold" dir="ltr">
                         {fmtMoney(Number(s.openingBalance) || 0)}
                       </td>
                       <td className={`p-3 font-bold ${balanceTone(Number(s.balance) || 0)}`} dir="ltr">
                         {fmtMoney(Number(s.balance) || 0)}
-                        <span className="ms-2 text-[11px] font-semibold">
+                        <span className="ms-2 text-[13px] font-bold">
                           {balanceLabel(Number(s.balance) || 0)}
                         </span>
                       </td>
-                      <td className="p-3 text-muted-foreground">{s.notes || "—"}</td>
+                      <td className="p-3 font-bold text-muted-foreground">{s.notes || "—"}</td>
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -579,19 +747,16 @@ export default function SuppliersPage() {
           <Card className="p-4 sm:p-6 border border-border/50 space-y-4">
             <div>
               <h2 className="text-xl font-extrabold">شراء من المورد</h2>
-              <p className="text-xs text-muted-foreground font-semibold">
-                رقم الفاتورة · تاريخ · ساعة · اسم المورد · ملاحظة · أصناف الشراء
-              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                <label className="text-[15px] font-bold text-foreground mb-1.5 block">
                   رقم الفاتورة *
                 </label>
                 <div className="relative">
                   <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    className="h-11 ps-9"
+                    className="h-12 ps-9 text-[15px] font-bold"
                     value={purchaseForm.invoiceNo}
                     onChange={(e) =>
                       setPurchaseForm((f) => ({ ...f, invoiceNo: e.target.value }))
@@ -600,12 +765,12 @@ export default function SuppliersPage() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                <label className="text-[15px] font-bold text-foreground mb-1.5 block">
                   التاريخ *
                 </label>
                 <Input
                   type="date"
-                  className="h-11"
+                  className="h-12 text-[15px] font-bold"
                   dir="ltr"
                   value={purchaseForm.invoiceDate}
                   onChange={(e) =>
@@ -614,12 +779,12 @@ export default function SuppliersPage() {
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                <label className="text-[15px] font-bold text-foreground mb-1.5 block">
                   الساعة *
                 </label>
                 <Input
                   type="time"
-                  className="h-11"
+                  className="h-12 text-[15px] font-bold"
                   dir="ltr"
                   value={purchaseForm.invoiceTime}
                   onChange={(e) =>
@@ -634,17 +799,18 @@ export default function SuppliersPage() {
                 label="اسم المورد *"
                 placeholder="اختر المورد"
                 icon={Truck}
-                size="sm"
+                labelClassName="text-[15px] font-bold text-foreground"
+                valueClassName="text-[15px] font-bold"
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+              <label className="text-[15px] font-bold text-foreground mb-1.5 block">
                 ملاحظة
               </label>
               <div className="relative">
                 <StickyNote className="absolute start-3 top-3 w-4 h-4 text-muted-foreground" />
                 <Input
-                  className="h-11 ps-9"
+                  className="h-12 ps-9 text-[15px] font-bold"
                   value={purchaseForm.notes}
                   onChange={(e) => setPurchaseForm((f) => ({ ...f, notes: e.target.value }))}
                 />
@@ -653,12 +819,12 @@ export default function SuppliersPage() {
 
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-extrabold text-sm">شراء الصنف</h3>
+                <h3 className="text-[15px] font-bold">شراء الصنف</h3>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="rounded-full"
+                  className="rounded-full h-10 text-[15px] font-bold"
                   onClick={() =>
                     setPurchaseLines((rows) => [
                       ...rows,
@@ -675,149 +841,211 @@ export default function SuppliersPage() {
                   <Plus className="w-4 h-4 me-1" /> سطر صنف
                 </Button>
               </div>
-              <div className="space-y-3">
-                {purchaseLines.map((line, idx) => {
-                  const amount = (Number(line.qty) || 0) * (Number(line.price) || 0);
-                  return (
-                    <div
-                      key={line.key}
-                      className="grid grid-cols-1 lg:grid-cols-12 gap-2 rounded-xl border border-border/50 bg-background/80 p-3"
-                    >
-                      <div className="lg:col-span-4">
-                        <ModernCombobox
-                          value={line.menuItemId}
-                          onChange={(v) =>
-                            setPurchaseLines((rows) =>
-                              rows.map((r, i) =>
-                                i === idx
-                                  ? {
-                                      ...r,
-                                      menuItemId: v,
-                                      unitKind: findMenu(v)?.majorUnit ? r.unitKind : "minor",
-                                    }
-                                  : r
+              <div className="rounded-xl border border-border/50 bg-background/80 overflow-hidden">
+                <div className="hidden lg:grid grid-cols-[minmax(0,1.35fr)_minmax(0,2.4fr)_auto] gap-2 px-3 pt-2 pb-1">
+                  <div className="text-[15px] font-bold text-foreground">الصنف *</div>
+                  <div className="grid grid-cols-4 gap-2 min-w-0">
+                    <div className="text-[15px] font-bold text-foreground">كمية *</div>
+                    <div className="text-[15px] font-bold text-foreground">الوحدة *</div>
+                    <div className="text-[15px] font-bold text-foreground">سعر *</div>
+                    <div className="text-[15px] font-bold text-foreground">مبلغ</div>
+                  </div>
+                  <div className="w-12" />
+                </div>
+                <div className="divide-y divide-border/30">
+                  {purchaseLines.map((line, idx) => {
+                    const amount = (Number(line.qty) || 0) * (Number(line.price) || 0);
+                    return (
+                      <div
+                        key={line.key}
+                        className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,2.4fr)_auto] gap-2 px-3 py-1.5"
+                      >
+                        <div className="min-w-0">
+                          <span className="lg:hidden text-[15px] font-bold mb-1 block">الصنف *</span>
+                          <ModernCombobox
+                            value={line.menuItemId}
+                            onChange={(v) =>
+                              setPurchaseLines((rows) =>
+                                rows.map((r, i) =>
+                                  i === idx
+                                    ? {
+                                        ...r,
+                                        menuItemId: v,
+                                        unitKind: findMenu(v)?.majorUnit ? r.unitKind : "minor",
+                                      }
+                                    : r
+                                )
                               )
-                            )
-                          }
-                          options={menuOptions}
-                          label="الصنف *"
-                          placeholder="اختر الصنف"
-                          icon={Package}
-                          size="sm"
-                        />
-                      </div>
-                      <div className="lg:col-span-2">
-                        <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                          كمية *
-                        </label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.001"
-                          className="h-10"
-                          dir="ltr"
-                          value={line.qty}
-                          onChange={(e) =>
-                            setPurchaseLines((rows) =>
-                              rows.map((r, i) =>
-                                i === idx ? { ...r, qty: Number(e.target.value) || 0 } : r
-                              )
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="lg:col-span-2">
-                        <ModernCombobox
-                          value={line.unitKind}
-                          onChange={(v) =>
-                            setPurchaseLines((rows) =>
-                              rows.map((r, i) =>
-                                i === idx
-                                  ? { ...r, unitKind: (v as SupplierUnitKind) || "minor" }
-                                  : r
-                              )
-                            )
-                          }
-                          options={unitOptionsFor(line.menuItemId)}
-                          label="الوحدة *"
-                          placeholder="كبيرة / صغيرة"
-                          icon={Scale}
-                          searchable={false}
-                          size="sm"
-                        />
-                      </div>
-                      <div className="lg:col-span-2">
-                        <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                          سعر *
-                        </label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="h-10"
-                          dir="ltr"
-                          value={line.price}
-                          onChange={(e) =>
-                            setPurchaseLines((rows) =>
-                              rows.map((r, i) =>
-                                i === idx ? { ...r, price: Number(e.target.value) || 0 } : r
-                              )
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="lg:col-span-1">
-                        <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                          مبلغ
-                        </label>
-                        <div className="h-10 rounded-xl border border-border/60 bg-secondary/40 px-2 flex items-center font-bold text-sm" dir="ltr">
-                          {fmtMoney(amount)}
+                            }
+                            options={menuOptions}
+                            placeholder="اختر الصنف"
+                            icon={Package}
+                            valueClassName="text-[15px] font-bold"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
+                          <div className="min-w-0">
+                            <span className="lg:hidden text-[15px] font-bold mb-1 block">كمية *</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.001"
+                              className="h-12 w-full text-[15px] font-bold"
+                              dir="ltr"
+                              value={line.qty}
+                              onChange={(e) =>
+                                setPurchaseLines((rows) =>
+                                  rows.map((r, i) =>
+                                    i === idx ? { ...r, qty: Number(e.target.value) || 0 } : r
+                                  )
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="lg:hidden text-[15px] font-bold mb-1 block">الوحدة *</span>
+                            <ModernCombobox
+                              value={line.unitKind}
+                              onChange={(v) =>
+                                setPurchaseLines((rows) =>
+                                  rows.map((r, i) =>
+                                    i === idx
+                                      ? { ...r, unitKind: (v as SupplierUnitKind) || "minor" }
+                                      : r
+                                  )
+                                )
+                              }
+                              options={unitOptionsFor(line.menuItemId)}
+                              placeholder="كبيرة / صغيرة"
+                              icon={Scale}
+                              searchable={false}
+                              valueClassName="text-[15px] font-bold"
+                              className="w-full min-w-0"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="lg:hidden text-[15px] font-bold mb-1 block">سعر *</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              className="h-12 w-full text-[15px] font-bold"
+                              dir="ltr"
+                              value={line.price}
+                              onChange={(e) =>
+                                setPurchaseLines((rows) =>
+                                  rows.map((r, i) =>
+                                    i === idx ? { ...r, price: Number(e.target.value) || 0 } : r
+                                  )
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="lg:hidden text-[15px] font-bold mb-1 block">مبلغ</span>
+                            <div className="h-12 w-full rounded-xl border border-border/60 bg-secondary/40 px-2 flex items-center text-[15px] font-bold" dir="ltr">
+                              {fmtMoney(amount)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end lg:justify-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-12 w-12 text-destructive"
+                            disabled={purchaseLines.length <= 1}
+                            onClick={() =>
+                              setPurchaseLines((rows) => rows.filter((_, i) => i !== idx))
+                            }
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="lg:col-span-1 flex items-end justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 text-destructive"
-                          disabled={purchaseLines.length <= 1}
-                          onClick={() =>
-                            setPurchaseLines((rows) => rows.filter((_, i) => i !== idx))
-                          }
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border/40">
-                <div className="flex gap-4 text-sm font-extrabold">
-                  <span>
+              <div className="pt-2 border-t border-border/40 space-y-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-[15px] font-bold">
+                  <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                     مجموع كمية:{" "}
                     <span className="text-primary" dir="ltr">
                       {fmtMoney(purchaseTotals.totalQty)}
                     </span>
-                  </span>
-                  <span>
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                     مجموع المبلغ:{" "}
                     <span className="text-primary" dir="ltr">
                       {fmtMoney(purchaseTotals.totalAmount)}
                     </span>
-                  </span>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  className="rounded-full"
-                  disabled={creatingPurchase}
-                  onClick={savePurchase}
-                >
-                  حفظ فاتورة الشراء
-                </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+                      مبلغ الدفع
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="h-12 text-[15px] font-bold"
+                      dir="ltr"
+                      value={purchaseForm.paidAmount}
+                      onChange={(e) =>
+                        setPurchaseForm((f) => ({
+                          ...f,
+                          paidAmount: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+                      خصم
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      className="h-12 text-[15px] font-bold"
+                      dir="ltr"
+                      value={purchaseForm.discountAmount}
+                      onChange={(e) =>
+                        setPurchaseForm((f) => ({
+                          ...f,
+                          discountAmount: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+                      باقي قائمة
+                    </label>
+                    <div
+                      className="h-12 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 flex items-center text-[15px] font-bold text-amber-700 dark:text-amber-300"
+                      dir="ltr"
+                    >
+                      {fmtMoney(purchaseTotals.remainingAmount)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    className="rounded-full h-12 text-[15px] font-bold"
+                    disabled={creatingPurchase}
+                    onClick={savePurchase}
+                  >
+                    حفظ فاتورة الشراء
+                  </Button>
+                </div>
               </div>
               {purchaseError ? (
-                <p className="text-xs font-semibold text-destructive">{purchaseError}</p>
+                <p className="text-[15px] font-bold text-destructive">{purchaseError}</p>
               ) : null}
             </div>
           </Card>
@@ -843,7 +1071,9 @@ export default function SuppliersPage() {
                       </p>
                       <p className="text-xs text-muted-foreground font-semibold">
                         {p.invoiceDate} {p.invoiceTime} · كمية {fmtMoney(p.totalQty)} · مبلغ{" "}
-                        {fmtMoney(p.totalAmount)} · {p.items.length} أصناف
+                        {fmtMoney(p.totalAmount)} · دفع {fmtMoney(p.paidAmount || 0)} · خصم{" "}
+                        {fmtMoney(p.discountAmount || 0)} · باقي{" "}
+                        {fmtMoney(p.remainingAmount ?? p.totalAmount)} · {p.items.length} أصناف
                       </p>
                     </div>
                     <Button
@@ -869,120 +1099,22 @@ export default function SuppliersPage() {
       {/* ── Movement ── */}
       {section === "movement" ? (
         <div className="space-y-4">
-          <Card className="p-4 sm:p-6 border border-border/50 space-y-4">
-            <div>
-              <h2 className="text-xl font-extrabold">حركة المورد</h2>
-              <p className="text-xs text-muted-foreground font-semibold">
-                رقم الفاتورة · تاريخ · ساعة · اسم المورد · نوع المبلغ · ملاحظة
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                  رقم الفاتورة *
-                </label>
-                <Input
-                  className="h-11"
-                  value={movementForm.invoiceNo}
-                  onChange={(e) =>
-                    setMovementForm((f) => ({ ...f, invoiceNo: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                  التاريخ *
-                </label>
-                <Input
-                  type="date"
-                  className="h-11"
-                  dir="ltr"
-                  value={movementForm.movementDate}
-                  onChange={(e) =>
-                    setMovementForm((f) => ({ ...f, movementDate: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                  الساعة *
-                </label>
-                <Input
-                  type="time"
-                  className="h-11"
-                  dir="ltr"
-                  value={movementForm.movementTime}
-                  onChange={(e) =>
-                    setMovementForm((f) => ({ ...f, movementTime: e.target.value }))
-                  }
-                />
-              </div>
-              <ModernCombobox
-                value={movementForm.supplierId}
-                onChange={(v) => setMovementForm((f) => ({ ...f, supplierId: v }))}
-                options={supplierOptions}
-                label="اسم المورد *"
-                placeholder="اختر المورد"
-                icon={Truck}
-                size="sm"
-              />
-              <ModernCombobox
-                value={movementForm.amountType}
-                onChange={(v) =>
-                  setMovementForm((f) => ({
-                    ...f,
-                    amountType: (v as SupplierAmountType) || "paid",
-                  }))
-                }
-                options={amountTypeOptions}
-                label="نوع المبلغ *"
-                placeholder="مدفوع"
-                icon={Wallet}
-                searchable={false}
-                size="sm"
-              />
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                  المبلغ *
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="h-11"
-                  dir="ltr"
-                  value={movementForm.amount}
-                  onChange={(e) =>
-                    setMovementForm((f) => ({ ...f, amount: Number(e.target.value) || 0 }))
-                  }
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                ملاحظة
-              </label>
-              <Input
-                className="h-11"
-                value={movementForm.notes}
-                onChange={(e) => setMovementForm((f) => ({ ...f, notes: e.target.value }))}
-              />
-            </div>
-            {movementError ? (
-              <p className="text-xs font-semibold text-destructive">{movementError}</p>
-            ) : null}
-            <Button
-              type="button"
-              className="rounded-full"
-              disabled={creatingMovement}
-              onClick={saveMovement}
-            >
-              حفظ حركة المورد
-            </Button>
-          </Card>
-
           <Card className="p-4 sm:p-6 border border-border/50 space-y-3">
-            <h3 className="font-extrabold">سجل الحركات</h3>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="text-xl font-extrabold">حركة المورد</h2>
+                <p className="text-xs text-muted-foreground font-semibold">
+                  رقم الفاتورة · تاريخ · ساعة · اسم المورد · نوع المبلغ · ملاحظة
+                </p>
+              </div>
+              <Button
+                type="button"
+                className="rounded-full h-12 px-5 text-[15px] font-bold touch-manipulation"
+                onClick={openNewMovement}
+              >
+                <Plus className="w-5 h-5 me-1.5" /> إضافة حركة جديدة
+              </Button>
+            </div>
             {loadingMovements ? (
               <div className="py-8 flex justify-center">
                 <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -1250,33 +1382,41 @@ export default function SuppliersPage() {
       >
         <div className="space-y-3">
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-              كود المورد *
+            <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+              كود المورد
             </label>
             <Input
-              className="h-11"
+              className="h-12 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
               value={supplierForm.code}
-              onChange={(e) => setSupplierForm((f) => ({ ...f, code: e.target.value }))}
+              readOnly
+              disabled
+              dir="ltr"
             />
+            <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
+              يُولَّد تلقائياً ويزيد مع كل مورد جديد
+            </p>
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+            <label className="text-[15px] font-bold text-foreground mb-1.5 block">
               اسم المورد *
             </label>
             <Input
-              className="h-11"
+              className="h-12 text-[15px] font-bold"
               value={supplierForm.name}
-              onChange={(e) => setSupplierForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => {
+                setSupplierForm((f) => ({ ...f, name: e.target.value }));
+                if (supplierError) setSupplierError("");
+              }}
             />
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+            <label className="text-[15px] font-bold text-foreground mb-1.5 block">
               رصيد افتتاحي
             </label>
             <Input
               type="number"
               step="0.01"
-              className="h-11"
+              className="h-12 text-[15px] font-bold"
               dir="ltr"
               value={supplierForm.openingBalance}
               onChange={(e) =>
@@ -1286,9 +1426,132 @@ export default function SuppliersPage() {
                 }))
               }
             />
-            <p className="text-[10px] text-muted-foreground mt-1 font-semibold">
+            <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
               موجب = باقي عندنا · سالب = باقي عنده
             </p>
+          </div>
+          <div>
+            <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+              ملاحظة
+            </label>
+            <Input
+              className="h-12 text-[15px] font-bold"
+              value={supplierForm.notes}
+              onChange={(e) => setSupplierForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+          {supplierError ? (
+            <p className="text-[15px] font-bold text-destructive">{supplierError}</p>
+          ) : null}
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-12 text-[15px] font-bold"
+              onClick={() => setSupplierFormOpen(false)}
+            >
+              إلغاء
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 h-12 text-[15px] font-bold"
+              disabled={creatingSupplier || updatingSupplier}
+              onClick={saveSupplier}
+            >
+              حفظ
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={movementFormOpen}
+        onClose={() => setMovementFormOpen(false)}
+        title="إضافة حركة مورد جديدة"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                رقم الفاتورة *
+              </label>
+              <Input
+                className="h-11"
+                value={movementForm.invoiceNo}
+                onChange={(e) =>
+                  setMovementForm((f) => ({ ...f, invoiceNo: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                التاريخ *
+              </label>
+              <Input
+                type="date"
+                className="h-11"
+                dir="ltr"
+                value={movementForm.movementDate}
+                onChange={(e) =>
+                  setMovementForm((f) => ({ ...f, movementDate: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                الساعة *
+              </label>
+              <Input
+                type="time"
+                className="h-11"
+                dir="ltr"
+                value={movementForm.movementTime}
+                onChange={(e) =>
+                  setMovementForm((f) => ({ ...f, movementTime: e.target.value }))
+                }
+              />
+            </div>
+            <ModernCombobox
+              value={movementForm.supplierId}
+              onChange={(v) => setMovementForm((f) => ({ ...f, supplierId: v }))}
+              options={supplierOptions}
+              label="اسم المورد *"
+              placeholder="اختر المورد"
+              icon={Truck}
+              size="sm"
+            />
+            <ModernCombobox
+              value={movementForm.amountType}
+              onChange={(v) =>
+                setMovementForm((f) => ({
+                  ...f,
+                  amountType: (v as SupplierAmountType) || "paid",
+                }))
+              }
+              options={amountTypeOptions}
+              label="نوع المبلغ *"
+              placeholder="مدفوع"
+              icon={Wallet}
+              searchable={false}
+              size="sm"
+            />
+            <div>
+              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+                المبلغ *
+              </label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                className="h-11"
+                dir="ltr"
+                value={movementForm.amount}
+                onChange={(e) =>
+                  setMovementForm((f) => ({ ...f, amount: Number(e.target.value) || 0 }))
+                }
+              />
+            </div>
           </div>
           <div>
             <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
@@ -1296,29 +1559,29 @@ export default function SuppliersPage() {
             </label>
             <Input
               className="h-11"
-              value={supplierForm.notes}
-              onChange={(e) => setSupplierForm((f) => ({ ...f, notes: e.target.value }))}
+              value={movementForm.notes}
+              onChange={(e) => setMovementForm((f) => ({ ...f, notes: e.target.value }))}
             />
           </div>
-          {supplierError ? (
-            <p className="text-xs font-semibold text-destructive">{supplierError}</p>
+          {movementError ? (
+            <p className="text-xs font-semibold text-destructive">{movementError}</p>
           ) : null}
           <div className="flex gap-2 pt-1">
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
-              onClick={() => setSupplierFormOpen(false)}
+              className="flex-1 h-11 rounded-full text-[15px] font-bold"
+              onClick={() => setMovementFormOpen(false)}
             >
               إلغاء
             </Button>
             <Button
               type="button"
-              className="flex-1"
-              disabled={creatingSupplier || updatingSupplier}
-              onClick={saveSupplier}
+              className="flex-1 h-11 rounded-full text-[15px] font-bold"
+              disabled={creatingMovement}
+              onClick={saveMovement}
             >
-              حفظ
+              حفظ الحركة
             </Button>
           </div>
         </div>

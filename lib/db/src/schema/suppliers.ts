@@ -38,6 +38,16 @@ export const supplierPurchasesTable = pgTable("supplier_purchases", {
   totalAmount: numeric("total_amount", { precision: 14, scale: 2 })
     .default("0")
     .notNull(),
+  /** Amount paid on this invoice */
+  paidAmount: numeric("paid_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  /** Discount on this invoice */
+  discountAmount: numeric("discount_amount", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
+  /** Remaining = total - discount - paid */
+  remainingAmount: numeric("remaining_amount", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
