@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetMenuItems,
   useGetMenuCategories,
   useCreateOrder,
+  useUpdateOrder,
   useGetSettings,
   useGetTables,
   useUpdateTable,
@@ -11,6 +13,7 @@ import {
   useGetBranches,
   useGetDevicePrinters,
   useGetOrders,
+  getGetOrdersQueryKey,
   getGetTablesQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
@@ -22,8 +25,9 @@ import {
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
   DoorOpen, UserRound, Lock, Wallet, Printer, PencilLine, Undo2,
+  ShoppingBag, Truck,
 } from "lucide-react";
-import type { MenuItem } from "@workspace/api-client-react";
+import type { MenuItem, Order } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useCurrency } from "@/hooks/use-currency";
 import { useBranch } from "@/lib/branch-context";
@@ -159,6 +163,7 @@ function menuItemDisplayName(
 
 export default function POS() {
   const { t, locale } = useI18n();
+  const queryClient = useQueryClient();
   const { selectedBranchId, branchLabel } = useBranch();
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
@@ -171,28 +176,10 @@ export default function POS() {
   const { data: paymentCards } = useGetCards();
   const { data: branches } = useGetBranches();
   const { data: devicePrinters } = useGetDevicePrinters();
-  const { data: pendingOrders } = useGetOrders(
-    { status: "pending" },
-    {
-      query: {
-        queryKey: ["/api/orders", { status: "pending" }],
-        refetchInterval: 8_000,
-        staleTime: 4_000,
-      },
-    }
-  );
-  const { data: preparingOrders } = useGetOrders(
-    { status: "preparing" },
-    {
-      query: {
-        queryKey: ["/api/orders", { status: "preparing" }],
-        refetchInterval: 8_000,
-        staleTime: 4_000,
-      },
-    }
-  );
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
+  const { mutate: updateOrder, isPending: isUpdatingOrder } = useUpdateOrder();
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
+  const isSavingOrder = isCreating || isUpdatingOrder;
   const posSaveTarget =
     appSettings?.posSaveTarget === "kitchen" || appSettings?.posSaveTarget === "none"
       ? appSettings.posSaveTarget
@@ -240,7 +227,7 @@ export default function POS() {
   const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
   const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
-  /** "all" = normal seat pick; "openOrders" = seats with cashier/kitchen lists */
+  /** "all" = normal seat pick; "openOrders" = today's stored lists */
   const [seatPickerMode, setSeatPickerMode] = useState<"all" | "openOrders">("all");
   const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
   const [personSearch, setPersonSearch] = useState("");
@@ -253,43 +240,75 @@ export default function POS() {
   const [cartOpen, setCartOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
   const [now, setNow] = useState(() => new Date());
+  /** When set, POS is editing an existing stored order (load items + save via update). */
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+
+  const todayDateKey = useMemo(() => {
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, [now.getFullYear(), now.getMonth(), now.getDate()]);
+
+  const todayOrdersParams = useMemo(
+    () => ({ date: todayDateKey, limit: 200 }),
+    [todayDateKey]
+  );
+
+  const { data: todayOrders, refetch: refetchTodayOrders } = useGetOrders(
+    todayOrdersParams,
+    {
+      query: {
+        queryKey: getGetOrdersQueryKey(todayOrdersParams),
+        refetchInterval: 8_000,
+        staleTime: 4_000,
+      },
+    }
+  );
+
+  const todayBranchOrders = useMemo(() => {
+    const list = todayOrders ?? [];
+    const filtered =
+      selectedBranchId === "all"
+        ? list
+        : list.filter((o) => o.branchId == null || o.branchId === selectedBranchId);
+    return [...filtered].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [todayOrders, selectedBranchId]);
 
   const openSeatStages = useMemo(() => {
     const map = new Map<number, { cashier: boolean; kitchen: boolean }>();
-    const add = (orders: typeof pendingOrders, stage: "cashier" | "kitchen") => {
-      for (const order of orders ?? []) {
-        const tableId = order.tableId;
-        if (tableId == null) continue;
-        const prev = map.get(tableId) ?? { cashier: false, kitchen: false };
-        prev[stage] = true;
-        map.set(tableId, prev);
+    for (const order of todayBranchOrders) {
+      const tableId = order.tableId;
+      if (tableId == null) continue;
+      const prev = map.get(tableId) ?? { cashier: false, kitchen: false };
+      if (order.status === "pending" || order.status === "confirmed") prev.cashier = true;
+      if (
+        order.status === "preparing" ||
+        order.status === "ready" ||
+        order.status === "served"
+      ) {
+        prev.kitchen = true;
       }
-    };
-    add(pendingOrders, "cashier");
-    add(preparingOrders, "kitchen");
+      map.set(tableId, prev);
+    }
     return map;
-  }, [pendingOrders, preparingOrders]);
+  }, [todayBranchOrders]);
 
   const seatTypeCounts = useMemo(() => {
     const base = { table: 0, room: 0, person: 0 };
-    const source =
-      seatPickerMode === "openOrders"
-        ? branchTables.filter((t) => openSeatStages.has(t.id))
-        : branchTables;
-    for (const t of source) {
+    for (const t of branchTables) {
       const key = (t.type ?? "table") as SeatEntityType;
       if (key in base) base[key] += 1;
     }
     return base;
-  }, [branchTables, openSeatStages, seatPickerMode]);
+  }, [branchTables]);
 
   const pickerSeats = useMemo(() => {
     let list = branchTables.filter(
       (t) => (t.type ?? "table") === pickerEntityType
     );
-    if (seatPickerMode === "openOrders") {
-      list = list.filter((t) => openSeatStages.has(t.id));
-    }
     if (pickerEntityType === "person") {
       const q = personSearch.trim().toLowerCase();
       if (q) {
@@ -304,21 +323,7 @@ export default function POS() {
       );
     }
     return list;
-  }, [branchTables, openSeatStages, personSearch, pickerEntityType, seatPickerMode]);
-
-  /** Unified edit-lists rows: all open cashier/kitchen seats in one list */
-  const editListSeats = useMemo(() => {
-    const typeOrder: Record<SeatEntityType, number> = { table: 0, room: 1, person: 2 };
-    return branchTables
-      .filter((t) => openSeatStages.has(t.id))
-      .slice()
-      .sort((a, b) => {
-        const ta = typeOrder[((a.type ?? "table") as SeatEntityType)] ?? 0;
-        const tb = typeOrder[((b.type ?? "table") as SeatEntityType)] ?? 0;
-        if (ta !== tb) return ta - tb;
-        return String(a.number).localeCompare(String(b.number), "ar", { sensitivity: "base" });
-      });
-  }, [branchTables, openSeatStages]);
+  }, [branchTables, personSearch, pickerEntityType]);
 
   const { isCompactPos, isPortrait, width } = useBreakpoint();
   const {
@@ -376,11 +381,54 @@ export default function POS() {
     setSeatPickerMode(mode);
     setPersonSearch("");
     setIsPersonSearchPadOpen(false);
+    if (mode === "all") {
+      setPickerEntityType("table");
+    }
     if (mode === "openOrders") {
-      const firstOpen = branchTables.find((t) => openSeatStages.has(t.id));
-      setPickerEntityType(((firstOpen?.type ?? "table") as SeatEntityType) || "table");
+      void refetchTodayOrders();
     }
     setIsTablePickerOpen(true);
+  };
+
+  const loadOrderIntoCurrentCart = (order: Order) => {
+    const menuById = new Map((items ?? []).map((m) => [m.id, m]));
+    const nextCart: CartItem[] = [];
+    for (const line of order.items ?? []) {
+      const menuItemId = Number(line.menuItemId);
+      if (!Number.isFinite(menuItemId)) continue;
+      const qty = Math.max(1, Number(line.quantity) || 1);
+      const unitPrice = Number(line.unitPrice);
+      const fromOrder = line.menuItem;
+      const fromMenu = menuById.get(menuItemId);
+      const base: MenuItem =
+        fromOrder ??
+        fromMenu ??
+        ({
+          id: menuItemId,
+          categoryId: fromMenu?.categoryId ?? 0,
+          name: fromMenu?.name ?? `#${menuItemId}`,
+          nameAr: fromMenu?.nameAr ?? `صنف #${menuItemId}`,
+          price: Number.isFinite(unitPrice) ? unitPrice : Number(fromMenu?.price) || 0,
+          isAvailable: true,
+        } as MenuItem);
+
+      const existing = nextCart.find((c) => c.id === menuItemId);
+      if (existing) {
+        existing.cartQuantity += qty;
+        continue;
+      }
+      nextCart.push({
+        ...base,
+        price: Number.isFinite(unitPrice) ? unitPrice : Number(base.price) || 0,
+        cartQuantity: qty,
+      });
+    }
+    setCart(nextCart);
+    setDiscount(Number(order.discount) || 0);
+    setInvoiceNumber(order.orderNumber || invoiceNumber);
+    setEditingOrderId(order.id);
+    setOrderSuccess(false);
+    setCartOpen(true);
   };
 
   const finishPersonSelection = (personId: number) => {
@@ -412,6 +460,47 @@ export default function POS() {
       );
     };
     markPresent();
+  };
+
+  const selectTodayOrder = (order: Order) => {
+    loadOrderIntoCurrentCart(order);
+    const nextType = (order.type as OrderType) || "dine_in";
+    setOrderType(nextType);
+    if (nextType === "dine_in" && order.tableId != null) {
+      const seat =
+        branchTables.find((t) => t.id === order.tableId) ??
+        (order.table as RestaurantTable | undefined);
+      if (seat && (seat.type ?? "table") === "person") {
+        selectPerson(seat);
+        return;
+      }
+      setSelectedTableId(order.tableId);
+      closeSeatPicker();
+      return;
+    }
+    setSelectedTableId(null);
+    if (nextType === "delivery") {
+      setDeliveryPhone(order.deliveryPhone ?? "");
+      setDeliveryAddress(order.deliveryAddress ?? "");
+    }
+    closeSeatPicker();
+  };
+
+  const listStatusLabel = (status: string) => {
+    const key = `pos.listStatus.${status}`;
+    const label = t(key);
+    return label === key ? status : label;
+  };
+
+  const orderListTitle = (order: Order) => {
+    if (order.type === "takeaway") return t("order.takeaway");
+    if (order.type === "delivery") {
+      return order.deliveryPhone?.trim() || t("order.delivery");
+    }
+    const seat =
+      branchTables.find((t) => t.id === order.tableId) ??
+      (order.table as RestaurantTable | undefined);
+    return seat ? seatLabel(seat, t) : t("order.dineIn");
   };
 
   const addToCart = (item: MenuItem) => {
@@ -471,7 +560,13 @@ export default function POS() {
     setCheckoutCardId(null);
     setIsCheckoutOpen(false);
     setOrderSuccess(false);
+    setEditingOrderId(null);
     startNewOrderSession();
+  };
+
+  const invalidateOrdersQueries = () => {
+    void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    void refetchTodayOrders();
   };
 
   useEffect(() => {
@@ -556,13 +651,62 @@ export default function POS() {
             : t("pos.cardShort")
           : t("common.transfer");
     const receiptData = isDirectSave ? buildDirectReceipt(paymentLabel) : null;
+    const lineItems = cart.map((i) => ({
+      menuItemId: i.id,
+      quantity: i.cartQuantity,
+    }));
+
+    const afterSaveSuccess = () => {
+      if (orderType === "delivery" && deliveryPhone.replace(/\D/g, "").length >= 7) {
+        upsertDeliveryContact({
+          phone: deliveryPhone,
+          address: deliveryAddress.trim(),
+        }).catch(() => {
+          /* non-blocking */
+        });
+      }
+      invalidateOrdersQueries();
+      setOrderSuccess(true);
+      if (opts?.print && receiptData) {
+        try {
+          printThermalReceipt(receiptData);
+          toast({
+            title: t("pos.savedPrinted"),
+            description: devicePrinter?.printerName?.trim()
+              ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
+              : t("pos.printGeneric"),
+          });
+        } catch {
+          toast({
+            variant: "destructive",
+            title: t("pos.saved"),
+            description: t("pos.printPopupBlocked"),
+          });
+        }
+      }
+    };
+
+    if (editingOrderId != null) {
+      updateOrder(
+        {
+          id: editingOrderId,
+          data: {
+            discount: discount || undefined,
+            notes: cardNote,
+            items: lineItems,
+          },
+        },
+        { onSuccess: afterSaveSuccess }
+      );
+      return;
+    }
 
     createOrder(
       {
         data: {
           type: orderType,
           tableId: orderType === "dine_in" ? selectedTableId ?? undefined : undefined,
-          items: cart.map((i) => ({ menuItemId: i.id, quantity: i.cartQuantity })),
+          items: lineItems,
           discount: discount || undefined,
           deliveryAddress: orderType === "delivery" ? deliveryAddress : undefined,
           deliveryPhone: orderType === "delivery" ? deliveryPhone : undefined,
@@ -570,37 +714,7 @@ export default function POS() {
           notes: cardNote,
         } as any,
       },
-      {
-        onSuccess: () => {
-          if (orderType === "delivery" && deliveryPhone.replace(/\D/g, "").length >= 7) {
-            upsertDeliveryContact({
-              phone: deliveryPhone,
-              address: deliveryAddress.trim(),
-            }).catch(() => {
-              /* non-blocking */
-            });
-          }
-          setOrderSuccess(true);
-          if (opts?.print && receiptData) {
-            try {
-              printThermalReceipt(receiptData);
-              toast({
-                title: t("pos.savedPrinted"),
-                description: devicePrinter?.printerName?.trim()
-                  ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
-                  : t("pos.printGeneric"),
-              });
-            } catch {
-              toast({
-                variant: "destructive",
-                title: t("pos.saved"),
-                description:
-                  t("pos.printPopupBlocked"),
-              });
-            }
-          }
-        },
-      }
+      { onSuccess: afterSaveSuccess }
     );
   };
 
@@ -652,6 +766,11 @@ export default function POS() {
                 >
                   {invoiceNumber}
                 </span>
+                {editingOrderId != null && (
+                  <span className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-800 dark:text-amber-200">
+                    {t("pos.editLists")}
+                  </span>
+                )}
                 {orderType === "dine_in" && (
                   <button
                     type="button"
@@ -1122,9 +1241,9 @@ export default function POS() {
               <span className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.22),transparent_55%)] pointer-events-none" />
               <PencilLine className="relative w-5 h-5" />
               <span className="relative truncate">{t("pos.editLists")}</span>
-              {openSeatStages.size > 0 && (
+              {todayBranchOrders.length > 0 && (
                 <span className="relative ms-0.5 inline-flex min-w-6 h-6 items-center justify-center rounded-full bg-white/25 px-1.5 text-[11px] font-display font-bold tabular-nums">
-                  {openSeatStages.size}
+                  {todayBranchOrders.length}
                 </span>
               )}
             </button>
@@ -1191,9 +1310,14 @@ export default function POS() {
         <div className="space-y-4">
           {seatPickerMode === "openOrders" ? (
             <>
-              <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3">
-                <p className="text-sm font-bold text-foreground">{t("pos.editLists")}</p>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("pos.editListsHint")}</p>
+              <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground">{t("pos.editListsTitle")}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("pos.editListsHint")}</p>
+                </div>
+                <span className="flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-[11px] font-extrabold text-amber-800 dark:text-amber-200 tabular-nums">
+                  {t("pos.todayListsCount", { n: todayBranchOrders.length })}
+                </span>
               </div>
 
               {needsBranchPick ? (
@@ -1202,7 +1326,7 @@ export default function POS() {
                   <p className="font-bold">{t("pos.pickBranchFirstTitle")}</p>
                   <p className="text-xs mt-1 opacity-80">{t("pos.pickBranchFirstHint")}</p>
                 </div>
-              ) : editListSeats.length === 0 ? (
+              ) : todayBranchOrders.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
                   <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p className="font-bold">{t("pos.noOpenSeats")}</p>
@@ -1210,32 +1334,41 @@ export default function POS() {
               ) : (
                 <div className="rounded-2xl border border-border/60 bg-card/70 overflow-hidden max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain shadow-sm">
                   <div className="divide-y divide-border/50">
-                    {editListSeats.map((seat, idx) => {
-                      const seatType = (seat.type ?? "table") as SeatEntityType;
-                      const openStage = openSeatStages.get(seat.id);
-                      const isSelected = selectedTableId === seat.id;
+                    {todayBranchOrders.map((order, idx) => {
+                      const seat =
+                        branchTables.find((t) => t.id === order.tableId) ??
+                        (order.table as RestaurantTable | undefined);
+                      const seatType = (seat?.type ?? "table") as SeatEntityType;
+                      const isSelected = editingOrderId === order.id;
+                      const status = String(order.status);
+                      const statusTone =
+                        status === "paid"
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                          : status === "cancelled"
+                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30"
+                            : status === "preparing" || status === "ready" || status === "served"
+                              ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30"
+                              : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
                       const typeLabel =
-                        seatType === "room"
-                          ? t("seat.room")
-                          : seatType === "person"
-                            ? t("seat.person")
-                            : t("seat.table");
+                        order.type === "takeaway"
+                          ? t("order.takeaway")
+                          : order.type === "delivery"
+                            ? t("order.delivery")
+                            : seatType === "room"
+                              ? t("seat.room")
+                              : seatType === "person"
+                                ? t("seat.person")
+                                : t("seat.table");
+                      const created = new Date(order.createdAt);
                       return (
                         <motion.button
-                          key={seat.id}
+                          key={order.id}
                           type="button"
                           disabled={isUpdatingPerson}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.02, 0.28) }}
-                          onClick={() => {
-                            if (seatType === "person") {
-                              selectPerson(seat);
-                              return;
-                            }
-                            setSelectedTableId(seat.id);
-                            closeSeatPicker();
-                          }}
+                          onClick={() => selectTodayOrder(order)}
                           className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors cursor-pointer ${
                             isSelected ? "bg-primary/10" : "hover:bg-primary/5"
                           } ${isUpdatingPerson ? "opacity-60" : ""}`}
@@ -1247,7 +1380,11 @@ export default function POS() {
                                 : "bg-secondary/80 border-border/60 text-foreground"
                             }`}
                           >
-                            {seatType === "room" ? (
+                            {order.type === "takeaway" ? (
+                              <ShoppingBag className="w-6 h-6 text-primary" />
+                            ) : order.type === "delivery" ? (
+                              <Truck className="w-6 h-6 text-primary" />
+                            ) : seatType === "room" ? (
                               <RoomIcon className="w-10 h-auto" />
                             ) : seatType === "person" ? (
                               <UserRound className="w-6 h-6 text-primary" />
@@ -1259,41 +1396,50 @@ export default function POS() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-extrabold text-sm sm:text-base truncate">
-                                {seatLabel(seat, t)}
+                                {orderListTitle(order)}
                               </p>
                               <span className="inline-flex items-center rounded-full border border-border/60 bg-secondary/70 px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
                                 {typeLabel}
                               </span>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${statusTone}`}
+                              >
+                                {listStatusLabel(status)}
+                              </span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] sm:text-xs text-muted-foreground">
-                              {seat.location ? (
+                              <span className="font-display font-bold text-foreground/80">
+                                {order.orderNumber}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-primary/80" />
+                                {formatClock(created)}
+                              </span>
+                              {order.type === "delivery" && order.deliveryAddress ? (
+                                <span className="inline-flex items-center gap-1 truncate">
+                                  <MapPin className="w-3 h-3 text-primary/80" />
+                                  {order.deliveryAddress}
+                                </span>
+                              ) : null}
+                              {seat?.location && order.type === "dine_in" ? (
                                 <span className="inline-flex items-center gap-1 truncate">
                                   <MapPin className="w-3 h-3 text-primary/80" />
                                   {seat.location}
                                 </span>
                               ) : null}
-                              <span className="inline-flex items-center gap-1">
-                                <Users className="w-3 h-3 text-primary/80" />
-                                <span className="font-display">{seat.capacity}</span>
-                              </span>
-                              {openStage?.cashier && (
-                                <span className="rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[10px] font-extrabold">
-                                  {t("pos.openOnCashier")}
-                                </span>
-                              )}
-                              {openStage?.kitchen && (
-                                <span className="rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-extrabold">
-                                  {t("pos.openOnKitchen")}
-                                </span>
-                              )}
                             </div>
                           </div>
 
-                          {isSelected ? (
-                            <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
-                          ) : (
-                            <span className="w-5 h-5 rounded-full border border-border/70 flex-shrink-0" />
-                          )}
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                            <span className="font-display text-sm sm:text-base font-extrabold tabular-nums text-foreground">
+                              {formatMoneyAmount(Number(order.total) || 0)}
+                            </span>
+                            {isSelected ? (
+                              <CheckCircle2 className="w-5 h-5 text-primary" />
+                            ) : (
+                              <span className="w-5 h-5 rounded-full border border-border/70" />
+                            )}
+                          </div>
                         </motion.button>
                       );
                     })}
@@ -1834,9 +1980,9 @@ export default function POS() {
               <Button
                 variant="outline"
                 className="h-14 text-sm sm:text-base touch-target gap-2 border-2"
-                isLoading={isCreating}
+                isLoading={isSavingOrder}
                 disabled={
-                  isCreating ||
+                  isSavingOrder ||
                   (checkoutPayMethod === "cash" && checkoutReceived < total) ||
                   (checkoutPayMethod === "card" && !checkoutCardId)
                 }
@@ -1847,9 +1993,9 @@ export default function POS() {
               </Button>
               <Button
                 className="h-14 text-sm sm:text-base touch-target gap-2"
-                isLoading={isCreating}
+                isLoading={isSavingOrder}
                 disabled={
-                  isCreating ||
+                  isSavingOrder ||
                   (checkoutPayMethod === "cash" && checkoutReceived < total) ||
                   (checkoutPayMethod === "card" && !checkoutCardId)
                 }
@@ -1889,7 +2035,7 @@ export default function POS() {
                 variant="outline"
                 className="h-20 sm:h-24 flex flex-col gap-2 touch-target"
                 onClick={() => handleCheckout("cash")}
-                isLoading={isCreating}
+                isLoading={isSavingOrder}
               >
                 <Banknote className="w-7 h-7 sm:w-8 sm:h-8 text-green-500" />
                 <span>{t("pos.cash")}</span>
@@ -1898,7 +2044,7 @@ export default function POS() {
                 variant="outline"
                 className="h-20 sm:h-24 flex flex-col gap-2 touch-target"
                 onClick={() => handleCheckout("card")}
-                isLoading={isCreating}
+                isLoading={isSavingOrder}
               >
                 <CreditCard className="w-7 h-7 sm:w-8 sm:h-8 text-blue-500" />
                 <span>{t("common.card")}</span>
@@ -1907,7 +2053,7 @@ export default function POS() {
                 variant="outline"
                 className="h-20 sm:h-24 flex flex-col gap-2 touch-target"
                 onClick={() => handleCheckout("transfer")}
-                isLoading={isCreating}
+                isLoading={isSavingOrder}
               >
                 <Phone className="w-7 h-7 sm:w-8 sm:h-8 text-purple-500" />
                 <span>{t("common.transfer")}</span>
