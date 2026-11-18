@@ -175,13 +175,28 @@ export default function Menu() {
   );
 
   const majorUnitOptions = useMemo<ComboboxOption[]>(() => {
-    return (itemUnits ?? []).map((u) => ({
+    const fromDb = (itemUnits ?? []).map((u) => ({
       value: u.nameAr,
       label: u.nameAr,
       subtitle: u.name?.trim() || undefined,
       icon: Package,
     }));
+    const hasMinorAsMajor = fromDb.some((u) => u.value === LOCKED_MINOR_UNIT);
+    if (hasMinorAsMajor) return fromDb;
+    return [
+      {
+        value: LOCKED_MINOR_UNIT,
+        label: LOCKED_MINOR_UNIT,
+        subtitle: "نفس الوحدة الصغرى",
+        icon: Package,
+      },
+      ...fromDb,
+    ];
   }, [itemUnits]);
+
+  const isSameUnit =
+    formData.costMode === "with" &&
+    formData.majorUnit.trim() === LOCKED_MINOR_UNIT;
 
   const handleOpen = (item?: MenuItem) => {
     setFormError("");
@@ -196,7 +211,10 @@ export default function Menu() {
         costMode: hasCost ? "with" : "none",
         cost: hasCost ? Number(item.cost) : 0,
         majorUnit: item.majorUnit?.trim() || "",
-        subunitQty: Math.max(1, Number(item.subunitQty) || 1),
+        subunitQty:
+          (item.majorUnit?.trim() || "") === LOCKED_MINOR_UNIT
+            ? 1
+            : Math.max(1, Number(item.subunitQty) || 1),
         categoryId: item.categoryId,
         isAvailable: item.isAvailable,
         isFavorite: item.isFavorite === true,
@@ -335,7 +353,11 @@ export default function Menu() {
         setFormError("اختر الوحدة الكبرى");
         return;
       }
-      if (!(Number(formData.subunitQty) >= 1)) {
+      const subunitQty =
+        formData.majorUnit.trim() === LOCKED_MINOR_UNIT
+          ? 1
+          : Math.floor(Number(formData.subunitQty));
+      if (!(subunitQty >= 1)) {
         setFormError("عدد الكمية الفرعية يجب أن يكون 1 أو أكثر");
         return;
       }
@@ -353,7 +375,11 @@ export default function Menu() {
       price: formData.price,
       cost: withCost ? Number(formData.cost) : null,
       majorUnit: withCost ? formData.majorUnit.trim() : null,
-      subunitQty: withCost ? Math.floor(Number(formData.subunitQty)) : null,
+      subunitQty: withCost
+        ? formData.majorUnit.trim() === LOCKED_MINOR_UNIT
+          ? 1
+          : Math.floor(Number(formData.subunitQty))
+        : null,
       categoryId: formData.categoryId,
       isAvailable: formData.isAvailable,
       isFavorite: formData.isFavorite,
@@ -791,7 +817,14 @@ export default function Menu() {
                       <ModernCombobox
                         value={formData.majorUnit}
                         onChange={(v) =>
-                          setFormData((f) => ({ ...f, majorUnit: v }))
+                          setFormData((f) => ({
+                            ...f,
+                            majorUnit: v,
+                            subunitQty:
+                              v.trim() === LOCKED_MINOR_UNIT
+                                ? 1
+                                : Math.max(1, f.subunitQty),
+                          }))
                         }
                         options={majorUnitOptions}
                         label="الوحدة الكبرى *"
@@ -820,23 +853,41 @@ export default function Menu() {
                         <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
                           عدد كمية فرعية *
                         </label>
-                        <Input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={formData.subunitQty}
-                          onChange={(e) =>
-                            setFormData((f) => ({
-                              ...f,
-                              subunitQty: Math.max(1, Math.floor(Number(e.target.value) || 1)),
-                            }))
-                          }
-                          className="h-11"
-                          dir="ltr"
-                        />
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={isSameUnit ? 1 : formData.subunitQty}
+                            disabled={isSameUnit}
+                            readOnly={isSameUnit}
+                            onChange={(e) => {
+                              if (isSameUnit) return;
+                              setFormData((f) => ({
+                                ...f,
+                                subunitQty: Math.max(
+                                  1,
+                                  Math.floor(Number(e.target.value) || 1)
+                                ),
+                              }));
+                            }}
+                            className={`h-11 ${
+                              isSameUnit
+                                ? "bg-secondary/60 text-muted-foreground cursor-not-allowed pe-10"
+                                : ""
+                            }`}
+                            dir="ltr"
+                          />
+                          {isSameUnit ? (
+                            <Lock className="absolute end-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                          ) : null}
+                        </div>
                         <p className="text-[10px] text-muted-foreground mt-1 font-semibold">
-                          كم «{LOCKED_MINOR_UNIT}» داخل الوحدة الكبرى
-                          {formData.majorUnit ? ` (${formData.majorUnit})` : ""}
+                          {isSameUnit
+                            ? "الوحدة الكبرى = الصغرى، لذلك الكمية الفرعية ثابتة على 1"
+                            : `كم «${LOCKED_MINOR_UNIT}» داخل الوحدة الكبرى${
+                                formData.majorUnit ? ` (${formData.majorUnit})` : ""
+                              }`}
                         </p>
                       </div>
                       <div>
