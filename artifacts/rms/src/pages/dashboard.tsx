@@ -20,6 +20,7 @@ import {
   CreditCard,
   Settings,
   Phone,
+  Clock3,
   type LucideIcon,
 } from "lucide-react";
 import { getGetBranchesQueryOptions } from "@workspace/api-client-react";
@@ -45,6 +46,7 @@ const HOME_ITEMS: HomeItem[] = [
   { href: "/menu", labelKey: "nav.menu", icon: MenuSquare, roles: ["admin", "manager"] },
   { href: "/inventory", labelKey: "nav.inventory", icon: Package, roles: ["admin", "manager"] },
   { href: "/employees", labelKey: "nav.employees", icon: UsersRound, roles: ["admin", "manager"] },
+  { href: "/shifts", labelKey: "nav.shifts", icon: Clock3, roles: ["admin", "manager"] },
   { href: "/expenses", labelKey: "nav.expenses", icon: Receipt, roles: ["admin", "manager"] },
   { href: "/branches", labelKey: "nav.branches", icon: Building2, roles: ["admin", "manager"] },
   { href: "/cards", labelKey: "nav.cards", icon: CreditCard, roles: ["admin", "manager"] },

@@ -15,6 +15,7 @@ import Orders from "@/pages/orders";
 import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Employees from "@/pages/employees";
+import Shifts from "@/pages/shifts";
 import Expenses from "@/pages/expenses";
 import Branches from "@/pages/branches";
 import Cards from "@/pages/cards";
@@ -179,6 +180,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/inventory": ["admin", "manager"],
   "/customers": ["admin", "manager"],
   "/employees": ["admin", "manager"],
+  "/shifts": ["admin", "manager"],
   "/expenses": ["admin", "manager"],
   "/branches": ["admin", "manager"],
   "/cards": ["admin", "manager"],
@@ -233,6 +235,7 @@ function Router() {
       <Route path="/inventory" component={Inventory} />
       <Route path="/customers" component={Customers} />
       <Route path="/employees" component={Employees} />
+      <Route path="/shifts" component={Shifts} />
       <Route path="/expenses" component={Expenses} />
       <Route path="/branches" component={Branches} />
       <Route path="/cards" component={Cards} />

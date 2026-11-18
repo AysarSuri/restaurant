@@ -12,6 +12,7 @@ import cardsRouter from "./cards";
 import settingsRouter from "./settings";
 import deliveryContactsRouter from "./delivery-contacts";
 import reportsRouter from "./reports";
+import shiftsRouter from "./shifts";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use("/cards", cardsRouter);
 router.use("/settings", settingsRouter);
 router.use("/delivery-contacts", deliveryContactsRouter);
 router.use("/reports", reportsRouter);
+router.use("/shifts", shiftsRouter);
 
 export default router;

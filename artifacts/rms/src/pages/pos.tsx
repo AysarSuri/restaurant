@@ -145,6 +145,20 @@ function formatDateAr(date: Date) {
 interface CartItem extends MenuItem {
   cartQuantity: number;
   price: number;
+  /** Return/refund line — shown in red with a negative amount */
+  isReturn?: boolean;
+}
+
+function cartLineKey(item: Pick<CartItem, "id" | "isReturn">) {
+  return `${item.id}:${item.isReturn ? "return" : "sale"}`;
+}
+
+function cartLineSignedQty(item: Pick<CartItem, "cartQuantity" | "isReturn">) {
+  return item.isReturn ? -Math.abs(item.cartQuantity) : item.cartQuantity;
+}
+
+function cartLineAmount(item: Pick<CartItem, "price" | "cartQuantity" | "isReturn">) {
+  return item.price * cartLineSignedQty(item);
 }
 
 type OrderType = "dine_in" | "takeaway" | "delivery";
@@ -242,6 +256,8 @@ export default function POS() {
   const [now, setNow] = useState(() => new Date());
   /** When set, POS is editing an existing stored order (load items + save via update). */
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  /** When on, tapping menu items adds return (negative) lines in red. */
+  const [isReturnMode, setIsReturnMode] = useState(false);
 
   const todayDateKey = useMemo(() => {
     const y = now.getFullYear();
@@ -396,7 +412,10 @@ export default function POS() {
     for (const line of order.items ?? []) {
       const menuItemId = Number(line.menuItemId);
       if (!Number.isFinite(menuItemId)) continue;
-      const qty = Math.max(1, Number(line.quantity) || 1);
+      const rawQty = Number(line.quantity) || 0;
+      if (rawQty === 0) continue;
+      const asReturn = rawQty < 0;
+      const qty = Math.max(1, Math.abs(rawQty));
       const unitPrice = Number(line.unitPrice);
       const fromOrder = line.menuItem;
       const fromMenu = menuById.get(menuItemId);
@@ -412,7 +431,9 @@ export default function POS() {
           isAvailable: true,
         } as MenuItem);
 
-      const existing = nextCart.find((c) => c.id === menuItemId);
+      const existing = nextCart.find(
+        (c) => c.id === menuItemId && Boolean(c.isReturn) === asReturn
+      );
       if (existing) {
         existing.cartQuantity += qty;
         continue;
@@ -421,6 +442,7 @@ export default function POS() {
         ...base,
         price: Number.isFinite(unitPrice) ? unitPrice : Number(base.price) || 0,
         cartQuantity: qty,
+        isReturn: asReturn || undefined,
       });
     }
     setCart(nextCart);
@@ -505,31 +527,43 @@ export default function POS() {
 
   const addToCart = (item: MenuItem) => {
     if (needsBranchPick) return;
+    const asReturn = isReturnMode;
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
+      const existing = prev.find(
+        (i) => i.id === item.id && Boolean(i.isReturn) === asReturn
+      );
       if (existing)
         return prev.map((i) =>
-          i.id === item.id ? { ...i, cartQuantity: i.cartQuantity + 1 } : i
+          i.id === item.id && Boolean(i.isReturn) === asReturn
+            ? { ...i, cartQuantity: i.cartQuantity + 1 }
+            : i
         );
-      return [...prev, { ...item, price: Number(item.price), cartQuantity: 1 }];
+      return [
+        ...prev,
+        {
+          ...item,
+          price: Number(item.price),
+          cartQuantity: 1,
+          isReturn: asReturn || undefined,
+        },
+      ];
     });
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: number, delta: number, isReturn = false) => {
     setCart((prev) =>
       prev
         .map((i) =>
-          i.id === id ? { ...i, cartQuantity: i.cartQuantity + delta } : i
+          i.id === id && Boolean(i.isReturn) === isReturn
+            ? { ...i, cartQuantity: i.cartQuantity + delta }
+            : i
         )
         .filter((i) => i.cartQuantity > 0)
     );
   };
 
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.price * item.cartQuantity,
-    0
-  );
-  const total = Math.max(0, subtotal - discount);
+  const subtotal = cart.reduce((sum, item) => sum + cartLineAmount(item), 0);
+  const total = subtotal - discount;
 
   const branchPaymentCards = useMemo(() => {
     const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
@@ -561,6 +595,7 @@ export default function POS() {
     setIsCheckoutOpen(false);
     setOrderSuccess(false);
     setEditingOrderId(null);
+    setIsReturnMode(false);
     startNewOrderSession();
   };
 
@@ -618,10 +653,10 @@ export default function POS() {
       orderTypeLabel: orderTypeLabels[orderType],
       seatLabel: orderType === "dine_in" ? seatLabel(selectedTable, t) : null,
       items: cart.map((i) => ({
-        name: menuItemDisplayName(i, locale),
-        quantity: i.cartQuantity,
+        name: `${i.isReturn ? `${t("pos.returnLine")} · ` : ""}${menuItemDisplayName(i, locale)}`,
+        quantity: cartLineSignedQty(i),
         unitPrice: i.price,
-        lineTotal: i.price * i.cartQuantity,
+        lineTotal: cartLineAmount(i),
       })),
       subtotal,
       discount,
@@ -653,7 +688,7 @@ export default function POS() {
     const receiptData = isDirectSave ? buildDirectReceipt(paymentLabel) : null;
     const lineItems = cart.map((i) => ({
       menuItemId: i.id,
-      quantity: i.cartQuantity,
+      quantity: cartLineSignedQty(i),
     }));
 
     const afterSaveSuccess = () => {
@@ -769,6 +804,11 @@ export default function POS() {
                 {editingOrderId != null && (
                   <span className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-800 dark:text-amber-200">
                     {t("pos.editLists")}
+                  </span>
+                )}
+                {isReturnMode && (
+                  <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[10px] font-extrabold text-rose-700 dark:text-rose-300">
+                    {t("pos.return")}
                   </span>
                 )}
                 {orderType === "dine_in" && (
@@ -905,55 +945,95 @@ export default function POS() {
         {/* Cart Items — single-row professional lines */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
           <AnimatePresence>
-            {cart.map((item) => (
+            {cart.map((item) => {
+              const isReturnLine = Boolean(item.isReturn);
+              const lineAmount = cartLineAmount(item);
+              return (
               <motion.div
-                key={item.id}
+                key={cartLineKey(item)}
                 layout
                 initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -16 }}
-                className="group flex items-center gap-2 sm:gap-2.5 rounded-2xl border border-border/50 bg-gradient-to-l from-secondary/70 via-card/80 to-card/90 px-2.5 py-2 shadow-[0_6px_18px_-14px_rgba(0,0,0,0.45)] hover:border-primary/35 transition-colors"
+                className={`group flex items-center gap-2 sm:gap-2.5 rounded-2xl border px-2.5 py-2 shadow-[0_6px_18px_-14px_rgba(0,0,0,0.45)] transition-colors ${
+                  isReturnLine
+                    ? "border-rose-500/45 bg-gradient-to-l from-rose-500/15 via-rose-500/10 to-card/90 hover:border-rose-500/70"
+                    : "border-border/50 bg-gradient-to-l from-secondary/70 via-card/80 to-card/90 hover:border-primary/35"
+                }`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-extrabold leading-tight">{menuItemDisplayName(item, locale)}</p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p
+                      className={`truncate text-sm font-extrabold leading-tight ${
+                        isReturnLine ? "text-rose-700 dark:text-rose-300" : ""
+                      }`}
+                    >
+                      {menuItemDisplayName(item, locale)}
+                    </p>
+                    {isReturnLine && (
+                      <span className="flex-shrink-0 rounded-full border border-rose-500/40 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-rose-700 dark:text-rose-300">
+                        {t("pos.returnLine")}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-background/70 p-0.5">
+                <div
+                  className={`flex flex-shrink-0 items-center gap-0.5 rounded-xl border p-0.5 ${
+                    isReturnLine
+                      ? "border-rose-500/40 bg-rose-500/10"
+                      : "border-border/60 bg-background/70"
+                  }`}
+                >
                   <button
                     type="button"
-                    onClick={() => updateQuantity(item.id, -1)}
+                    onClick={() => updateQuantity(item.id, -1, isReturnLine)}
                     className="flex h-10 w-10 items-center justify-center rounded-lg text-foreground hover:bg-secondary transition-colors"
                     aria-label={t("inventory.decrease")}
                   >
                     <Minus className="w-4.5 h-4.5" />
                   </button>
-                  <span className="min-w-[1.85rem] text-center font-display font-extrabold text-base tabular-nums">
-                    {item.cartQuantity}
+                  <span
+                    className={`min-w-[1.85rem] text-center font-display font-extrabold text-base tabular-nums ${
+                      isReturnLine ? "text-rose-700 dark:text-rose-300" : ""
+                    }`}
+                  >
+                    {isReturnLine ? `-${item.cartQuantity}` : item.cartQuantity}
                   </span>
                   <button
                     type="button"
-                    onClick={() => updateQuantity(item.id, 1)}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg text-primary hover:bg-primary/15 transition-colors"
+                    onClick={() => updateQuantity(item.id, 1, isReturnLine)}
+                    className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+                      isReturnLine
+                        ? "text-rose-600 hover:bg-rose-500/15"
+                        : "text-primary hover:bg-primary/15"
+                    }`}
                     aria-label={t("common.increase")}
                   >
                     <Plus className="w-4.5 h-4.5" />
                   </button>
                 </div>
 
-                <span className="flex-shrink-0 font-display text-xs sm:text-sm font-bold text-primary tabular-nums whitespace-nowrap" dir="ltr">
-                  {formatMoneyAmount(item.price * item.cartQuantity)}
+                <span
+                  className={`flex-shrink-0 font-display text-xs sm:text-sm font-bold tabular-nums whitespace-nowrap ${
+                    isReturnLine ? "text-rose-600 dark:text-rose-400" : "text-primary"
+                  }`}
+                  dir="ltr"
+                >
+                  {formatMoneyAmount(lineAmount)}
                 </span>
 
                 <button
                   type="button"
-                  onClick={() => updateQuantity(item.id, -item.cartQuantity)}
+                  onClick={() => updateQuantity(item.id, -item.cartQuantity, isReturnLine)}
                   className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-destructive/25 text-destructive hover:bg-destructive/15 transition-colors"
                   aria-label={t("common.delete")}
                 >
                   <Trash2 className="w-4.5 h-4.5" />
                 </button>
               </motion.div>
-            ))}
+              );
+            })}
           </AnimatePresence>
           {cart.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 py-16">
@@ -996,7 +1076,13 @@ export default function POS() {
 
           <div className="flex justify-between font-bold text-xl text-foreground pt-1 border-t border-border/50">
             <span>{t("common.total")}</span>
-            <span className="text-primary font-display">{formatMoneyAmount(total)}</span>
+            <span
+              className={`font-display ${
+                total < 0 ? "text-rose-600 dark:text-rose-400" : "text-primary"
+              }`}
+            >
+              {formatMoneyAmount(total)}
+            </span>
           </div>
 
           <Button
@@ -1158,7 +1244,9 @@ export default function POS() {
           >
             <AnimatePresence mode="popLayout">
               {filteredItems?.map((item) => {
-                const inCart = cart.find((c) => c.id === item.id);
+                const inCart = cart.find(
+                  (c) => c.id === item.id && Boolean(c.isReturn) === isReturnMode
+                );
                 return (
                   <motion.button
                     key={item.id}
@@ -1171,14 +1259,24 @@ export default function POS() {
                     onClick={() => addToCart(item)}
                     className={`text-start bg-card/85 backdrop-blur-sm border rounded-2xl p-3 sm:p-4 cursor-pointer flex flex-col justify-between transition-all relative overflow-hidden
                       ${
-                        inCart
-                          ? "border-primary/70 shadow-lg shadow-primary/15 ring-1 ring-primary/30"
-                          : "border-border/50 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10"
+                        isReturnMode
+                          ? inCart
+                            ? "border-rose-500/80 shadow-lg shadow-rose-500/20 ring-1 ring-rose-500/40"
+                            : "border-rose-500/35 hover:border-rose-500/70 hover:shadow-xl hover:shadow-rose-500/15"
+                          : inCart
+                            ? "border-primary/70 shadow-lg shadow-primary/15 ring-1 ring-primary/30"
+                            : "border-border/50 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10"
                       }`}
                   >
                     {inCart && (
-                      <div className="absolute top-2 left-2 min-w-7 h-7 px-1.5 bg-primary rounded-full flex items-center justify-center text-xs font-bold text-primary-foreground z-10 shadow-md">
-                        {inCart.cartQuantity}
+                      <div
+                        className={`absolute top-2 left-2 min-w-7 h-7 px-1.5 rounded-full flex items-center justify-center text-xs font-bold z-10 shadow-md ${
+                          isReturnMode
+                            ? "bg-rose-600 text-white"
+                            : "bg-primary text-primary-foreground"
+                        }`}
+                      >
+                        {isReturnMode ? `-${inCart.cartQuantity}` : inCart.cartQuantity}
                       </div>
                     )}
                     {item.isFavorite && (
@@ -1206,7 +1304,13 @@ export default function POS() {
                           {formatIQD(Number(item.price))}
                           <span className="text-[10px] ms-1 font-bold opacity-70">{currencySymbol}</span>
                         </div>
-                        <span className="w-8 h-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                        <span
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            isReturnMode
+                              ? "bg-rose-500/15 text-rose-600"
+                              : "bg-primary/15 text-primary"
+                          }`}
+                        >
                           <Plus className="w-4 h-4" />
                         </span>
                       </div>
@@ -1226,11 +1330,16 @@ export default function POS() {
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={() => window.history.back()}
-              className="group inline-flex h-12 sm:h-14 min-w-[7.5rem] flex-1 items-center justify-center gap-2 rounded-2xl border border-border/70 bg-secondary/70 px-4 text-sm sm:text-base font-extrabold text-foreground transition-all hover:border-primary/40 hover:bg-secondary active:scale-[0.98]"
+              onClick={() => setIsReturnMode((v) => !v)}
+              className={`group inline-flex h-12 sm:h-14 min-w-[7.5rem] flex-1 items-center justify-center gap-2 rounded-2xl border px-4 text-sm sm:text-base font-extrabold transition-all active:scale-[0.98] ${
+                isReturnMode
+                  ? "border-rose-500 bg-rose-600 text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500"
+                  : "border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 hover:border-rose-500"
+              }`}
+              title={t("pos.returnModeOn")}
             >
-              <Undo2 className="w-5 h-5 text-muted-foreground transition-colors group-hover:text-primary" />
-              {t("common.back")}
+              <Undo2 className={`w-5 h-5 ${isReturnMode ? "text-white" : "text-rose-600 dark:text-rose-300"}`} />
+              {t("pos.return")}
             </button>
 
             <button
