@@ -129,6 +129,11 @@ export default function Menu() {
   const addImageInputRef = useRef<HTMLInputElement>(null);
   const editImageInputRef = useRef<HTMLInputElement>(null);
   const [formError, setFormError] = useState("");
+  const [filterItemId, setFilterItemId] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("");
+  const [filterBranchId, setFilterBranchId] = useState("");
+  const [filterVisibility, setFilterVisibility] = useState<"all" | "visible" | "hidden">("all");
+  const [filterFavorite, setFilterFavorite] = useState<"all" | "favorite" | "normal">("all");
 
   const [formData, setFormData] = useState({
     nameAr: "",
@@ -155,6 +160,98 @@ export default function Menu() {
       icon: Tags,
     }));
   }, [categories]);
+
+  const filterCategoryOptions = useMemo<ComboboxOption[]>(
+    () => [
+      { value: "", label: "كل التصنيفات", subtitle: "بدون فلتر", icon: Tags },
+      ...categoryOptions,
+    ],
+    [categoryOptions]
+  );
+
+  const filterBranchOptions = useMemo<ComboboxOption[]>(
+    () => [
+      { value: "", label: "كل الفروع", subtitle: "بدون فلتر", icon: Building2 },
+      {
+        value: "all",
+        label: "جميع الفروع",
+        subtitle: "أصناف متاحة لكل الفروع",
+        icon: Building2,
+      },
+      ...(branches ?? []).map((b) => ({
+        value: String(b.id),
+        label: b.name,
+        subtitle: "فرع محدد",
+        icon: Building2,
+      })),
+    ],
+    [branches]
+  );
+
+  const filterVisibilityOptions = useMemo<ComboboxOption[]>(
+    () => [
+      { value: "all", label: "الكل", subtitle: "ظاهر ومخفي", icon: Eye },
+      { value: "visible", label: "ظاهر", subtitle: "يظهر في البيع", icon: Eye },
+      { value: "hidden", label: "مخفي", subtitle: "مخفي من البيع", icon: EyeOff },
+    ],
+    []
+  );
+
+  const filterFavoriteOptions = useMemo<ComboboxOption[]>(
+    () => [
+      { value: "all", label: "الكل", subtitle: "مفضل وعادي", icon: Star },
+      { value: "favorite", label: "مفضل", subtitle: "في المفضلة فقط", icon: Star },
+      { value: "normal", label: "عادي", subtitle: "غير مفضل", icon: Star },
+    ],
+    []
+  );
+
+  const filterItemOptions = useMemo<ComboboxOption[]>(() => {
+    const sorted = [...(items ?? [])].sort((a, b) =>
+      (a.nameAr || "").localeCompare(b.nameAr || "", "ar")
+    );
+    return [
+      {
+        value: "",
+        label: "كل الأصناف",
+        subtitle: "عرض بدون اختيار صنف",
+        icon: Package,
+      },
+      ...sorted.map((item) => ({
+        value: String(item.id),
+        label: item.nameAr,
+        subtitle: item.name?.trim() || categories?.find((c) => c.id === item.categoryId)?.nameAr || "صنف",
+        icon: Package,
+      })),
+    ];
+  }, [items, categories]);
+
+  const filteredItems = useMemo(() => {
+    const list = items ?? [];
+    return list.filter((item) => {
+      if (filterItemId && String(item.id) !== filterItemId) return false;
+      if (filterCategoryId && String(item.categoryId) !== filterCategoryId) return false;
+      if (filterBranchId === "all") {
+        if (!(item.allBranches !== false || !(item.branchIds?.length))) return false;
+      } else if (filterBranchId) {
+        const branchId = Number(filterBranchId);
+        const isAll = item.allBranches !== false || !(item.branchIds?.length);
+        if (!isAll && !(item.branchIds ?? []).includes(branchId)) return false;
+      }
+      if (filterVisibility === "visible" && !item.isAvailable) return false;
+      if (filterVisibility === "hidden" && item.isAvailable) return false;
+      if (filterFavorite === "favorite" && item.isFavorite !== true) return false;
+      if (filterFavorite === "normal" && item.isFavorite === true) return false;
+      return true;
+    });
+  }, [
+    items,
+    filterItemId,
+    filterCategoryId,
+    filterBranchId,
+    filterVisibility,
+    filterFavorite,
+  ]);
 
   const costModeOptions = useMemo<ComboboxOption[]>(
     () => [
@@ -632,10 +729,9 @@ export default function Menu() {
       <CrudTable<MenuItem>
         title="إدارة الأصناف"
         titleEn="Items Management"
-        data={items}
+        data={filteredItems}
         columns={columns}
         isLoading={isLoading}
-        searchKey="nameAr"
         onAdd={() => handleOpen()}
         onEdit={handleOpen}
         onDelete={(item) => {
@@ -653,6 +749,75 @@ export default function Menu() {
             <Tags className="w-4 h-4 me-1.5" />
             التصنيفات
           </Button>
+        }
+        toolbar={
+          <div className="flex flex-col xl:flex-row gap-3 xl:items-end">
+            <div className="xl:flex-[1.65] min-w-0">
+              <ModernCombobox
+                value={filterItemId}
+                onChange={setFilterItemId}
+                options={filterItemOptions}
+                label="بحث حسب الصنف"
+                placeholder="ابحث واختر صنفاً"
+                hint="بحث بالاسم العربي أو الإنجليزي"
+                icon={Package}
+                searchable
+                searchPlaceholder="اكتب للبحث عن صنف..."
+                emptyText="لا يوجد صنف مطابق"
+                className="w-full"
+              />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 xl:flex-[1.2] min-w-0">
+              <ModernCombobox
+                value={filterCategoryId}
+                onChange={setFilterCategoryId}
+                options={filterCategoryOptions}
+                label="حسب التصنيف"
+                placeholder="كل التصنيفات"
+                icon={Tags}
+                searchable
+                size="sm"
+                className="w-full min-w-0"
+              />
+              <ModernCombobox
+                value={filterBranchId}
+                onChange={setFilterBranchId}
+                options={filterBranchOptions}
+                label="حسب الفرع"
+                placeholder="كل الفروع"
+                icon={Building2}
+                searchable
+                size="sm"
+                className="w-full min-w-0"
+              />
+              <ModernCombobox
+                value={filterVisibility}
+                onChange={(v) =>
+                  setFilterVisibility((v as "all" | "visible" | "hidden") || "all")
+                }
+                options={filterVisibilityOptions}
+                label="حسب الإخفاء"
+                placeholder="الكل"
+                icon={Eye}
+                searchable={false}
+                size="sm"
+                className="w-full min-w-0"
+              />
+              <ModernCombobox
+                value={filterFavorite}
+                onChange={(v) =>
+                  setFilterFavorite((v as "all" | "favorite" | "normal") || "all")
+                }
+                options={filterFavoriteOptions}
+                label="حسب المفضلة"
+                placeholder="الكل"
+                icon={Star}
+                searchable={false}
+                size="sm"
+                className="w-full min-w-0"
+              />
+            </div>
+          </div>
         }
       />
 

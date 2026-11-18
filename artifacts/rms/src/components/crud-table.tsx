@@ -21,10 +21,12 @@ interface CrudTableProps<T> {
   isLoading?: boolean;
   /** Extra header actions (rendered before the main Add button) */
   headerActions?: React.ReactNode;
+  /** Extra filter/search row rendered under the header, inside the card */
+  toolbar?: React.ReactNode;
 }
 
 export function CrudTable<T extends { id: number }>({
-  title, titleEn, data, columns, onAdd, onEdit, onDelete, searchKey, isLoading, headerActions
+  title, titleEn, data, columns, onAdd, onEdit, onDelete, searchKey, isLoading, headerActions, toolbar
 }: CrudTableProps<T>) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
@@ -67,6 +69,12 @@ export function CrudTable<T extends { id: number }>({
         </div>
       </div>
 
+      {toolbar ? (
+        <div className="px-4 md:px-6 py-3 border-b border-border/40 bg-secondary/20">
+          {toolbar}
+        </div>
+      ) : null}
+
       {/* ── MOBILE: Card list (< md) ── */}
       <div className="md:hidden divide-y divide-border/30">
         {isLoading ? (
@@ -89,15 +97,15 @@ export function CrudTable<T extends { id: number }>({
                 ))}
               </div>
               {(onEdit || onDelete) && (
-                <div className="flex gap-2 pt-1">
+                <div className="flex gap-3.5 pt-1">
                   {onEdit && (
-                    <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5" onClick={() => onEdit(item)}>
-                      <Edit className="w-3.5 h-3.5" /> {t("common.edit")}
+                    <Button variant="outline" size="sm" className="flex-1 h-10 text-sm gap-2" onClick={() => onEdit(item)}>
+                      <Edit className="w-5 h-5" /> {t("common.edit")}
                     </Button>
                   )}
                   {onDelete && (
-                    <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)}>
-                      <Trash2 className="w-3.5 h-3.5" /> {t("common.delete")}
+                    <Button variant="ghost" size="sm" className="flex-1 h-10 text-sm gap-2 text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)}>
+                      <Trash2 className="w-5 h-5" /> {t("common.delete")}
                     </Button>
                   )}
                 </div>
@@ -137,7 +145,7 @@ export function CrudTable<T extends { id: number }>({
               </TableRow>
             ) : (
               filteredData.map((item) => (
-                <TableRow key={item.id} className="border-border/20 group">
+                <TableRow key={item.id} className="border-border/20">
                   {columns.map((col, idx) => (
                     <TableCell key={String(col.key) + idx} className="font-medium">
                       {col.render ? col.render(item) : String(item[col.key as keyof T] || "")}
@@ -145,15 +153,15 @@ export function CrudTable<T extends { id: number }>({
                   ))}
                   {(onEdit || onDelete) && (
                     <TableCell className="text-end">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-3.5">
                         {onEdit && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => onEdit(item)}>
-                            <Edit className="w-4 h-4" />
+                          <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:text-primary" onClick={() => onEdit(item)}>
+                            <Edit className="w-5 h-5" />
                           </Button>
                         )}
                         {onDelete && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)}>
-                            <Trash2 className="w-4 h-4" />
+                          <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:text-destructive" onClick={() => onDelete(item)}>
+                            <Trash2 className="w-5 h-5" />
                           </Button>
                         )}
                       </div>

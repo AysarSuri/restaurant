@@ -34,6 +34,8 @@ type ModernComboboxProps = {
   disabled?: boolean;
   className?: string;
   dir?: "rtl" | "ltr";
+  /** Compact trigger for denser filter rows */
+  size?: "md" | "sm";
 };
 
 export function ModernCombobox({
@@ -52,9 +54,11 @@ export function ModernCombobox({
   disabled = false,
   className,
   dir: dirProp,
+  size = "md",
 }: ModernComboboxProps) {
   const { t, dir: localeDir } = useI18n();
   const dir = dirProp ?? localeDir;
+  const compact = size === "sm";
   const resolvedPlaceholder = placeholder ?? t("common.choose");
   const resolvedSearch = searchPlaceholder ?? t("common.search");
   const resolvedCustom = customPlaceholder ?? t("settings.customValue");
@@ -89,8 +93,15 @@ export function ModernCombobox({
   return (
     <div className={cn("w-full", className)}>
       {label ? (
-        <div className="mb-1.5 flex items-end justify-between gap-2">
-          <label className="block text-sm font-semibold text-foreground">{label}</label>
+        <div className={cn("flex items-end justify-between gap-2", compact ? "mb-1" : "mb-1.5")}>
+          <label
+            className={cn(
+              "block font-semibold text-foreground",
+              compact ? "text-[11px] text-muted-foreground" : "text-sm"
+            )}
+          >
+            {label}
+          </label>
           {hint ? <span className="text-[10px] text-muted-foreground">{hint}</span> : null}
         </div>
       ) : null}
@@ -112,8 +123,8 @@ export function ModernCombobox({
             type="button"
             disabled={disabled}
             className={cn(
-              "group relative flex w-full items-center gap-2.5 overflow-hidden border text-start transition-all duration-200",
-              "h-12 rounded-xl ps-2.5 pe-3",
+              "group relative flex w-full items-center overflow-hidden border text-start transition-all duration-200",
+              compact ? "h-10 gap-2 rounded-xl ps-2 pe-2.5" : "h-12 gap-2.5 rounded-xl ps-2.5 pe-3",
               "bg-gradient-to-l from-primary/12 via-card/85 to-card/95 backdrop-blur-md",
               "border-primary/25 shadow-[0_8px_22px_-14px_hsla(var(--primary),0.5)]",
               "hover:border-primary/45 hover:shadow-[0_12px_26px_-12px_hsla(var(--primary),0.55)]",
@@ -123,21 +134,27 @@ export function ModernCombobox({
             )}
           >
             {TriggerIcon ? (
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-md shadow-primary/25">
-                <TriggerIcon className="h-4 w-4" />
+              <span
+                className={cn(
+                  "flex flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-md shadow-primary/25",
+                  compact ? "h-7 w-7" : "h-8 w-8"
+                )}
+              >
+                <TriggerIcon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
               </span>
             ) : null}
             <span className="min-w-0 flex-1 leading-tight">
               <span
                 className={cn(
-                  "block truncate text-sm font-bold",
+                  "block truncate font-bold",
+                  compact ? "text-xs" : "text-sm",
                   selected || value ? "text-foreground" : "text-muted-foreground"
                 )}
                 dir={selected || !value ? dir : "ltr"}
               >
                 {displayLabel}
               </span>
-              {selected?.subtitle ? (
+              {selected?.subtitle && !compact ? (
                 <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                   {selected.subtitle}
                 </span>
