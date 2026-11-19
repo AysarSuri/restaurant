@@ -29,6 +29,7 @@ import TableOrder from "@/pages/table-order";
 import { BranchProvider } from "@/lib/branch-context";
 import { applyBrandPrimary } from "@/lib/brand-theme";
 import { LocaleProvider } from "@/i18n";
+import { EnterAsTab } from "@/components/enter-as-tab";
 import { useGetSettings } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
@@ -262,6 +263,7 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <BranchProvider>
               <TooltipProvider>
+                <EnterAsTab />
                 <BrandThemeSync />
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                   <Router />

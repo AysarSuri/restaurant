@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetSuppliers,
@@ -20,6 +20,7 @@ import {
   getGetSupplierDebtsQueryKey,
   getGetSupplierStatementQueryKey,
   type Supplier,
+  type SupplierPurchase,
   type SupplierAmountType,
   type SupplierUnitKind,
   type MenuItem,
@@ -55,9 +56,13 @@ function todayDate() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function nowTime() {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+/** Live clock like POS: HH:mm:ss */
+function nowTime(date = new Date()) {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
 
 function balanceTone(balance: number) {
@@ -75,17 +80,34 @@ function balanceLabel(balance: number) {
 type PurchaseLine = {
   key: string;
   menuItemId: string;
-  qty: number;
+  qty: number | "";
   unitKind: SupplierUnitKind;
-  price: number;
+  price: number | "";
 };
 
-const EMPTY_SUPPLIER = { code: "", name: "", openingBalance: 0, notes: "" };
+const EMPTY_PURCHASE_LINE = (): PurchaseLine => ({
+  key: crypto.randomUUID(),
+  menuItemId: "",
+  qty: "",
+  unitKind: "minor",
+  price: "",
+});
+
+const EMPTY_SUPPLIER = { code: "", name: "", openingBalance: "" as string | number, notes: "" };
 
 function nextSupplierCode(list: Supplier[] | undefined): string {
   let max = 0;
   for (const s of list ?? []) {
     const match = String(s.code ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
+function nextPurchaseInvoiceNo(list: SupplierPurchase[] | undefined): string {
+  let max = 0;
+  for (const p of list ?? []) {
+    const match = String(p.invoiceNo ?? "").trim().match(/(\d+)\s*$/);
     if (match) max = Math.max(max, Number(match[1]));
   }
   return String(max + 1);
@@ -136,9 +158,31 @@ export default function SuppliersPage() {
     discountAmount: 0,
   });
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([
-    { key: crypto.randomUUID(), menuItemId: "", qty: 1, unitKind: "minor" as SupplierUnitKind, price: 0 },
+    EMPTY_PURCHASE_LINE(),
   ]);
   const [purchaseError, setPurchaseError] = useState("");
+
+  useEffect(() => {
+    if (section !== "purchase") return;
+    setPurchaseForm((f) => ({
+      ...f,
+      invoiceNo: nextPurchaseInvoiceNo(purchases),
+    }));
+  }, [section, purchases]);
+
+  // Live clock for purchase form — same behavior as POS
+  useEffect(() => {
+    if (section !== "purchase") return;
+    const tick = () => {
+      const clock = nowTime();
+      setPurchaseForm((f) =>
+        f.invoiceTime === clock ? f : { ...f, invoiceTime: clock }
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [section]);
 
   // ── movement ──
   const [movementFormOpen, setMovementFormOpen] = useState(false);
@@ -191,12 +235,14 @@ export default function SuppliersPage() {
 
   const menuOptions = useMemo<ComboboxOption[]>(
     () =>
-      (menuItems ?? []).map((m) => ({
-        value: String(m.id),
-        label: m.nameAr,
-        subtitle: m.name,
-        icon: Package,
-      })),
+      (menuItems ?? [])
+        .filter((m) => m.cost != null && m.cost !== "" && Number(m.cost) > 0)
+        .map((m) => ({
+          value: String(m.id),
+          label: m.nameAr,
+          subtitle: m.name,
+          icon: Package,
+        })),
     [menuItems]
   );
 
@@ -278,7 +324,10 @@ export default function SuppliersPage() {
     const body = {
       code: editingSupplier ? code : nextSupplierCode(suppliers),
       name,
-      openingBalance: Number(supplierForm.openingBalance) || 0,
+      openingBalance:
+        supplierForm.openingBalance === "" || supplierForm.openingBalance === null
+          ? 0
+          : Number(supplierForm.openingBalance) || 0,
       notes: supplierForm.notes.trim(),
     };
     if (editingSupplier) {
@@ -325,8 +374,8 @@ export default function SuppliersPage() {
   };
 
   const savePurchase = () => {
-    if (!purchaseForm.invoiceNo.trim()) return setPurchaseError("رقم الفاتورة مطلوب");
     if (!purchaseForm.supplierId) return setPurchaseError("اختر المورد");
+    const invoiceNo = nextPurchaseInvoiceNo(purchases);
     const items = purchaseLines
       .filter((l) => l.menuItemId)
       .map((l) => ({
@@ -346,7 +395,7 @@ export default function SuppliersPage() {
     }
     createPurchase(
       {
-        invoiceNo: purchaseForm.invoiceNo.trim(),
+        invoiceNo,
         invoiceDate: purchaseForm.invoiceDate,
         invoiceTime: purchaseForm.invoiceTime,
         supplierId: Number(purchaseForm.supplierId),
@@ -357,24 +406,19 @@ export default function SuppliersPage() {
       },
       {
         onSuccess: () => {
-          setPurchaseForm({
-            invoiceNo: "",
+          setPurchaseForm((f) => ({
+            ...f,
+            invoiceNo: nextPurchaseInvoiceNo([
+              ...(purchases ?? []),
+              { invoiceNo } as SupplierPurchase,
+            ]),
             invoiceDate: todayDate(),
             invoiceTime: nowTime(),
-            supplierId: purchaseForm.supplierId,
             notes: "",
             paidAmount: 0,
             discountAmount: 0,
-          });
-          setPurchaseLines([
-            {
-              key: crypto.randomUUID(),
-              menuItemId: "",
-              qty: 1,
-              unitKind: "minor",
-              price: 0,
-            },
-          ]);
+          }));
+          setPurchaseLines([EMPTY_PURCHASE_LINE()]);
           invalidateAll();
         },
         onError: (e) => setPurchaseError(apiErrorMessage(e, "تعذر حفظ فاتورة الشراء")),
@@ -751,18 +795,21 @@ export default function SuppliersPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               <div>
                 <label className="text-[15px] font-bold text-foreground mb-1.5 block">
-                  رقم الفاتورة *
+                  رقم الفاتورة
                 </label>
                 <div className="relative">
                   <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    className="h-12 ps-9 text-[15px] font-bold"
-                    value={purchaseForm.invoiceNo}
-                    onChange={(e) =>
-                      setPurchaseForm((f) => ({ ...f, invoiceNo: e.target.value }))
-                    }
+                    className="h-12 ps-9 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                    value={purchaseForm.invoiceNo || nextPurchaseInvoiceNo(purchases)}
+                    readOnly
+                    disabled
+                    dir="ltr"
                   />
                 </div>
+                <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
+                  يُولَّد تلقائياً من 1 ويزيد بدون تكرار
+                </p>
               </div>
               <div>
                 <label className="text-[15px] font-bold text-foreground mb-1.5 block">
@@ -780,16 +827,14 @@ export default function SuppliersPage() {
               </div>
               <div>
                 <label className="text-[15px] font-bold text-foreground mb-1.5 block">
-                  الساعة *
+                  الساعة
                 </label>
                 <Input
-                  type="time"
-                  className="h-12 text-[15px] font-bold"
+                  className="h-12 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono tracking-wide"
                   dir="ltr"
                   value={purchaseForm.invoiceTime}
-                  onChange={(e) =>
-                    setPurchaseForm((f) => ({ ...f, invoiceTime: e.target.value }))
-                  }
+                  readOnly
+                  disabled
                 />
               </div>
               <ModernCombobox
@@ -826,16 +871,7 @@ export default function SuppliersPage() {
                   size="sm"
                   className="rounded-full h-10 text-[15px] font-bold"
                   onClick={() =>
-                    setPurchaseLines((rows) => [
-                      ...rows,
-                      {
-                        key: crypto.randomUUID(),
-                        menuItemId: "",
-                        qty: 1,
-                        unitKind: "minor",
-                        price: 0,
-                      },
-                    ])
+                    setPurchaseLines((rows) => [...rows, EMPTY_PURCHASE_LINE()])
                   }
                 >
                   <Plus className="w-4 h-4 me-1" /> سطر صنف
@@ -879,6 +915,7 @@ export default function SuppliersPage() {
                             }
                             options={menuOptions}
                             placeholder="اختر الصنف"
+                            emptyText="لا توجد أصناف من نوع تكلفة"
                             icon={Package}
                             valueClassName="text-[15px] font-bold"
                           />
@@ -896,7 +933,12 @@ export default function SuppliersPage() {
                               onChange={(e) =>
                                 setPurchaseLines((rows) =>
                                   rows.map((r, i) =>
-                                    i === idx ? { ...r, qty: Number(e.target.value) || 0 } : r
+                                    i === idx
+                                      ? {
+                                          ...r,
+                                          qty: e.target.value === "" ? "" : Number(e.target.value),
+                                        }
+                                      : r
                                   )
                                 )
                               }
@@ -935,7 +977,13 @@ export default function SuppliersPage() {
                               onChange={(e) =>
                                 setPurchaseLines((rows) =>
                                   rows.map((r, i) =>
-                                    i === idx ? { ...r, price: Number(e.target.value) || 0 } : r
+                                    i === idx
+                                      ? {
+                                          ...r,
+                                          price:
+                                            e.target.value === "" ? "" : Number(e.target.value),
+                                        }
+                                      : r
                                   )
                                 )
                               }
@@ -1416,13 +1464,14 @@ export default function SuppliersPage() {
             <Input
               type="number"
               step="0.01"
-              className="h-12 text-[15px] font-bold"
               dir="ltr"
+              placeholder="فارغ = صفر"
+              className="h-12 text-[15px] font-bold placeholder:text-muted-foreground/35 placeholder:font-normal"
               value={supplierForm.openingBalance}
               onChange={(e) =>
                 setSupplierForm((f) => ({
                   ...f,
-                  openingBalance: Number(e.target.value) || 0,
+                  openingBalance: e.target.value === "" ? "" : e.target.value,
                 }))
               }
             />

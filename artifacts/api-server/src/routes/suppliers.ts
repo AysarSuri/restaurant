@@ -11,7 +11,7 @@ import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const AMOUNT_TYPES = new Set(["paid", "received", "discount"]);
 const UNIT_KINDS = new Set(["major", "minor"]);
@@ -39,7 +39,7 @@ function todayDate() {
 
 function nowTime() {
   const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 }
 
 function normalizeDate(v: unknown): string | null {
@@ -83,6 +83,28 @@ async function nextSupplierCode(): Promise<string> {
   let max = 0;
   for (const row of rows) {
     const match = String(row.code ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
+async function isDuplicatePurchaseInvoiceNo(invoiceNo: string) {
+  const normalized = invoiceNo.trim().toLowerCase();
+  const rows = await db
+    .select({ id: supplierPurchasesTable.id })
+    .from(supplierPurchasesTable)
+    .where(sql`lower(${supplierPurchasesTable.invoiceNo}) = ${normalized}`)
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function nextPurchaseInvoiceNo(): Promise<string> {
+  const rows = await db
+    .select({ invoiceNo: supplierPurchasesTable.invoiceNo })
+    .from(supplierPurchasesTable);
+  let max = 0;
+  for (const row of rows) {
+    const match = String(row.invoiceNo ?? "").trim().match(/(\d+)\s*$/);
     if (match) max = Math.max(max, Number(match[1]));
   }
   return String(max + 1);
@@ -343,14 +365,18 @@ router.get("/purchases", async (_req, res) => {
 });
 
 router.post("/purchases", async (req, res) => {
-  const invoiceNo = String(req.body?.invoiceNo ?? "").trim();
   const invoiceDate = normalizeDate(req.body?.invoiceDate) ?? todayDate();
   const invoiceTime = normalizeTime(req.body?.invoiceTime) ?? nowTime();
   const supplierId = Number(req.body?.supplierId);
   const notes = String(req.body?.notes ?? "").trim() || null;
   const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
 
-  if (!invoiceNo) return res.status(400).json({ message: "رقم الفاتورة مطلوب" });
+  // Always assign next sequential invoice number (starts at 1)
+  let invoiceNo = await nextPurchaseInvoiceNo();
+  while (await isDuplicatePurchaseInvoiceNo(invoiceNo)) {
+    invoiceNo = String(Number(invoiceNo) + 1);
+  }
+
   if (!Number.isFinite(supplierId) || supplierId <= 0) {
     return res.status(400).json({ message: "اختر المورد" });
   }
