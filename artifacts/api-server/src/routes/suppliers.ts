@@ -1086,7 +1086,7 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `purchase-discount-${p.id}`,
             kind: "purchase",
-            docType: "خصم",
+            docType: "شراء",
             date: p.invoiceDate,
             time,
             invoiceNo: p.invoiceNo,
@@ -1100,7 +1100,7 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `purchase-paid-${p.id}`,
             kind: "purchase",
-            docType: "مدفوع",
+            docType: "شراء",
             date: p.invoiceDate,
             time,
             invoiceNo: p.invoiceNo,
@@ -1146,7 +1146,7 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `return-discount-${r.id}`,
             kind: "return",
-            docType: "خصم",
+            docType: "مرجوع",
             date: r.invoiceDate,
             time,
             invoiceNo: r.invoiceNo,
@@ -1160,7 +1160,7 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `return-paid-${r.id}`,
             kind: "return",
-            docType: "واصل",
+            docType: "مرجوع",
             date: r.invoiceDate,
             time,
             invoiceNo: r.invoiceNo,

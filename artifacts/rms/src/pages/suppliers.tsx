@@ -98,6 +98,26 @@ function movementAmountTypeLabel(type: SupplierAmountType | string) {
   return "مدفوع";
 }
 
+/** Statement invoice type: شراء / مرجوع / مدفوع|واصل|خصم from movement */
+function statementDocType(line: {
+  docType?: string;
+  kind?: string;
+  description?: string;
+}) {
+  const typed = String(line.docType ?? "").trim();
+  if (typed) return typed;
+  if (line.kind === "purchase") return "شراء";
+  if (line.kind === "return") return "مرجوع";
+  if (line.kind === "opening") return "رصيد";
+  if (line.kind === "movement") {
+    const d = String(line.description ?? "");
+    if (d.includes("واصل")) return "واصل";
+    if (d.includes("خصم")) return "خصم";
+    return "مدفوع";
+  }
+  return "—";
+}
+
 type PurchaseLine = {
   key: string;
   menuItemId: string;
@@ -882,7 +902,7 @@ export default function SuppliersPage() {
         (l) =>
           `<tr>
             <td dir="ltr">${l.date ? formatDate(l.date) : "—"}</td>
-            <td>${l.docType || "—"}</td>
+            <td>${statementDocType(l)}</td>
             <td>${l.invoiceNo}</td>
             <td>${l.description || "—"}</td>
             <td dir="ltr">${fmtMoney(l.debit)}</td>
@@ -2123,7 +2143,7 @@ export default function SuppliersPage() {
                           {l.date ? formatDate(l.date) : "—"}
                         </td>
                         <td className="p-2.5 text-center font-extrabold">
-                          {l.docType || "—"}
+                          {statementDocType(l)}
                         </td>
                         <td className="p-2.5 text-center font-mono font-bold">{l.invoiceNo}</td>
                         <td className="p-2.5 text-center font-bold text-muted-foreground">
