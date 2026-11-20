@@ -19,6 +19,7 @@ import {
   getGetSettingsQueryKey,
   getGetSuppliersQueryKey,
   getGetSupplierPurchasesQueryKey,
+  getGetSupplierReturnsQueryKey,
   getGetSupplierMovementsQueryKey,
   getGetSupplierDebtsQueryKey,
   getGetSupplierStatementQueryKey,
@@ -31,6 +32,7 @@ import {
 import { Button, Input, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { printSupplierPurchaseThermal } from "@/lib/print-receipt";
+import { SupplierReturnsPanel } from "@/components/supplier-returns-panel";
 import {
   ArrowLeftRight,
   Building2,
@@ -49,9 +51,10 @@ import {
   Pencil,
   BadgeDollarSign,
   X,
+  Undo2,
 } from "lucide-react";
 
-type Section = "hub" | "names" | "purchase" | "movement" | "statement" | "debts";
+type Section = "hub" | "names" | "purchase" | "returns" | "movement" | "statement" | "debts";
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat("en-IQ", { maximumFractionDigits: 2 }).format(n);
@@ -216,6 +219,20 @@ export default function SuppliersPage() {
   });
   const [movementError, setMovementError] = useState("");
 
+  // Live clock for new movement form — same as purchase
+  useEffect(() => {
+    if (!movementFormOpen) return;
+    const tick = () => {
+      const clock = nowTime();
+      setMovementForm((f) =>
+        f.movementTime === clock ? f : { ...f, movementTime: clock }
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [movementFormOpen]);
+
   // ── statement ──
   const [statementSupplierId, setStatementSupplierId] = useState(0);
   const { data: statement, isLoading: loadingStatement } = useGetSupplierStatement(
@@ -320,6 +337,7 @@ export default function SuppliersPage() {
   const invalidateAll = () => {
     void queryClient.invalidateQueries({ queryKey: getGetSuppliersQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetSupplierPurchasesQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: getGetSupplierReturnsQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetSupplierMovementsQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetSupplierDebtsQueryKey() });
     if (statementSupplierId > 0) {
@@ -716,6 +734,12 @@ export default function SuppliersPage() {
       icon: ShoppingCart,
     },
     {
+      id: "returns",
+      title: "مرجوعات",
+      desc: "فاتورة مرجوع بنفس تفاصيل وترتيب فواتير الشراء",
+      icon: Undo2,
+    },
+    {
       id: "movement",
       title: "حركة المورد",
       desc: "مدفوع / واصل / خصم مع رقم فاتورة وتاريخ",
@@ -745,7 +769,7 @@ export default function SuppliersPage() {
             </p>
             <h1 className="text-2xl sm:text-3xl font-black text-foreground">إدارة الموردين</h1>
             <p className="text-sm text-muted-foreground mt-1 font-semibold">
-              أسماء، شراء، حركات، كشف حساب، وديون — بشكل واضح واحترافي
+              أسماء، شراء، مرجوعات، حركات، كشف حساب، وديون — بشكل واضح واحترافي
             </p>
           </div>
           {section !== "hub" ? (
@@ -765,23 +789,46 @@ export default function SuppliersPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
           {hubCards.map((card) => {
             const Icon = card.icon;
+            const isReturns = card.id === "returns";
             return (
               <button
                 key={card.id}
                 type="button"
                 onClick={() => setSection(card.id)}
-                className="
+                className={
+                  isReturns
+                    ? `
+                  group text-start rounded-3xl border-2 border-destructive/40 bg-destructive/5
+                  min-h-[9.5rem] sm:min-h-[10.5rem] p-5 sm:p-6
+                  hover:border-destructive/70 hover:bg-destructive/10 hover:shadow-lg
+                  active:scale-[0.98] active:bg-destructive/15
+                  transition-all touch-manipulation select-none
+                `
+                    : `
                   group text-start rounded-3xl border-2 border-border/70 bg-card/90
                   min-h-[9.5rem] sm:min-h-[10.5rem] p-5 sm:p-6
                   hover:border-primary/50 hover:bg-primary/5 hover:shadow-lg
                   active:scale-[0.98] active:bg-primary/10
                   transition-all touch-manipulation select-none
-                "
+                `
+                }
               >
-                <span className="inline-flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 mb-4 group-hover:scale-105 transition-transform">
+                <span
+                  className={
+                    isReturns
+                      ? "inline-flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-destructive text-destructive-foreground shadow-md shadow-destructive/25 mb-4 group-hover:scale-105 transition-transform"
+                      : "inline-flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 mb-4 group-hover:scale-105 transition-transform"
+                  }
+                >
                   <Icon className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.25} />
                 </span>
-                <h2 className="text-[15px] font-bold leading-snug">{card.title}</h2>
+                <h2
+                  className={`text-[15px] font-bold leading-snug ${
+                    isReturns ? "text-destructive" : ""
+                  }`}
+                >
+                  {card.title}
+                </h2>
                 <p className="text-[13px] text-muted-foreground mt-2 leading-relaxed font-semibold">
                   {card.desc}
                 </p>
@@ -1523,6 +1570,18 @@ export default function SuppliersPage() {
         </div>
       ) : null}
 
+      {/* ── Returns ── */}
+      {section === "returns" ? (
+        <SupplierReturnsPanel
+          suppliers={suppliers}
+          menuItems={menuItems}
+          restaurantName={restaurantName}
+          restaurantLogoUrl={restaurantLogoUrl}
+          restaurantMobile={restaurantMobile}
+          onInvalidate={invalidateAll}
+        />
+      ) : null}
+
       {/* ── Movement ── */}
       {section === "movement" ? (
         <div className="space-y-4">
@@ -1928,16 +1987,14 @@ export default function SuppliersPage() {
             </div>
             <div>
               <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                الساعة *
+                الساعة
               </label>
               <Input
-                type="time"
-                className="h-11"
+                className="h-11 bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono tracking-wide"
                 dir="ltr"
                 value={movementForm.movementTime}
-                onChange={(e) =>
-                  setMovementForm((f) => ({ ...f, movementTime: e.target.value }))
-                }
+                readOnly
+                disabled
               />
             </div>
             <ModernCombobox

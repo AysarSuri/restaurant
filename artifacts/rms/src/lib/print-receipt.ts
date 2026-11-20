@@ -381,6 +381,8 @@ export type SupplierPurchaseReceiptData = {
   restaurantName: string;
   logoUrl?: string | null;
   mobile?: string | null;
+  /** Document title under restaurant identity */
+  docTitle?: string;
   invoiceNo: string;
   invoiceDate: string;
   invoiceTime: string;
@@ -460,9 +462,9 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
     }
     body { width: 80mm; }
     .ticket {
-      width: 76mm;
+      width: 72mm;
       margin: 0 auto;
-      padding: 3mm 2.5mm 4mm;
+      padding: 3mm 4.5mm 4mm;
       color: #000;
     }
     .identity {
@@ -594,17 +596,9 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
       font-weight: 800;
       color: #000;
     }
-    .hint {
-      text-align: center;
-      margin-top: 1.5mm;
-      font-size: 10px;
-      font-weight: 700;
-      color: #000;
-      opacity: 0.8;
-    }
     @media print {
       html, body { width: 80mm; }
-      .ticket { width: 76mm; }
+      .ticket { width: 72mm; padding-left: 4.5mm; padding-right: 4.5mm; }
     }
   </style>
 </head>
@@ -615,7 +609,7 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
       <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
       ${phone ? `<p class="phone">${esc(phone)}</p>` : ""}
     </div>
-    <p class="doc-title">فاتورة شراء من المورد</p>
+    <p class="doc-title">${esc(data.docTitle?.trim() || "فاتورة شراء من المورد")}</p>
     <hr class="rule" />
     <div class="row"><span>رقم الفاتورة</span><span>${esc(data.invoiceNo)}</span></div>
     <div class="row"><span>التاريخ</span><span>${esc(data.invoiceDate)}</span></div>
@@ -655,7 +649,6 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
       </div>
     </div>
     <p class="footer">شكراً لتعاملكم</p>
-    <p class="hint">ورقة حرارية 80×80</p>
   </div>
 </body>
 </html>`;

@@ -4,6 +4,8 @@ import {
   suppliersTable,
   supplierPurchasesTable,
   supplierPurchaseItemsTable,
+  supplierReturnsTable,
+  supplierReturnItemsTable,
   supplierMovementsTable,
   menuItemsTable,
 } from "@workspace/db/schema";
@@ -110,6 +112,28 @@ async function nextPurchaseInvoiceNo(): Promise<string> {
   return String(max + 1);
 }
 
+async function isDuplicateReturnInvoiceNo(invoiceNo: string) {
+  const normalized = invoiceNo.trim().toLowerCase();
+  const rows = await db
+    .select({ id: supplierReturnsTable.id })
+    .from(supplierReturnsTable)
+    .where(sql`lower(${supplierReturnsTable.invoiceNo}) = ${normalized}`)
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function nextReturnInvoiceNo(): Promise<string> {
+  const rows = await db
+    .select({ invoiceNo: supplierReturnsTable.invoiceNo })
+    .from(supplierReturnsTable);
+  let max = 0;
+  for (const row of rows) {
+    const match = String(row.invoiceNo ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
 function mapSupplier(row: typeof suppliersTable.$inferSelect) {
   return {
     id: row.id,
@@ -150,6 +174,19 @@ async function computeBalances(supplierIds: number[]) {
 
   for (const p of purchases) {
     map.set(p.supplierId, (map.get(p.supplierId) ?? 0) + num(p.total));
+  }
+
+  const returns = await db
+    .select({
+      supplierId: supplierReturnsTable.supplierId,
+      total: sql<string>`coalesce(sum(${supplierReturnsTable.remainingAmount}), 0)`,
+    })
+    .from(supplierReturnsTable)
+    .where(inArray(supplierReturnsTable.supplierId, supplierIds))
+    .groupBy(supplierReturnsTable.supplierId);
+
+  for (const r of returns) {
+    map.set(r.supplierId, (map.get(r.supplierId) ?? 0) - num(r.total));
   }
 
   const movements = await db
@@ -255,6 +292,14 @@ router.delete("/:id", async (req, res) => {
     .limit(1);
   if (purchase) {
     return res.status(400).json({ message: "لا يمكن حذف مورد له فواتير شراء" });
+  }
+  const [retRow] = await db
+    .select({ id: supplierReturnsTable.id })
+    .from(supplierReturnsTable)
+    .where(eq(supplierReturnsTable.supplierId, id))
+    .limit(1);
+  if (retRow) {
+    return res.status(400).json({ message: "لا يمكن حذف مورد له فواتير مرجوع" });
   }
   const [movement] = await db
     .select({ id: supplierMovementsTable.id })
@@ -579,6 +624,183 @@ router.delete("/purchases/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Returns (مرجوعات) ────────────────────────────────────
+
+async function loadReturnItems(returnIds: number[]) {
+  const map = new Map<number, any[]>();
+  if (returnIds.length === 0) return map;
+  const rows = await db
+    .select({
+      id: supplierReturnItemsTable.id,
+      returnId: supplierReturnItemsTable.returnId,
+      menuItemId: supplierReturnItemsTable.menuItemId,
+      qty: supplierReturnItemsTable.qty,
+      unitKind: supplierReturnItemsTable.unitKind,
+      unitLabel: supplierReturnItemsTable.unitLabel,
+      price: supplierReturnItemsTable.price,
+      amount: supplierReturnItemsTable.amount,
+      itemNameAr: menuItemsTable.nameAr,
+      itemName: menuItemsTable.name,
+      majorUnit: menuItemsTable.majorUnit,
+      minorUnit: menuItemsTable.minorUnit,
+      subunitQty: menuItemsTable.subunitQty,
+    })
+    .from(supplierReturnItemsTable)
+    .leftJoin(menuItemsTable, eq(menuItemsTable.id, supplierReturnItemsTable.menuItemId))
+    .where(inArray(supplierReturnItemsTable.returnId, returnIds));
+
+  for (const r of rows) {
+    const list = map.get(r.returnId) ?? [];
+    list.push({
+      id: r.id,
+      menuItemId: r.menuItemId,
+      qty: num(r.qty),
+      unitKind: r.unitKind,
+      unitLabel: r.unitLabel,
+      price: num(r.price),
+      amount: num(r.amount),
+      itemNameAr: r.itemNameAr,
+      itemName: r.itemName,
+      majorUnit: r.majorUnit,
+      minorUnit: r.minorUnit,
+      subunitQty: r.subunitQty,
+    });
+    map.set(r.returnId, list);
+  }
+  return map;
+}
+
+async function enrichReturns(rows: (typeof supplierReturnsTable.$inferSelect)[]) {
+  const supplierIds = [...new Set(rows.map((r) => r.supplierId))];
+  const suppliers =
+    supplierIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(suppliersTable)
+          .where(inArray(suppliersTable.id, supplierIds));
+  const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
+  const itemsMap = await loadReturnItems(rows.map((r) => r.id));
+
+  return rows.map((r) => {
+    const s = supplierMap.get(r.supplierId);
+    return {
+      id: r.id,
+      invoiceNo: r.invoiceNo,
+      invoiceDate: r.invoiceDate,
+      invoiceTime: r.invoiceTime,
+      supplierId: r.supplierId,
+      supplierCode: s?.code ?? "",
+      supplierName: s?.name ?? "",
+      notes: r.notes,
+      totalQty: num(r.totalQty),
+      totalAmount: num(r.totalAmount),
+      paidAmount: num(r.paidAmount),
+      discountAmount: num(r.discountAmount),
+      remainingAmount: num(r.remainingAmount),
+      items: itemsMap.get(r.id) ?? [],
+      createdAt: r.createdAt,
+    };
+  });
+}
+
+router.get("/returns", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(supplierReturnsTable)
+    .orderBy(desc(supplierReturnsTable.invoiceDate), desc(supplierReturnsTable.id));
+  res.json(await enrichReturns(rows));
+});
+
+router.post("/returns", async (req, res) => {
+  const parsed = await parsePurchaseBody(req.body);
+  if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
+
+  let invoiceNo = await nextReturnInvoiceNo();
+  while (await isDuplicateReturnInvoiceNo(invoiceNo)) {
+    invoiceNo = String(Number(invoiceNo) + 1);
+  }
+
+  const [ret] = await db
+    .insert(supplierReturnsTable)
+    .values({
+      invoiceNo,
+      invoiceDate: parsed.invoiceDate,
+      invoiceTime: parsed.invoiceTime,
+      supplierId: parsed.supplierId,
+      notes: parsed.notes,
+      totalQty: qtyStr(parsed.totalQty),
+      totalAmount: money(parsed.totalAmount),
+      paidAmount: money(parsed.paidAmount),
+      discountAmount: money(parsed.discountAmount),
+      remainingAmount: money(parsed.remainingAmount),
+    })
+    .returning();
+
+  await db.insert(supplierReturnItemsTable).values(
+    parsed.items.map((it) => ({
+      returnId: ret.id,
+      ...it,
+    }))
+  );
+
+  const [full] = await enrichReturns([ret]);
+  res.status(201).json(full);
+});
+
+router.put("/returns/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const [existing] = await db
+    .select()
+    .from(supplierReturnsTable)
+    .where(eq(supplierReturnsTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "فاتورة المرجوع غير موجودة" });
+
+  const parsed = await parsePurchaseBody(req.body);
+  if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
+
+  const [ret] = await db
+    .update(supplierReturnsTable)
+    .set({
+      invoiceDate: parsed.invoiceDate,
+      invoiceTime: parsed.invoiceTime,
+      supplierId: parsed.supplierId,
+      notes: parsed.notes,
+      totalQty: qtyStr(parsed.totalQty),
+      totalAmount: money(parsed.totalAmount),
+      paidAmount: money(parsed.paidAmount),
+      discountAmount: money(parsed.discountAmount),
+      remainingAmount: money(parsed.remainingAmount),
+    })
+    .where(eq(supplierReturnsTable.id, id))
+    .returning();
+
+  await db.delete(supplierReturnItemsTable).where(eq(supplierReturnItemsTable.returnId, id));
+  await db.insert(supplierReturnItemsTable).values(
+    parsed.items.map((it) => ({
+      returnId: id,
+      ...it,
+    }))
+  );
+
+  const [full] = await enrichReturns([ret]);
+  res.json(full);
+});
+
+router.delete("/returns/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+  const [row] = await db
+    .delete(supplierReturnsTable)
+    .where(eq(supplierReturnsTable.id, id))
+    .returning();
+  if (!row) return res.status(404).json({ message: "فاتورة المرجوع غير موجودة" });
+  res.json({ ok: true });
+});
+
 // ─── Movements ────────────────────────────────────────────
 
 async function enrichMovements(rows: (typeof supplierMovementsTable.$inferSelect)[]) {
@@ -690,6 +912,12 @@ router.get("/statement/:supplierId", async (req, res) => {
     .where(eq(supplierPurchasesTable.supplierId, supplierId))
     .orderBy(asc(supplierPurchasesTable.invoiceDate), asc(supplierPurchasesTable.id));
 
+  const returns = await db
+    .select()
+    .from(supplierReturnsTable)
+    .where(eq(supplierReturnsTable.supplierId, supplierId))
+    .orderBy(asc(supplierReturnsTable.invoiceDate), asc(supplierReturnsTable.id));
+
   const movements = await db
     .select()
     .from(supplierMovementsTable)
@@ -698,7 +926,7 @@ router.get("/statement/:supplierId", async (req, res) => {
 
   type Line = {
     id: string;
-    kind: "opening" | "purchase" | "movement";
+    kind: "opening" | "purchase" | "return" | "movement";
     date: string;
     time: string;
     invoiceNo: string;
@@ -776,6 +1004,59 @@ router.get("/statement/:supplierId", async (req, res) => {
             description: "دفع على فاتورة شراء",
             debit: 0,
             credit: paid,
+            balance: Number(running.toFixed(2)),
+          });
+        }
+      },
+    });
+  }
+
+  for (const r of returns) {
+    events.push({
+      sort: `${r.invoiceDate}T${r.invoiceTime}|R${r.id}`,
+      date: r.invoiceDate,
+      time: r.invoiceTime,
+      apply: () => {
+        const amount = num(r.totalAmount);
+        const discount = num(r.discountAmount);
+        const paid = num(r.paidAmount);
+        running -= amount;
+        lines.push({
+          id: `return-${r.id}`,
+          kind: "return",
+          date: r.invoiceDate,
+          time: r.invoiceTime,
+          invoiceNo: r.invoiceNo,
+          description: "فاتورة مرجوع",
+          debit: 0,
+          credit: amount,
+          balance: Number(running.toFixed(2)),
+        });
+        if (discount > 0) {
+          running += discount;
+          lines.push({
+            id: `return-discount-${r.id}`,
+            kind: "return",
+            date: r.invoiceDate,
+            time: r.invoiceTime,
+            invoiceNo: r.invoiceNo,
+            description: "خصم فاتورة مرجوع",
+            debit: discount,
+            credit: 0,
+            balance: Number(running.toFixed(2)),
+          });
+        }
+        if (paid > 0) {
+          running += paid;
+          lines.push({
+            id: `return-paid-${r.id}`,
+            kind: "return",
+            date: r.invoiceDate,
+            time: r.invoiceTime,
+            invoiceNo: r.invoiceNo,
+            description: "واصل على فاتورة مرجوع",
+            debit: paid,
+            credit: 0,
             balance: Number(running.toFixed(2)),
           });
         }

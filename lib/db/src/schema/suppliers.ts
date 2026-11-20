@@ -68,6 +68,50 @@ export const supplierPurchaseItemsTable = pgTable("supplier_purchase_items", {
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
 });
 
+/** Purchase return invoice header (مرجوع شراء) — same shape as purchases */
+export const supplierReturnsTable = pgTable("supplier_returns", {
+  id: serial("id").primaryKey(),
+  invoiceNo: text("invoice_no").notNull(),
+  invoiceDate: text("invoice_date").notNull(),
+  invoiceTime: text("invoice_time").notNull(),
+  supplierId: integer("supplier_id")
+    .notNull()
+    .references(() => suppliersTable.id, { onDelete: "restrict" }),
+  notes: text("notes"),
+  totalQty: numeric("total_qty", { precision: 14, scale: 3 }).default("0").notNull(),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
+  /** Amount refunded / settled on this return */
+  paidAmount: numeric("paid_amount", { precision: 14, scale: 2 }).default("0").notNull(),
+  /** Discount on this return */
+  discountAmount: numeric("discount_amount", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
+  /** Remaining = total - discount - paid (reduces supplier balance) */
+  remainingAmount: numeric("remaining_amount", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/** Purchase return invoice lines */
+export const supplierReturnItemsTable = pgTable("supplier_return_items", {
+  id: serial("id").primaryKey(),
+  returnId: integer("return_id")
+    .notNull()
+    .references(() => supplierReturnsTable.id, { onDelete: "cascade" }),
+  menuItemId: integer("menu_item_id")
+    .notNull()
+    .references(() => menuItemsTable.id, { onDelete: "restrict" }),
+  qty: numeric("qty", { precision: 14, scale: 3 }).notNull(),
+  /** major | minor */
+  unitKind: text("unit_kind").notNull(),
+  unitLabel: text("unit_label").notNull(),
+  price: numeric("price", { precision: 14, scale: 2 }).notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+});
+
 /**
  * Supplier cash / adjustment movement.
  * amountType: paid (مدفوع) | received (واصل) | discount (خصم)

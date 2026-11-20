@@ -70,6 +70,10 @@ export interface SupplierPurchase {
   createdAt?: string;
 }
 
+/** Same shape as purchase — return/refund invoice */
+export type SupplierReturn = SupplierPurchase;
+export type SupplierReturnItem = SupplierPurchaseItem;
+
 export interface CreateSupplierPurchaseBody {
   invoiceNo: string;
   invoiceDate: string;
@@ -85,6 +89,8 @@ export interface CreateSupplierPurchaseBody {
     price: number;
   }>;
 }
+
+export type CreateSupplierReturnBody = CreateSupplierPurchaseBody;
 
 export interface SupplierMovement {
   id: number;
@@ -112,7 +118,7 @@ export interface CreateSupplierMovementBody {
 
 export interface SupplierStatementLine {
   id: string;
-  kind: "opening" | "purchase" | "movement";
+  kind: "opening" | "purchase" | "return" | "movement";
   date: string;
   time: string;
   invoiceNo: string;
@@ -147,6 +153,7 @@ const base = "/api/suppliers";
 
 export const getGetSuppliersQueryKey = () => [base] as const;
 export const getGetSupplierPurchasesQueryKey = () => [`${base}/purchases`] as const;
+export const getGetSupplierReturnsQueryKey = () => [`${base}/returns`] as const;
 export const getGetSupplierMovementsQueryKey = () => [`${base}/movements`] as const;
 export const getGetSupplierDebtsQueryKey = () => [`${base}/debts`] as const;
 export const getGetSupplierStatementQueryKey = (supplierId: number) =>
@@ -157,6 +164,9 @@ export const getSuppliers = (options?: RequestOpts) =>
 
 export const getSupplierPurchases = (options?: RequestOpts) =>
   customFetch<SupplierPurchase[]>(`${base}/purchases`, { ...options, method: "GET" });
+
+export const getSupplierReturns = (options?: RequestOpts) =>
+  customFetch<SupplierReturn[]>(`${base}/returns`, { ...options, method: "GET" });
 
 export const getSupplierMovements = (options?: RequestOpts) =>
   customFetch<SupplierMovement[]>(`${base}/movements`, { ...options, method: "GET" });
@@ -203,6 +213,13 @@ export function useGetSupplierPurchases(options?: {
   request?: RequestOpts;
 }) {
   return useListQuery(getGetSupplierPurchasesQueryKey(), getSupplierPurchases, options);
+}
+
+export function useGetSupplierReturns(options?: {
+  query?: Partial<UseQueryOptions<SupplierReturn[], ErrorType<unknown>, SupplierReturn[]>>;
+  request?: RequestOpts;
+}) {
+  return useListQuery(getGetSupplierReturnsQueryKey(), getSupplierReturns, options);
 }
 
 export function useGetSupplierMovements(options?: {
@@ -323,6 +340,52 @@ export function useDeleteSupplierPurchase(
   return useMutation({
     mutationFn: ({ id }) =>
       customFetch<{ ok: boolean }>(`${base}/purchases/${id}`, { method: "DELETE" }),
+    ...options,
+  });
+}
+
+export function useCreateSupplierReturn(
+  options?: UseMutationOptions<
+    SupplierReturn,
+    ErrorType<unknown>,
+    BodyType<CreateSupplierReturnBody>
+  >
+) {
+  return useMutation({
+    mutationFn: (body) =>
+      customFetch<SupplierReturn>(`${base}/returns`, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      }),
+    ...options,
+  });
+}
+
+export function useUpdateSupplierReturn(
+  options?: UseMutationOptions<
+    SupplierReturn,
+    ErrorType<unknown>,
+    { id: number; data: BodyType<CreateSupplierReturnBody> }
+  >
+) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      customFetch<SupplierReturn>(`${base}/returns/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      }),
+    ...options,
+  });
+}
+
+export function useDeleteSupplierReturn(
+  options?: UseMutationOptions<{ ok: boolean }, ErrorType<unknown>, { id: number }>
+) {
+  return useMutation({
+    mutationFn: ({ id }) =>
+      customFetch<{ ok: boolean }>(`${base}/returns/${id}`, { method: "DELETE" }),
     ...options,
   });
 }
