@@ -130,10 +130,20 @@ export interface SupplierStatementLine {
 
 export interface SupplierStatement {
   supplier: Supplier;
+  fromDate?: string | null;
+  toDate?: string | null;
+  openingBalance?: number;
   balance: number;
   balanceLabel: string;
+  totalDebit?: number;
+  totalCredit?: number;
   lines: SupplierStatementLine[];
 }
+
+export type SupplierStatementParams = {
+  from?: string;
+  to?: string;
+};
 
 export interface SupplierDebtItem {
   id: number;
@@ -156,8 +166,18 @@ export const getGetSupplierPurchasesQueryKey = () => [`${base}/purchases`] as co
 export const getGetSupplierReturnsQueryKey = () => [`${base}/returns`] as const;
 export const getGetSupplierMovementsQueryKey = () => [`${base}/movements`] as const;
 export const getGetSupplierDebtsQueryKey = () => [`${base}/debts`] as const;
-export const getGetSupplierStatementQueryKey = (supplierId: number) =>
-  [`${base}/statement`, supplierId] as const;
+export const getGetSupplierStatementQueryKey = (
+  supplierId: number,
+  params?: SupplierStatementParams
+) => {
+  if (!params) return [`${base}/statement`, supplierId] as const;
+  return [
+    `${base}/statement`,
+    supplierId,
+    params.from ?? "",
+    params.to ?? "",
+  ] as const;
+};
 
 export const getSuppliers = (options?: RequestOpts) =>
   customFetch<Supplier[]>(base, { ...options, method: "GET" });
@@ -174,11 +194,23 @@ export const getSupplierMovements = (options?: RequestOpts) =>
 export const getSupplierDebts = (options?: RequestOpts) =>
   customFetch<SupplierDebtsReport>(`${base}/debts`, { ...options, method: "GET" });
 
-export const getSupplierStatement = (supplierId: number, options?: RequestOpts) =>
-  customFetch<SupplierStatement>(`${base}/statement/${supplierId}`, {
-    ...options,
-    method: "GET",
-  });
+export const getSupplierStatement = (
+  supplierId: number,
+  params?: SupplierStatementParams,
+  options?: RequestOpts
+) => {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  const query = qs.toString();
+  return customFetch<SupplierStatement>(
+    `${base}/statement/${supplierId}${query ? `?${query}` : ""}`,
+    {
+      ...options,
+      method: "GET",
+    }
+  );
+};
 
 function useListQuery<T>(
   key: QueryKey,
@@ -242,6 +274,7 @@ export function useGetSupplierDebts(options?: {
 
 export function useGetSupplierStatement(
   supplierId: number,
+  params?: SupplierStatementParams,
   options?: {
     query?: Partial<
       UseQueryOptions<SupplierStatement, ErrorType<unknown>, SupplierStatement>
@@ -250,11 +283,12 @@ export function useGetSupplierStatement(
   }
 ) {
   const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetSupplierStatementQueryKey(supplierId);
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSupplierStatementQueryKey(supplierId, params);
   return useQuery({
     queryKey,
     queryFn: ({ signal }) =>
-      getSupplierStatement(supplierId, { signal, ...requestOptions }),
+      getSupplierStatement(supplierId, params, { signal, ...requestOptions }),
     enabled: supplierId > 0,
     ...queryOptions,
   });

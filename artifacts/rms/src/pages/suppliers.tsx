@@ -267,9 +267,23 @@ export default function SuppliersPage() {
 
   // ── statement ──
   const [statementSupplierId, setStatementSupplierId] = useState(0);
-  const { data: statement, isLoading: loadingStatement } = useGetSupplierStatement(
-    statementSupplierId
+  const [statementFromDate, setStatementFromDate] = useState(todayDate);
+  const [statementToDate, setStatementToDate] = useState(todayDate);
+  const statementParams = useMemo(
+    () => ({
+      from: statementFromDate.trim() || undefined,
+      to: statementToDate.trim() || undefined,
+    }),
+    [statementFromDate, statementToDate]
   );
+  const statementDatesValid =
+    !statementFromDate ||
+    !statementToDate ||
+    statementFromDate <= statementToDate;
+  const { data: statement, isLoading: loadingStatement, isFetching: fetchingStatement } =
+    useGetSupplierStatement(statementSupplierId, statementParams, {
+      query: { enabled: statementSupplierId > 0 && statementDatesValid },
+    });
 
   const supplierOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -299,7 +313,7 @@ export default function SuppliersPage() {
     () => [
       {
         value: "",
-        label: "كل المندوبين",
+        label: "كل الموردين",
         subtitle: "عرض بدون فلتر",
         icon: Truck,
       },
@@ -853,16 +867,55 @@ export default function SuppliersPage() {
 
   const printStatement = () => {
     if (!statement) return;
+    const fromLabel = statement.fromDate
+      ? formatDate(statement.fromDate)
+      : statementFromDate
+        ? formatDate(statementFromDate)
+        : "—";
+    const toLabel = statement.toDate
+      ? formatDate(statement.toDate)
+      : statementToDate
+        ? formatDate(statementToDate)
+        : "—";
     const rows = statement.lines
       .map(
         (l) =>
-          `<tr><td dir="ltr">${l.date ? formatDate(l.date) : "—"} ${l.time || ""}</td><td>${l.invoiceNo}</td><td>${l.description}</td><td>${fmtMoney(l.debit)}</td><td>${fmtMoney(l.credit)}</td><td>${fmtMoney(l.balance)}</td></tr>`
+          `<tr>
+            <td dir="ltr">${l.date ? formatDate(l.date) : "—"}</td>
+            <td dir="ltr">${l.time || "—"}</td>
+            <td>${l.invoiceNo}</td>
+            <td>${l.description}</td>
+            <td dir="ltr">${fmtMoney(l.debit)}</td>
+            <td dir="ltr">${fmtMoney(l.credit)}</td>
+            <td dir="ltr" class="${l.balance > 0 ? "pos" : l.balance < 0 ? "neg" : ""}">${fmtMoney(l.balance)}</td>
+          </tr>`
       )
       .join("");
     printBlock(
       `كشف حساب المورد — ${statement.supplier.name}`,
-      `<div class="meta">كود: ${statement.supplier.code} | الرصيد: ${fmtMoney(statement.balance)} (${statement.balanceLabel})</div>
-       <table><thead><tr><th>التاريخ</th><th>الفاتورة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>${rows}</tbody></table>`
+      `<div class="meta">
+         المطعم: ${restaurantName}<br/>
+         كود المورد: ${statement.supplier.code}<br/>
+         الفترة: من ${fromLabel} إلى ${toLabel}<br/>
+         رصيد مرحّل: ${fmtMoney(statement.openingBalance ?? 0)} |
+         مجموع مدين: ${fmtMoney(statement.totalDebit ?? 0)} |
+         مجموع دائن: ${fmtMoney(statement.totalCredit ?? 0)} |
+         الرصيد النهائي: ${fmtMoney(statement.balance)} (${statement.balanceLabel})
+       </div>
+       <table>
+         <thead>
+           <tr>
+             <th>التاريخ</th>
+             <th>الساعة</th>
+             <th>الفاتورة</th>
+             <th>البيان</th>
+             <th>مدين</th>
+             <th>دائن</th>
+             <th>الرصيد</th>
+           </tr>
+         </thead>
+         <tbody>${rows}</tbody>
+       </table>`
     );
   };
 
@@ -1788,13 +1841,13 @@ export default function SuppliersPage() {
                   value={movementListSupplierId}
                   onChange={setMovementListSupplierId}
                   options={movementSupplierSearchOptions}
-                  label="المندوب"
-                  placeholder="كل المندوبين"
+                  label="المورد"
+                  placeholder="كل الموردين"
                   icon={Truck}
                   searchable
                   size="sm"
-                  searchPlaceholder="ابحث عن مندوب..."
-                  emptyText="لا يوجد مندوب مطابق"
+                  searchPlaceholder="ابحث عن مورد..."
+                  emptyText="لا يوجد مورد مطابق"
                   labelClassName="text-[14px] font-bold text-foreground"
                   valueClassName="text-[14px] font-bold"
                   className="[&>div:first-child]:mb-0.5"
@@ -1835,7 +1888,7 @@ export default function SuppliersPage() {
                       <th className="text-center p-3 font-bold">الفاتورة</th>
                       <th className="text-center p-3 font-bold">التاريخ</th>
                       <th className="text-center p-3 font-bold">الساعة</th>
-                      <th className="text-center p-3 font-bold">المندوب</th>
+                      <th className="text-center p-3 font-bold">المورد</th>
                       <th className="text-center p-3 font-bold">النوع</th>
                       <th className="text-center p-3 font-bold">المبلغ</th>
                       <th className="text-center p-3 font-bold">إجراءات</th>
@@ -1916,40 +1969,80 @@ export default function SuppliersPage() {
 
       {/* ── Statement ── */}
       {section === "statement" ? (
-        <Card className="p-4 sm:p-6 border border-border/50 space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <Card className="p-4 sm:p-6 border border-border/50 space-y-4 touch-ui">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-xl font-extrabold">كشف حساب المورد</h2>
               <p className="text-xs text-muted-foreground font-semibold">
-                عرض واضح للحركات مع تقرير للطباعة
+                كشف مهني حسب الفترة مع رصيد مرحّل وتقرير للطباعة
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="w-[min(100%,18rem)]">
-                <ModernCombobox
-                  value={statementSupplierId ? String(statementSupplierId) : ""}
-                  onChange={(v) => setStatementSupplierId(Number(v) || 0)}
-                  options={supplierOptions}
-                  label="اختر المورد"
-                  placeholder="اسم المورد"
-                  icon={Building2}
-                  size="sm"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full"
-                disabled={!statement}
-                onClick={printStatement}
-              >
-                <Printer className="w-4 h-4 me-1.5" /> تقرير الكشف
-              </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full h-11 px-5 text-[15px] font-bold touch-manipulation"
+              disabled={!statement || statement.lines.length === 0}
+              onClick={printStatement}
+            >
+              <Printer className="w-4 h-4 me-1.5" /> تقرير الكشف
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+            <div className="min-w-0 col-span-2 lg:col-span-1">
+              <ModernCombobox
+                value={statementSupplierId ? String(statementSupplierId) : ""}
+                onChange={(v) => setStatementSupplierId(Number(v) || 0)}
+                options={supplierOptions}
+                label="المورد *"
+                placeholder="اختر المورد"
+                icon={Building2}
+                searchable
+                size="sm"
+                searchPlaceholder="ابحث عن مورد..."
+                emptyText="لا يوجد مورد مطابق"
+                labelClassName="text-[14px] font-bold text-foreground"
+                valueClassName="text-[14px] font-bold"
+                className="[&>div:first-child]:mb-0.5"
+              />
+            </div>
+            <div className="min-w-0">
+              <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                من تاريخ
+              </label>
+              <YmdDateInput
+                className="h-11 text-[14px] font-bold"
+                value={statementFromDate}
+                onChange={setStatementFromDate}
+              />
+            </div>
+            <div className="min-w-0">
+              <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                إلى تاريخ
+              </label>
+              <YmdDateInput
+                className="h-11 text-[14px] font-bold"
+                value={statementToDate}
+                onChange={setStatementToDate}
+              />
+            </div>
+            <div className="min-w-0 col-span-2 lg:col-span-1 flex items-end">
+              <p className="text-[12px] font-bold text-muted-foreground pb-2">
+                الافتراضي: تاريخ اليوم
+              </p>
             </div>
           </div>
 
+          {statementFromDate &&
+          statementToDate &&
+          statementFromDate > statementToDate ? (
+            <p className="text-[14px] font-bold text-destructive">
+              تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية
+            </p>
+          ) : null}
+
           {!statementSupplierId ? (
-            <p className="text-sm text-muted-foreground text-center py-10">
+            <p className="text-sm text-muted-foreground text-center py-10 font-semibold">
               اختر مورداً لعرض كشف الحساب
             </p>
           ) : loadingStatement ? (
@@ -1958,51 +2051,94 @@ export default function SuppliersPage() {
             </div>
           ) : statement ? (
             <>
-              <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 flex flex-wrap gap-4 justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground font-semibold">المورد</p>
-                  <p className="font-extrabold text-lg">
-                    {statement.supplier.name}{" "}
-                    <span className="text-sm font-mono text-muted-foreground">
-                      ({statement.supplier.code})
-                    </span>
+              <div
+                className={`grid grid-cols-2 lg:grid-cols-4 gap-2.5 ${
+                  fetchingStatement ? "opacity-70" : ""
+                }`}
+              >
+                <div className="rounded-2xl border border-border/50 bg-secondary/30 px-3.5 py-3">
+                  <p className="text-[12px] font-bold text-muted-foreground">المورد</p>
+                  <p className="font-extrabold text-[15px] mt-0.5 truncate">
+                    {statement.supplier.name}
+                  </p>
+                  <p className="text-[12px] font-mono font-bold text-muted-foreground" dir="ltr">
+                    {statement.supplier.code}
                   </p>
                 </div>
-                <div className="text-end">
-                  <p className="text-xs text-muted-foreground font-semibold">الرصيد النهائي</p>
-                  <p className={`text-xl font-black ${balanceTone(statement.balance)}`} dir="ltr">
+                <div className="rounded-2xl border border-border/50 bg-secondary/30 px-3.5 py-3">
+                  <p className="text-[12px] font-bold text-muted-foreground">رصيد مرحّل</p>
+                  <p
+                    className={`text-lg font-black mt-0.5 tabular-nums ${balanceTone(
+                      statement.openingBalance ?? 0
+                    )}`}
+                    dir="ltr"
+                  >
+                    {fmtMoney(statement.openingBalance ?? 0)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-secondary/30 px-3.5 py-3">
+                  <p className="text-[12px] font-bold text-muted-foreground">مدين / دائن</p>
+                  <p className="text-[14px] font-extrabold mt-0.5 tabular-nums" dir="ltr">
+                    {fmtMoney(statement.totalDebit ?? 0)}
+                    <span className="text-muted-foreground mx-1">/</span>
+                    {fmtMoney(statement.totalCredit ?? 0)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 px-3.5 py-3">
+                  <p className="text-[12px] font-bold text-muted-foreground">الرصيد النهائي</p>
+                  <p
+                    className={`text-xl font-black mt-0.5 tabular-nums ${balanceTone(
+                      statement.balance
+                    )}`}
+                    dir="ltr"
+                  >
                     {fmtMoney(statement.balance)}
                   </p>
-                  <p className="text-xs font-bold">{statement.balanceLabel}</p>
+                  <p className="text-[12px] font-bold">{statement.balanceLabel}</p>
                 </div>
               </div>
+
               <div className="overflow-auto rounded-2xl border border-border/40">
-                <table className="w-full text-sm">
+                <table className="w-full text-[14px]">
                   <thead className="bg-secondary/50 text-primary">
                     <tr>
-                      <th className="text-start p-3">التاريخ</th>
-                      <th className="text-start p-3">الفاتورة</th>
-                      <th className="text-start p-3">البيان</th>
-                      <th className="text-start p-3">مدين</th>
-                      <th className="text-start p-3">دائن</th>
-                      <th className="text-start p-3">الرصيد</th>
+                      <th className="text-center p-2.5 font-bold">التاريخ</th>
+                      <th className="text-center p-2.5 font-bold">الساعة</th>
+                      <th className="text-center p-2.5 font-bold">الفاتورة</th>
+                      <th className="text-center p-2.5 font-bold">البيان</th>
+                      <th className="text-center p-2.5 font-bold">مدين</th>
+                      <th className="text-center p-2.5 font-bold">دائن</th>
+                      <th className="text-center p-2.5 font-bold">الرصيد</th>
                     </tr>
                   </thead>
                   <tbody>
                     {statement.lines.map((l) => (
-                      <tr key={l.id} className="border-t border-border/30">
-                        <td className="p-3 tabular-nums" dir="ltr">
-                          {l.date ? formatDate(l.date) : "—"} {l.time}
+                      <tr
+                        key={l.id}
+                        className={`border-t border-border/30 ${
+                          l.kind === "opening" ? "bg-secondary/25" : ""
+                        }`}
+                      >
+                        <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
+                          {l.date ? formatDate(l.date) : "—"}
                         </td>
-                        <td className="p-3 font-bold">{l.invoiceNo}</td>
-                        <td className="p-3">{l.description}</td>
-                        <td className="p-3" dir="ltr">
+                        <td className="p-2.5 text-center font-bold tabular-nums font-mono" dir="ltr">
+                          {l.time || "—"}
+                        </td>
+                        <td className="p-2.5 text-center font-mono font-bold">{l.invoiceNo}</td>
+                        <td className="p-2.5 text-center font-bold">{l.description}</td>
+                        <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
                           {fmtMoney(l.debit)}
                         </td>
-                        <td className="p-3" dir="ltr">
+                        <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
                           {fmtMoney(l.credit)}
                         </td>
-                        <td className={`p-3 font-bold ${balanceTone(l.balance)}`} dir="ltr">
+                        <td
+                          className={`p-2.5 text-center font-black tabular-nums ${balanceTone(
+                            l.balance
+                          )}`}
+                          dir="ltr"
+                        >
                           {fmtMoney(l.balance)}
                         </td>
                       </tr>

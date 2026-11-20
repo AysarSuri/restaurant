@@ -983,6 +983,12 @@ router.get("/statement/:supplierId", async (req, res) => {
     .limit(1);
   if (!supplier) return res.status(404).json({ message: "المورد غير موجود" });
 
+  const fromDate = normalizeDate(req.query?.from) ?? normalizeDate(req.query?.fromDate);
+  const toDate = normalizeDate(req.query?.to) ?? normalizeDate(req.query?.toDate);
+  if (fromDate && toDate && fromDate > toDate) {
+    return res.status(400).json({ message: "تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية" });
+  }
+
   const purchases = await db
     .select()
     .from(supplierPurchasesTable)
@@ -1013,75 +1019,80 @@ router.get("/statement/:supplierId", async (req, res) => {
     balance: number;
   };
 
-  const lines: Line[] = [];
-  let running = num(supplier.openingBalance);
-  lines.push({
-    id: "opening",
-    kind: "opening",
-    date: "",
-    time: "",
-    invoiceNo: "—",
-    description: "رصيد افتتاحي",
-    debit: running > 0 ? running : 0,
-    credit: running < 0 ? Math.abs(running) : 0,
-    balance: Number(running.toFixed(2)),
-  });
-
   type Event = {
     sort: string;
     date: string;
     time: string;
-    apply: () => void;
+    applySilent: () => void;
+    applyVisible: () => void;
   };
+
+  const lines: Line[] = [];
+  let running = num(supplier.openingBalance);
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  const pushVisible = (line: Omit<Line, "balance">) => {
+    const next: Line = {
+      ...line,
+      balance: Number(running.toFixed(2)),
+    };
+    lines.push(next);
+    totalDebit += line.debit;
+    totalCredit += line.credit;
+  };
+
   const events: Event[] = [];
 
   for (const p of purchases) {
     events.push({
-      sort: `${p.invoiceDate}T${p.invoiceTime}|P${p.id}`,
+      sort: `${p.invoiceDate}T${p.invoiceTime || "00:00:00"}|P${p.id}`,
       date: p.invoiceDate,
-      time: p.invoiceTime,
-      apply: () => {
+      time: p.invoiceTime || "",
+      applySilent: () => {
+        running += num(p.totalAmount);
+        running -= num(p.discountAmount);
+        running -= num(p.paidAmount);
+      },
+      applyVisible: () => {
         const amount = num(p.totalAmount);
         const discount = num(p.discountAmount);
         const paid = num(p.paidAmount);
         running += amount;
-        lines.push({
+        pushVisible({
           id: `purchase-${p.id}`,
           kind: "purchase",
           date: p.invoiceDate,
-          time: p.invoiceTime,
+          time: p.invoiceTime || "",
           invoiceNo: p.invoiceNo,
           description: "فاتورة شراء",
           debit: amount,
           credit: 0,
-          balance: Number(running.toFixed(2)),
         });
         if (discount > 0) {
           running -= discount;
-          lines.push({
+          pushVisible({
             id: `purchase-discount-${p.id}`,
             kind: "purchase",
             date: p.invoiceDate,
-            time: p.invoiceTime,
+            time: p.invoiceTime || "",
             invoiceNo: p.invoiceNo,
             description: "خصم فاتورة شراء",
             debit: 0,
             credit: discount,
-            balance: Number(running.toFixed(2)),
           });
         }
         if (paid > 0) {
           running -= paid;
-          lines.push({
+          pushVisible({
             id: `purchase-paid-${p.id}`,
             kind: "purchase",
             date: p.invoiceDate,
-            time: p.invoiceTime,
+            time: p.invoiceTime || "",
             invoiceNo: p.invoiceNo,
             description: "دفع على فاتورة شراء",
             debit: 0,
             credit: paid,
-            balance: Number(running.toFixed(2)),
           });
         }
       },
@@ -1090,51 +1101,53 @@ router.get("/statement/:supplierId", async (req, res) => {
 
   for (const r of returns) {
     events.push({
-      sort: `${r.invoiceDate}T${r.invoiceTime}|R${r.id}`,
+      sort: `${r.invoiceDate}T${r.invoiceTime || "00:00:00"}|R${r.id}`,
       date: r.invoiceDate,
-      time: r.invoiceTime,
-      apply: () => {
+      time: r.invoiceTime || "",
+      applySilent: () => {
+        running -= num(r.totalAmount);
+        running += num(r.discountAmount);
+        running += num(r.paidAmount);
+      },
+      applyVisible: () => {
         const amount = num(r.totalAmount);
         const discount = num(r.discountAmount);
         const paid = num(r.paidAmount);
         running -= amount;
-        lines.push({
+        pushVisible({
           id: `return-${r.id}`,
           kind: "return",
           date: r.invoiceDate,
-          time: r.invoiceTime,
+          time: r.invoiceTime || "",
           invoiceNo: r.invoiceNo,
           description: "فاتورة مرجوع",
           debit: 0,
           credit: amount,
-          balance: Number(running.toFixed(2)),
         });
         if (discount > 0) {
           running += discount;
-          lines.push({
+          pushVisible({
             id: `return-discount-${r.id}`,
             kind: "return",
             date: r.invoiceDate,
-            time: r.invoiceTime,
+            time: r.invoiceTime || "",
             invoiceNo: r.invoiceNo,
             description: "خصم فاتورة مرجوع",
             debit: discount,
             credit: 0,
-            balance: Number(running.toFixed(2)),
           });
         }
         if (paid > 0) {
           running += paid;
-          lines.push({
+          pushVisible({
             id: `return-paid-${r.id}`,
             kind: "return",
             date: r.invoiceDate,
-            time: r.invoiceTime,
+            time: r.invoiceTime || "",
             invoiceNo: r.invoiceNo,
             description: "واصل على فاتورة مرجوع",
             debit: paid,
             credit: 0,
-            balance: Number(running.toFixed(2)),
           });
         }
       },
@@ -1149,34 +1162,71 @@ router.get("/statement/:supplierId", async (req, res) => {
           ? "واصل"
           : "خصم";
     events.push({
-      sort: `${m.movementDate}T${m.movementTime}|M${m.id}`,
+      sort: `${m.movementDate}T${m.movementTime || "00:00:00"}|M${m.id}`,
       date: m.movementDate,
-      time: m.movementTime,
-      apply: () => {
+      time: m.movementTime || "",
+      applySilent: () => {
+        running -= num(m.amount);
+      },
+      applyVisible: () => {
         const amount = num(m.amount);
         running -= amount;
-        lines.push({
+        pushVisible({
           id: `movement-${m.id}`,
           kind: "movement",
           date: m.movementDate,
-          time: m.movementTime,
+          time: m.movementTime || "",
           invoiceNo: m.invoiceNo,
           description: `حركة مورد — ${typeLabel}`,
           debit: 0,
           credit: amount,
-          balance: Number(running.toFixed(2)),
         });
       },
     });
   }
 
   events.sort((a, b) => a.sort.localeCompare(b.sort));
-  for (const e of events) e.apply();
 
+  // Bring forward: apply everything before fromDate silently
+  for (const e of events) {
+    if (fromDate && e.date < fromDate) e.applySilent();
+  }
+
+  const openingBalance = Number(running.toFixed(2));
+  lines.push({
+    id: "opening",
+    kind: "opening",
+    date: fromDate || "",
+    time: "",
+    invoiceNo: "—",
+    description: fromDate ? "رصيد مرحّل" : "رصيد افتتاحي",
+    debit: openingBalance > 0 ? openingBalance : 0,
+    credit: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+    balance: openingBalance,
+  });
+  // Opening line should not inflate period totals
+  totalDebit = 0;
+  totalCredit = 0;
+
+  for (const e of events) {
+    if (fromDate && e.date < fromDate) continue;
+    if (toDate && e.date > toDate) continue;
+    e.applyVisible();
+  }
+
+  const closing = Number(running.toFixed(2));
   res.json({
-    supplier: mapSupplier(supplier),
-    balance: Number(running.toFixed(2)),
-    balanceLabel: running > 0 ? "باقي عندنا" : running < 0 ? "باقي عنده" : "متوازن",
+    supplier: {
+      ...mapSupplier(supplier),
+      balance: closing,
+    },
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+    openingBalance,
+    balance: closing,
+    balanceLabel: closing > 0 ? "باقي عندنا" : closing < 0 ? "باقي عنده" : "متوازن",
+    totalDebit: Number(totalDebit.toFixed(2)),
+    totalCredit: Number(totalCredit.toFixed(2)),
     lines,
   });
 });
