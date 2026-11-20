@@ -119,9 +119,13 @@ export interface CreateSupplierMovementBody {
 export interface SupplierStatementLine {
   id: string;
   kind: "opening" | "purchase" | "return" | "movement";
+  /** شراء | مرجوع | مدفوع | واصل | خصم | رصيد */
+  docType?: string;
   date: string;
+  /** Present for sort; usually hidden in UI */
   time: string;
   invoiceNo: string;
+  /** Notes / بيان */
   description: string;
   debit: number;
   credit: number;

@@ -1010,9 +1010,13 @@ router.get("/statement/:supplierId", async (req, res) => {
   type Line = {
     id: string;
     kind: "opening" | "purchase" | "return" | "movement";
+    /** Visible invoice type: شراء | مرجوع | مدفوع | واصل | خصم | رصيد */
+    docType: string;
     date: string;
+    /** Kept for chronological sort; not shown in UI */
     time: string;
     invoiceNo: string;
+    /** Notes / بيان */
     description: string;
     debit: number;
     credit: number;
@@ -1025,6 +1029,11 @@ router.get("/statement/:supplierId", async (req, res) => {
     time: string;
     applySilent: () => void;
     applyVisible: () => void;
+  };
+
+  const noteText = (v: unknown) => {
+    const s = String(v ?? "").trim();
+    return s || "—";
   };
 
   const lines: Line[] = [];
@@ -1045,10 +1054,12 @@ router.get("/statement/:supplierId", async (req, res) => {
   const events: Event[] = [];
 
   for (const p of purchases) {
+    const notes = noteText(p.notes);
+    const time = p.invoiceTime || "00:00:00";
     events.push({
-      sort: `${p.invoiceDate}T${p.invoiceTime || "00:00:00"}|P${p.id}`,
+      sort: `${p.invoiceDate}T${time}|P${p.id}|0`,
       date: p.invoiceDate,
-      time: p.invoiceTime || "",
+      time,
       applySilent: () => {
         running += num(p.totalAmount);
         running -= num(p.discountAmount);
@@ -1062,10 +1073,11 @@ router.get("/statement/:supplierId", async (req, res) => {
         pushVisible({
           id: `purchase-${p.id}`,
           kind: "purchase",
+          docType: "شراء",
           date: p.invoiceDate,
-          time: p.invoiceTime || "",
+          time,
           invoiceNo: p.invoiceNo,
-          description: "فاتورة شراء",
+          description: notes,
           debit: amount,
           credit: 0,
         });
@@ -1074,10 +1086,11 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `purchase-discount-${p.id}`,
             kind: "purchase",
+            docType: "خصم",
             date: p.invoiceDate,
-            time: p.invoiceTime || "",
+            time,
             invoiceNo: p.invoiceNo,
-            description: "خصم فاتورة شراء",
+            description: notes,
             debit: 0,
             credit: discount,
           });
@@ -1087,10 +1100,11 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `purchase-paid-${p.id}`,
             kind: "purchase",
+            docType: "مدفوع",
             date: p.invoiceDate,
-            time: p.invoiceTime || "",
+            time,
             invoiceNo: p.invoiceNo,
-            description: "دفع على فاتورة شراء",
+            description: notes,
             debit: 0,
             credit: paid,
           });
@@ -1100,10 +1114,12 @@ router.get("/statement/:supplierId", async (req, res) => {
   }
 
   for (const r of returns) {
+    const notes = noteText(r.notes);
+    const time = r.invoiceTime || "00:00:00";
     events.push({
-      sort: `${r.invoiceDate}T${r.invoiceTime || "00:00:00"}|R${r.id}`,
+      sort: `${r.invoiceDate}T${time}|R${r.id}|0`,
       date: r.invoiceDate,
-      time: r.invoiceTime || "",
+      time,
       applySilent: () => {
         running -= num(r.totalAmount);
         running += num(r.discountAmount);
@@ -1117,10 +1133,11 @@ router.get("/statement/:supplierId", async (req, res) => {
         pushVisible({
           id: `return-${r.id}`,
           kind: "return",
+          docType: "مرجوع",
           date: r.invoiceDate,
-          time: r.invoiceTime || "",
+          time,
           invoiceNo: r.invoiceNo,
-          description: "فاتورة مرجوع",
+          description: notes,
           debit: 0,
           credit: amount,
         });
@@ -1129,10 +1146,11 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `return-discount-${r.id}`,
             kind: "return",
+            docType: "خصم",
             date: r.invoiceDate,
-            time: r.invoiceTime || "",
+            time,
             invoiceNo: r.invoiceNo,
-            description: "خصم فاتورة مرجوع",
+            description: notes,
             debit: discount,
             credit: 0,
           });
@@ -1142,10 +1160,11 @@ router.get("/statement/:supplierId", async (req, res) => {
           pushVisible({
             id: `return-paid-${r.id}`,
             kind: "return",
+            docType: "واصل",
             date: r.invoiceDate,
-            time: r.invoiceTime || "",
+            time,
             invoiceNo: r.invoiceNo,
-            description: "واصل على فاتورة مرجوع",
+            description: notes,
             debit: paid,
             credit: 0,
           });
@@ -1155,16 +1174,18 @@ router.get("/statement/:supplierId", async (req, res) => {
   }
 
   for (const m of movements) {
-    const typeLabel =
+    const docType =
       m.amountType === "paid"
         ? "مدفوع"
         : m.amountType === "received"
           ? "واصل"
           : "خصم";
+    const notes = noteText(m.notes);
+    const time = m.movementTime || "00:00:00";
     events.push({
-      sort: `${m.movementDate}T${m.movementTime || "00:00:00"}|M${m.id}`,
+      sort: `${m.movementDate}T${time}|M${m.id}|0`,
       date: m.movementDate,
-      time: m.movementTime || "",
+      time,
       applySilent: () => {
         running -= num(m.amount);
       },
@@ -1174,10 +1195,11 @@ router.get("/statement/:supplierId", async (req, res) => {
         pushVisible({
           id: `movement-${m.id}`,
           kind: "movement",
+          docType,
           date: m.movementDate,
-          time: m.movementTime || "",
+          time,
           invoiceNo: m.invoiceNo,
-          description: `حركة مورد — ${typeLabel}`,
+          description: notes,
           debit: 0,
           credit: amount,
         });
@@ -1196,6 +1218,7 @@ router.get("/statement/:supplierId", async (req, res) => {
   lines.push({
     id: "opening",
     kind: "opening",
+    docType: "رصيد",
     date: fromDate || "",
     time: "",
     invoiceNo: "—",

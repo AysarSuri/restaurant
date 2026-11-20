@@ -882,9 +882,9 @@ export default function SuppliersPage() {
         (l) =>
           `<tr>
             <td dir="ltr">${l.date ? formatDate(l.date) : "—"}</td>
-            <td dir="ltr">${l.time || "—"}</td>
+            <td>${l.docType || "—"}</td>
             <td>${l.invoiceNo}</td>
-            <td>${l.description}</td>
+            <td>${l.description || "—"}</td>
             <td dir="ltr">${fmtMoney(l.debit)}</td>
             <td dir="ltr">${fmtMoney(l.credit)}</td>
             <td dir="ltr" class="${l.balance > 0 ? "pos" : l.balance < 0 ? "neg" : ""}">${fmtMoney(l.balance)}</td>
@@ -906,8 +906,8 @@ export default function SuppliersPage() {
          <thead>
            <tr>
              <th>التاريخ</th>
-             <th>الساعة</th>
-             <th>الفاتورة</th>
+             <th>النوع</th>
+             <th>رقم الفاتورة</th>
              <th>البيان</th>
              <th>مدين</th>
              <th>دائن</th>
@@ -2103,8 +2103,8 @@ export default function SuppliersPage() {
                   <thead className="bg-secondary/50 text-primary">
                     <tr>
                       <th className="text-center p-2.5 font-bold">التاريخ</th>
-                      <th className="text-center p-2.5 font-bold">الساعة</th>
-                      <th className="text-center p-2.5 font-bold">الفاتورة</th>
+                      <th className="text-center p-2.5 font-bold">النوع</th>
+                      <th className="text-center p-2.5 font-bold">رقم الفاتورة</th>
                       <th className="text-center p-2.5 font-bold">البيان</th>
                       <th className="text-center p-2.5 font-bold">مدين</th>
                       <th className="text-center p-2.5 font-bold">دائن</th>
@@ -2122,11 +2122,13 @@ export default function SuppliersPage() {
                         <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
                           {l.date ? formatDate(l.date) : "—"}
                         </td>
-                        <td className="p-2.5 text-center font-bold tabular-nums font-mono" dir="ltr">
-                          {l.time || "—"}
+                        <td className="p-2.5 text-center font-extrabold">
+                          {l.docType || "—"}
                         </td>
                         <td className="p-2.5 text-center font-mono font-bold">{l.invoiceNo}</td>
-                        <td className="p-2.5 text-center font-bold">{l.description}</td>
+                        <td className="p-2.5 text-center font-bold text-muted-foreground">
+                          {l.description || "—"}
+                        </td>
                         <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
                           {fmtMoney(l.debit)}
                         </td>
