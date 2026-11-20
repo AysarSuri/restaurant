@@ -21,6 +21,8 @@ export type PosSaveTarget = "cashier" | "kitchen" | "none";
 
 export interface AppSettings {
   restaurantName: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
   themePrimary: string;
   currencyCode: string;
   currencySymbol: string;
@@ -35,6 +37,8 @@ export interface AppSettings {
 
 export interface UpdateAppSettingsBody {
   restaurantName?: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
   themePrimary?: string;
   currencyCode?: string;
   currencySymbol?: string;

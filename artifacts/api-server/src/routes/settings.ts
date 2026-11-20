@@ -80,6 +80,8 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     : DEFAULT_SETTINGS.posSaveTarget;
   return {
     restaurantName: settings.restaurantName,
+    logoUrl: settings.logoUrl ?? null,
+    mobile: settings.mobile ?? null,
     themePrimary: settings.themePrimary,
     currencyCode: settings.currencyCode,
     currencySymbol: settings.currencySymbol,
@@ -100,6 +102,8 @@ router.put("/", async (req, res) => {
   const settings = await getOrCreateSettings();
   const {
     restaurantName,
+    logoUrl,
+    mobile,
     themePrimary,
     currencyCode,
     currencySymbol,
@@ -114,6 +118,18 @@ router.put("/", async (req, res) => {
   if (!nextName) {
     res.status(400).json({ success: false, message: "اسم المطعم مطلوب" });
     return;
+  }
+
+  let nextLogoUrl = settings.logoUrl ?? null;
+  if (logoUrl !== undefined) {
+    const raw = logoUrl == null ? "" : String(logoUrl).trim();
+    nextLogoUrl = raw || null;
+  }
+
+  let nextMobile = settings.mobile ?? null;
+  if (mobile !== undefined) {
+    const raw = mobile == null ? "" : String(mobile).trim();
+    nextMobile = raw || null;
   }
 
   let nextTheme = settings.themePrimary;
@@ -193,6 +209,8 @@ router.put("/", async (req, res) => {
     .update(appSettingsTable)
     .set({
       restaurantName: nextName,
+      logoUrl: nextLogoUrl,
+      mobile: nextMobile,
       themePrimary: nextTheme,
       currencyCode: nextCurrencyCode,
       currencySymbol: nextCurrencySymbol,

@@ -16,6 +16,7 @@ import {
   useGetSupplierDebts,
   useGetMenuItems,
   useGetSettings,
+  getGetSettingsQueryKey,
   getGetSuppliersQueryKey,
   getGetSupplierPurchasesQueryKey,
   getGetSupplierMovementsQueryKey,
@@ -135,10 +136,12 @@ export default function SuppliersPage() {
   const { data: movements, isLoading: loadingMovements } = useGetSupplierMovements();
   const { data: debts, isLoading: loadingDebts, refetch: refetchDebts } = useGetSupplierDebts();
   const { data: menuItems } = useGetMenuItems();
-  const { data: appSettings } = useGetSettings({
-    query: { staleTime: 60_000, refetchOnWindowFocus: false },
+  const { data: appSettings, refetch: refetchSettings } = useGetSettings({
+    query: { staleTime: 30_000, refetchOnWindowFocus: true },
   });
   const restaurantName = appSettings?.restaurantName?.trim() || "المطعم";
+  const restaurantLogoUrl = appSettings?.logoUrl?.trim() || "";
+  const restaurantMobile = appSettings?.mobile?.trim() || "";
 
   const { mutate: createSupplier, isPending: creatingSupplier } = useCreateSupplier();
   const { mutate: updateSupplier, isPending: updatingSupplier } = useUpdateSupplier();
@@ -171,6 +174,10 @@ export default function SuppliersPage() {
   ]);
   const [purchaseError, setPurchaseError] = useState("");
   const [editingPurchaseId, setEditingPurchaseId] = useState<number | null>(null);
+  const [purchaseListSupplierId, setPurchaseListSupplierId] = useState("");
+  const [purchaseListFromDate, setPurchaseListFromDate] = useState(todayDate);
+  const [purchaseListToDate, setPurchaseListToDate] = useState(todayDate);
+  const [purchaseListInvoiceNo, setPurchaseListInvoiceNo] = useState("");
 
   useEffect(() => {
     if (section !== "purchase") return;
@@ -244,6 +251,31 @@ export default function SuppliersPage() {
     if (!supplierNameFilterId) return list;
     return list.filter((s) => String(s.id) === supplierNameFilterId);
   }, [suppliers, supplierNameFilterId]);
+
+  const filteredPurchases = useMemo(() => {
+    const list = purchases ?? [];
+    const invoiceQ = purchaseListInvoiceNo.trim().toLowerCase();
+    const from = purchaseListFromDate.trim();
+    const to = purchaseListToDate.trim();
+    return list.filter((p) => {
+      if (purchaseListSupplierId && String(p.supplierId) !== purchaseListSupplierId) {
+        return false;
+      }
+      if (invoiceQ && !String(p.invoiceNo ?? "").toLowerCase().includes(invoiceQ)) {
+        return false;
+      }
+      const d = String(p.invoiceDate ?? "");
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }, [
+    purchases,
+    purchaseListSupplierId,
+    purchaseListFromDate,
+    purchaseListToDate,
+    purchaseListInvoiceNo,
+  ]);
 
   const menuOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -481,14 +513,30 @@ export default function SuppliersPage() {
     });
   };
 
-  const printPurchaseReport = (p: SupplierPurchase) => {
+  const printPurchaseReport = async (p: SupplierPurchase) => {
+    // Always pull latest restaurant identity from settings (name + logo + mobile)
+    let settingsSnap = queryClient.getQueryData(getGetSettingsQueryKey()) as
+      | typeof appSettings
+      | undefined;
+    try {
+      const fresh = await refetchSettings();
+      if (fresh.data) settingsSnap = fresh.data;
+    } catch {
+      /* keep cached */
+    }
+    const name = settingsSnap?.restaurantName?.trim() || restaurantName || "المطعم";
+    const logo = settingsSnap?.logoUrl?.trim() || restaurantLogoUrl || "";
+    const phone = settingsSnap?.mobile?.trim() || restaurantMobile || "";
+
     const supplier = (suppliers ?? []).find((s) => s.id === p.supplierId);
     const currentBalance = Number(supplier?.balance) || 0;
     const remaining = Number(p.remainingAmount) || 0;
     const oldBalance = Number((currentBalance - remaining).toFixed(2));
     const newBalance = currentBalance;
     printSupplierPurchaseThermal({
-      restaurantName,
+      restaurantName: name,
+      logoUrl: logo || null,
+      mobile: phone || null,
       invoiceNo: p.invoiceNo,
       invoiceDate: p.invoiceDate,
       invoiceTime: p.invoiceTime,
@@ -874,50 +922,49 @@ export default function SuppliersPage() {
       {/* ── Purchase ── */}
       {section === "purchase" ? (
         <div className="space-y-3">
-          <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2.5">
+          <Card className="px-3 py-1.5 sm:px-4 sm:py-2 border border-border/50 space-y-1.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h2 className="text-lg sm:text-xl font-extrabold leading-none">
+              <h2 className="text-base sm:text-lg font-extrabold leading-none">
                 {editingPurchaseId != null ? "تعديل فاتورة شراء" : "شراء من المورد"}
               </h2>
-              <div className="flex items-center gap-2">
-                {editingPurchaseId != null ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="rounded-full h-11 px-4 text-[15px] font-bold touch-manipulation"
-                    onClick={resetPurchaseForm}
-                  >
-                    <X className="w-4 h-4 me-1" /> إلغاء التعديل
-                  </Button>
-                ) : (
-                  <span className="hidden sm:inline text-[12px] font-bold text-muted-foreground">
-                    فاتورة · أصناف · دفع
-                  </span>
-                )}
-              </div>
+              {editingPurchaseId != null ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full h-10 px-3 text-[14px] font-bold touch-manipulation"
+                  onClick={resetPurchaseForm}
+                >
+                  <X className="w-4 h-4 me-1" /> إلغاء التعديل
+                </Button>
+              ) : null}
             </div>
 
-            {/* Header: supplier first on mobile, then date/time/invoice */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-2.5">
-              <div className="col-span-2 sm:col-span-3 xl:col-span-2 order-1">
+            {/* Header fields — one compact row */}
+            <div className="grid grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_minmax(0,0.75fr)] gap-x-2 gap-y-1 items-end">
+              <div className="col-span-2 lg:col-span-1 min-w-0">
                 <ModernCombobox
                   value={purchaseForm.supplierId}
                   onChange={(v) => setPurchaseForm((f) => ({ ...f, supplierId: v }))}
                   options={supplierOptions}
-                  label="اسم المورد *"
+                  label="المورد *"
                   placeholder="اختر المورد"
                   icon={Truck}
-                  labelClassName="text-[15px] font-bold text-foreground mb-1"
-                  valueClassName="text-[15px] font-bold"
+                  searchable
+                  searchPlaceholder="ابحث باسم أو كود المورد..."
+                  emptyText="لا يوجد مورد مطابق"
+                  size="sm"
+                  labelClassName="text-[14px] font-bold text-foreground !mb-0"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
                 />
               </div>
-              <div className="order-2">
-                <label className="text-[15px] font-bold text-foreground mb-1 block">
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   التاريخ *
                 </label>
                 <Input
                   type="date"
-                  className="h-12 text-[15px] font-bold"
+                  className="h-10 text-[14px] font-bold"
                   dir="ltr"
                   value={purchaseForm.invoiceDate}
                   onChange={(e) =>
@@ -925,26 +972,26 @@ export default function SuppliersPage() {
                   }
                 />
               </div>
-              <div className="order-3">
-                <label className="text-[15px] font-bold text-foreground mb-1 block">
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   الساعة
                 </label>
                 <Input
-                  className="h-12 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono tracking-wide"
+                  className="h-10 text-[14px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono tracking-wide"
                   dir="ltr"
                   value={purchaseForm.invoiceTime}
                   readOnly
                   disabled
                 />
               </div>
-              <div className="order-4 col-span-2 sm:col-span-1">
-                <label className="text-[15px] font-bold text-foreground mb-1 block">
+              <div className="min-w-0 col-span-2 lg:col-span-1">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   رقم الفاتورة
                 </label>
                 <div className="relative">
-                  <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Hash className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
-                    className="h-12 ps-9 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                    className="h-10 ps-8 text-[14px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
                     value={purchaseForm.invoiceNo || nextPurchaseInvoiceNo(purchases)}
                     readOnly
                     disabled
@@ -955,11 +1002,13 @@ export default function SuppliersPage() {
             </div>
 
             <div>
-              <label className="text-[15px] font-bold text-foreground mb-1 block">ملاحظة</label>
+              <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                ملاحظة
+              </label>
               <div className="relative">
-                <StickyNote className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <StickyNote className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
-                  className="h-12 ps-9 text-[15px] font-bold"
+                  className="h-10 ps-8 text-[14px] font-bold"
                   value={purchaseForm.notes}
                   onChange={(e) => setPurchaseForm((f) => ({ ...f, notes: e.target.value }))}
                   placeholder="اختياري"
@@ -1241,6 +1290,64 @@ export default function SuppliersPage() {
 
           <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2 overflow-hidden">
             <h3 className="text-[15px] font-extrabold">فواتير الشراء</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                  من تاريخ
+                </label>
+                <Input
+                  type="date"
+                  className="h-11 text-[14px] font-bold"
+                  dir="ltr"
+                  value={purchaseListFromDate}
+                  onChange={(e) => setPurchaseListFromDate(e.target.value)}
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                  إلى تاريخ
+                </label>
+                <Input
+                  type="date"
+                  className="h-11 text-[14px] font-bold"
+                  dir="ltr"
+                  value={purchaseListToDate}
+                  onChange={(e) => setPurchaseListToDate(e.target.value)}
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                  رقم الفاتورة
+                </label>
+                <div className="relative">
+                  <Hash className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    className="h-11 ps-8 text-[14px] font-bold"
+                    dir="ltr"
+                    value={purchaseListInvoiceNo}
+                    onChange={(e) => setPurchaseListInvoiceNo(e.target.value)}
+                    placeholder="بحث برقم الفاتورة"
+                  />
+                </div>
+              </div>
+              <div className="min-w-0 col-span-2 lg:col-span-1">
+                <ModernCombobox
+                  value={purchaseListSupplierId}
+                  onChange={setPurchaseListSupplierId}
+                  options={supplierNameSearchOptions}
+                  label="المورد"
+                  placeholder="كل الموردين"
+                  icon={Truck}
+                  searchable
+                  size="sm"
+                  searchPlaceholder="ابحث عن مورد..."
+                  emptyText="لا يوجد مورد مطابق"
+                  labelClassName="text-[14px] font-bold text-foreground"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
+              </div>
+            </div>
             {loadingPurchases ? (
               <div className="py-6 flex justify-center">
                 <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
@@ -1249,6 +1356,10 @@ export default function SuppliersPage() {
               <p className="text-[14px] font-bold text-muted-foreground text-center py-5">
                 لا توجد فواتير بعد
               </p>
+            ) : filteredPurchases.length === 0 ? (
+              <p className="text-[14px] font-bold text-muted-foreground text-center py-5">
+                لا توجد فواتير مطابقة للبحث
+              </p>
             ) : (
               <>
                 {/* Desktop / tablet table */}
@@ -1256,43 +1367,43 @@ export default function SuppliersPage() {
                   <table className="w-full text-[14px] xl:text-[15px]">
                     <thead className="bg-secondary/50 text-primary">
                       <tr>
-                        <th className="text-start p-2.5 font-bold">رقم الفاتورة</th>
-                        <th className="text-start p-2.5 font-bold">التاريخ</th>
-                        <th className="text-start p-2.5 font-bold">اسم المورد</th>
-                        <th className="text-start p-2.5 font-bold">مجموع مبلغ</th>
-                        <th className="text-start p-2.5 font-bold">مبلغ الدفع</th>
-                        <th className="text-start p-2.5 font-bold">خصم</th>
-                        <th className="text-start p-2.5 font-bold">باقي قائمة</th>
-                        <th className="text-end p-2.5 font-bold">إجراءات</th>
+                        <th className="text-center p-2.5 font-bold">رقم الفاتورة</th>
+                        <th className="text-center p-2.5 font-bold">التاريخ</th>
+                        <th className="text-center p-2.5 font-bold">اسم المورد</th>
+                        <th className="text-center p-2.5 font-bold">مجموع مبلغ</th>
+                        <th className="text-center p-2.5 font-bold">مبلغ الدفع</th>
+                        <th className="text-center p-2.5 font-bold">خصم</th>
+                        <th className="text-center p-2.5 font-bold">باقي قائمة</th>
+                        <th className="text-center p-2.5 font-bold">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(purchases ?? []).map((p) => (
+                      {filteredPurchases.map((p) => (
                         <tr
                           key={p.id}
                           className={`border-t border-border/30 ${
                             editingPurchaseId === p.id ? "bg-primary/5" : ""
                           }`}
                         >
-                          <td className="p-2.5 font-mono font-bold">{p.invoiceNo}</td>
-                          <td className="p-2.5 font-bold" dir="ltr">
+                          <td className="p-2.5 text-center font-mono font-bold">{p.invoiceNo}</td>
+                          <td className="p-2.5 text-center font-bold" dir="ltr">
                             {p.invoiceDate}
                           </td>
-                          <td className="p-2.5 font-bold">{p.supplierName || "—"}</td>
-                          <td className="p-2.5 font-bold" dir="ltr">
+                          <td className="p-2.5 text-center font-bold">{p.supplierName || "—"}</td>
+                          <td className="p-2.5 text-center font-bold" dir="ltr">
                             {fmtMoney(p.totalAmount)}
                           </td>
-                          <td className="p-2.5 font-bold" dir="ltr">
+                          <td className="p-2.5 text-center font-bold" dir="ltr">
                             {fmtMoney(p.paidAmount || 0)}
                           </td>
-                          <td className="p-2.5 font-bold" dir="ltr">
+                          <td className="p-2.5 text-center font-bold" dir="ltr">
                             {fmtMoney(p.discountAmount || 0)}
                           </td>
-                          <td className="p-2.5 font-bold text-amber-700 dark:text-amber-300" dir="ltr">
+                          <td className="p-2.5 text-center font-bold text-amber-700 dark:text-amber-300" dir="ltr">
                             {fmtMoney(p.remainingAmount ?? 0)}
                           </td>
                           <td className="p-2.5">
-                            <div className="flex justify-end gap-1.5">
+                            <div className="flex justify-center gap-1.5">
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -1337,7 +1448,7 @@ export default function SuppliersPage() {
 
                 {/* Mobile cards */}
                 <div className="md:hidden space-y-2">
-                  {(purchases ?? []).map((p) => (
+                  {filteredPurchases.map((p) => (
                     <div
                       key={p.id}
                       className={`rounded-xl border border-border/40 px-2.5 py-2 space-y-2 ${

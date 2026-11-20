@@ -14,6 +14,10 @@ import { branchesTable } from "./branches";
 export const appSettingsTable = pgTable("app_settings", {
   id: serial("id").primaryKey(),
   restaurantName: text("restaurant_name").default("المطعم الذكي").notNull(),
+  /** Restaurant logo as data URL or http(s) URL */
+  logoUrl: text("logo_url"),
+  /** Restaurant contact mobile number */
+  mobile: text("mobile"),
   /** HSL components without hsl(), e.g. "38 92% 50%" */
   themePrimary: text("theme_primary").default("38 92% 50%").notNull(),
   /** iqd | usd | eur | custom */

@@ -379,6 +379,8 @@ export type SupplierPurchaseReceiptItem = {
 
 export type SupplierPurchaseReceiptData = {
   restaurantName: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
   invoiceNo: string;
   invoiceDate: string;
   invoiceTime: string;
@@ -431,6 +433,13 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
     data.supplierName,
     data.restaurantName
   );
+  // Do not HTML-escape data URLs (base64); only quote-safe attribute wrap
+  const rawLogo = data.logoUrl?.trim() || "";
+  const logoSrc = rawLogo.replace(/"/g, "");
+  const logo = logoSrc
+    ? `<img class="logo" src="${logoSrc}" alt="" />`
+    : "";
+  const phone = data.mobile?.trim() || "";
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -456,6 +465,18 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
       padding: 3mm 2.5mm 4mm;
       color: #000;
     }
+    .identity {
+      text-align: center;
+      margin: 0 0 2mm;
+    }
+    .logo {
+      display: block;
+      width: 24mm;
+      height: 24mm;
+      object-fit: contain;
+      margin: 0 auto 1.5mm;
+      border-radius: 2mm;
+    }
     .brand {
       text-align: center;
       font-size: 15px;
@@ -471,6 +492,15 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
       margin: 0 0 2mm;
       color: #000;
       letter-spacing: 0.04em;
+    }
+    .phone {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      margin: 0 0 1mm;
+      color: #000;
+      direction: ltr;
+      unicode-bidi: plaintext;
     }
     .rule {
       border: 0;
@@ -580,7 +610,11 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
 </head>
 <body>
   <div class="ticket">
-    <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
+    <div class="identity">
+      ${logo}
+      <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
+      ${phone ? `<p class="phone">${esc(phone)}</p>` : ""}
+    </div>
     <p class="doc-title">فاتورة شراء من المورد</p>
     <hr class="rule" />
     <div class="row"><span>رقم الفاتورة</span><span>${esc(data.invoiceNo)}</span></div>

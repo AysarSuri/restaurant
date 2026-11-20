@@ -53,11 +53,56 @@ import {
   Wallet,
   ChefHat,
   ArrowLeftRight,
+  ImageIcon,
+  Upload,
+  X,
+  Phone,
 } from "lucide-react";
 import type { PosSaveTarget } from "@workspace/api-client-react";
 import { useI18n } from "@/i18n";
 
 type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
+
+const MAX_LOGO_BYTES = 2.5 * 1024 * 1024;
+
+/** Compress / resize restaurant logo and return a data URL for storage */
+function fileToStoredLogo(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("الملف يجب أن يكون صورة"));
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      reject(new Error("حجم الصورة كبير جداً (الحد 2.5 ميجا)"));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("تعذر قراءة الصورة"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("صورة غير صالحة"));
+      img.onload = () => {
+        const maxSide = 512;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("تعذر معالجة الصورة"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const TABS: { id: TabId; labelKey: string; icon: typeof Store; hintKey: string }[] = [
   { id: "restaurant", labelKey: "settings.restaurantName", icon: Store, hintKey: "cards.identity" },
@@ -93,6 +138,11 @@ export default function SettingsPage() {
 
   const [tab, setTab] = useState<TabId>("restaurant");
   const [restaurantName, setRestaurantName] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoDeleteOpen, setLogoDeleteOpen] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [themePrimary, setThemePrimary] = useState("38 92% 50%");
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(DEFAULT_CURRENCY.currencyCode);
   const [currencySymbol, setCurrencySymbol] = useState(DEFAULT_CURRENCY.currencySymbol);
@@ -156,6 +206,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!settings) return;
     setRestaurantName(settings.restaurantName);
+    setLogoUrl(settings.logoUrl?.trim() || "");
+    setMobile(settings.mobile?.trim() || "");
     setThemePrimary(settings.themePrimary);
     applyBrandPrimary(settings.themePrimary);
     setCurrencyCode((settings.currencyCode as CurrencyCode) || DEFAULT_CURRENCY.currencyCode);
@@ -307,6 +359,20 @@ export default function SettingsPage() {
     );
   };
 
+  const handleLogoPick = async (file?: File | null) => {
+    if (!file) return;
+    setLogoBusy(true);
+    try {
+      const dataUrl = await fileToStoredLogo(file);
+      setLogoUrl(dataUrl);
+    } catch (err: any) {
+      notifySaveErr(err?.message || t("settings.logoUploadFailed"));
+    } finally {
+      setLogoBusy(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
   const handleSaveRestaurant = () => {
     clearSaveFlash();
     setSaveMsg("");
@@ -317,10 +383,18 @@ export default function SettingsPage() {
       return;
     }
     saveSettings(
-      { data: { restaurantName: name } },
+      {
+        data: {
+          restaurantName: name,
+          logoUrl: logoUrl.trim() || null,
+          mobile: mobile.trim() || null,
+        },
+      },
       {
         onSuccess: (res) => {
           syncSettings(res);
+          setLogoUrl(res.logoUrl?.trim() || "");
+          setMobile(res.mobile?.trim() || "");
           notifySaveOk(t("settings.savedRestaurantName"));
         },
         onError: (err: any) =>
@@ -780,15 +854,142 @@ export default function SettingsPage() {
               placeholder={t("settings.nameExample")}
             />
           </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1.5">
+              <Phone className="w-4 h-4 inline me-1 text-primary" />
+              {t("settings.mobile")}
+            </label>
+            <div className="relative">
+              <Phone className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                className="ps-9"
+                dir="ltr"
+                inputMode="tel"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                placeholder={t("settings.mobilePlaceholder")}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1.5">
+              <ImageIcon className="w-4 h-4 inline me-1 text-primary" />
+              {t("settings.logo")}
+            </label>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => void handleLogoPick(e.target.files?.[0])}
+            />
+            <div className="flex items-center gap-3 rounded-xl border-2 border-dashed border-border/70 bg-secondary/30 p-3">
+              <div className="w-16 h-16 rounded-xl border border-border/50 bg-background overflow-hidden flex items-center justify-center flex-shrink-0">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={t("settings.logoAlt")}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon className="w-7 h-7 text-muted-foreground/60" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">
+                  {logoUrl ? t("settings.logoSelected") : t("settings.logoChoose")}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {t("settings.logoHint")}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {logoUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 text-destructive"
+                    onClick={() => setLogoDeleteOpen(true)}
+                    aria-label={t("settings.logoRemove")}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 gap-1.5 px-3"
+                  isLoading={logoBusy}
+                  onClick={() => logoInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4" />
+                  {logoUrl ? t("settings.logoChange") : t("settings.logoUpload")}
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-transparent to-transparent p-4">
-            <p className="text-[11px] text-muted-foreground mb-1">{t("common.preview")}</p>
-            <p className="text-xl font-extrabold">{restaurantName.trim() || "—"}</p>
+            <p className="text-[11px] text-muted-foreground mb-2">{t("common.preview")}</p>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  className="w-12 h-12 rounded-xl object-cover border border-border/50"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-xl font-extrabold">{restaurantName.trim() || "—"}</p>
+                {mobile.trim() ? (
+                  <p className="text-sm font-bold text-muted-foreground mt-0.5" dir="ltr">
+                    {mobile.trim()}
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </div>
           <Button className="gap-2" isLoading={savingSettings} onClick={handleSaveRestaurant}>
             <Save className="w-4 h-4" /> {t("settings.saveName")}
           </Button>
         </Card>
       )}
+
+      <Dialog
+        isOpen={logoDeleteOpen}
+        onClose={() => setLogoDeleteOpen(false)}
+        title={t("settings.logoRemoveTitle")}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-xl border border-border/50 overflow-hidden bg-secondary/40 flex items-center justify-center flex-shrink-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <ImageIcon className="w-6 h-6 text-muted-foreground" />
+              )}
+            </div>
+            <div>
+              <p className="font-bold">{t("settings.logoRemoveAsk")}</p>
+              <p className="text-sm text-muted-foreground mt-1">{t("settings.logoRemoveHint")}</p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setLogoDeleteOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setLogoUrl("");
+                setLogoDeleteOpen(false);
+              }}
+            >
+              {t("settings.logoRemove")}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {tab === "printers" && (
         <div className="space-y-5">
