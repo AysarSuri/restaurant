@@ -37,6 +37,7 @@ import { YmdDateInput } from "@/components/ymd-date-input";
 import {
   printSupplierPurchaseThermal,
   printSupplierMovementThermal,
+  printSupplierStatementA4,
 } from "@/lib/print-receipt";
 import { SupplierReturnsPanel } from "@/components/supplier-returns-panel";
 import { useI18n } from "@/i18n";
@@ -127,12 +128,6 @@ function statementDocTypeTone(docType: string) {
     return "text-red-600 dark:text-red-400";
   }
   return "text-foreground";
-}
-
-function statementDocTypePrintClass(docType: string) {
-  if (docType === "شراء" || docType === "واصل") return "type-blue";
-  if (docType === "مرجوع" || docType === "مدفوع" || docType === "خصم") return "type-red";
-  return "";
 }
 
 type PurchaseLine = {
@@ -962,8 +957,18 @@ export default function SuppliersPage() {
     );
   };
 
-  const printStatement = () => {
+  const printStatement = async () => {
     if (!statement) return;
+    let settingsSnap = appSettings;
+    try {
+      const refreshed = await refetchSettings();
+      if (refreshed.data) settingsSnap = refreshed.data;
+    } catch {
+      /* keep cached */
+    }
+    const name = settingsSnap?.restaurantName?.trim() || restaurantName || "المطعم";
+    const logo = settingsSnap?.logoUrl?.trim() || restaurantLogoUrl || "";
+    const phone = settingsSnap?.mobile?.trim() || restaurantMobile || "";
     const fromLabel = statement.fromDate
       ? formatDate(statement.fromDate)
       : statementFromDate
@@ -974,50 +979,40 @@ export default function SuppliersPage() {
       : statementToDate
         ? formatDate(statementToDate)
         : "—";
-    const rows = statement.lines
-      .map((l) => {
-        const type = statementDocType(l);
-        return `<tr>
-            <td dir="ltr">${escHtml(l.date ? formatDate(l.date) : "—")}</td>
-            <td class="${statementDocTypePrintClass(type)}">${escHtml(type)}</td>
-            <td>${escHtml(String(l.invoiceNo ?? "—"))}</td>
-            <td>${escHtml(l.description || "—")}</td>
-            <td dir="ltr">${escHtml(fmtMoney(l.debit))}</td>
-            <td dir="ltr">${escHtml(fmtMoney(l.credit))}</td>
-            <td dir="ltr" class="${l.balance > 0 ? "pos" : l.balance < 0 ? "neg" : ""}">${escHtml(
-              fmtMoney(l.balance)
-            )}</td>
-          </tr>`;
-      })
-      .join("");
-    printBlock(
-      `كشف حساب المورد — ${statement.supplier.name}`,
-      `<div class="meta">
-         المطعم: ${escHtml(restaurantName)}<br/>
-         كود المورد: ${escHtml(String(statement.supplier.code))}<br/>
-         الفترة: من ${escHtml(fromLabel)} إلى ${escHtml(toLabel)}<br/>
-         رصيد مرحّل: ${escHtml(fmtMoney(statement.openingBalance ?? 0))} |
-         مجموع مدين: ${escHtml(fmtMoney(statement.totalDebit ?? 0))} |
-         مجموع دائن: ${escHtml(fmtMoney(statement.totalCredit ?? 0))} |
-         الرصيد النهائي: ${escHtml(fmtMoney(statement.balance))} (${escHtml(
-           statement.balanceLabel
-         )})
-       </div>
-       <table>
-         <thead>
-           <tr>
-             <th>التاريخ</th>
-             <th>النوع</th>
-             <th>رقم الفاتورة</th>
-             <th>البيان</th>
-             <th>مدين</th>
-             <th>دائن</th>
-             <th>الرصيد</th>
-           </tr>
-         </thead>
-         <tbody>${rows}</tbody>
-       </table>`
-    );
+
+    try {
+      printSupplierStatementA4({
+        restaurantName: name,
+        logoUrl: logo || null,
+        mobile: phone || null,
+        supplierName: statement.supplier.name,
+        supplierCode: String(statement.supplier.code ?? ""),
+        fromLabel,
+        toLabel,
+        openingBalance: Number(statement.openingBalance) || 0,
+        totalDebit: Number(statement.totalDebit) || 0,
+        totalCredit: Number(statement.totalCredit) || 0,
+        closingBalance: Number(statement.balance) || 0,
+        balanceLabel: statement.balanceLabel,
+        formatMoney: fmtMoney,
+        lines: statement.lines.map((l) => ({
+          dateLabel: l.date ? formatDate(l.date) : "—",
+          docType: statementDocType(l),
+          invoiceNo: String(l.invoiceNo ?? "—"),
+          description: l.description || "—",
+          debit: Number(l.debit) || 0,
+          credit: Number(l.credit) || 0,
+          balance: Number(l.balance) || 0,
+          kind: l.kind,
+        })),
+      });
+    } catch (e) {
+      window.alert(
+        e instanceof Error
+          ? e.message
+          : "تعذر فتح تقرير الكشف — اسمح بالنوافذ المنبثقة"
+      );
+    }
   };
 
   const hubCards: {
@@ -2083,7 +2078,7 @@ export default function SuppliersPage() {
               variant="outline"
               className="rounded-full h-11 px-5 text-[15px] font-bold touch-manipulation"
               disabled={!statement}
-              onClick={printStatement}
+              onClick={() => void printStatement()}
             >
               <Printer className="w-4 h-4 me-1.5" /> تقرير الكشف
             </Button>
