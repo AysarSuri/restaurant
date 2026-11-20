@@ -118,6 +118,23 @@ function statementDocType(line: {
   return "—";
 }
 
+/** شراء + واصل → blue; مرجوع + مدفوع + خصم → red */
+function statementDocTypeTone(docType: string) {
+  if (docType === "شراء" || docType === "واصل") {
+    return "text-sky-600 dark:text-sky-400";
+  }
+  if (docType === "مرجوع" || docType === "مدفوع" || docType === "خصم") {
+    return "text-red-600 dark:text-red-400";
+  }
+  return "text-foreground";
+}
+
+function statementDocTypePrintClass(docType: string) {
+  if (docType === "شراء" || docType === "واصل") return "type-blue";
+  if (docType === "مرجوع" || docType === "مدفوع" || docType === "خصم") return "type-red";
+  return "";
+}
+
 type PurchaseLine = {
   key: string;
   menuItemId: string;
@@ -811,26 +828,86 @@ export default function SuppliersPage() {
     });
   };
 
+  const escHtml = (value: string) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
   const printBlock = (title: string, html: string) => {
-    const w = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
-    if (!w) return;
-    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>${title}</title>
+    const fullHtml = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>${escHtml(
+      title
+    )}</title>
       <style>
         body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#111}
         h1{font-size:20px;margin:0 0 8px}
-        .meta{color:#555;margin-bottom:16px;font-size:13px}
+        .meta{color:#555;margin-bottom:16px;font-size:13px;line-height:1.6}
         table{width:100%;border-collapse:collapse;font-size:13px}
-        th,td{border:1px solid #ddd;padding:8px;text-align:right}
+        th,td{border:1px solid #ddd;padding:8px;text-align:center}
         th{background:#f5f5f5}
         .pos{color:#b45309;font-weight:700}
         .neg{color:#047857;font-weight:700}
+        .type-blue{color:#0284c7;font-weight:800}
+        .type-red{color:#dc2626;font-weight:800}
         @media print{button{display:none}}
       </style></head><body>
-      <h1>${title}</h1>
+      <h1>${escHtml(title)}</h1>
       ${html}
-      <script>window.onload=()=>window.print()</script>
-      </body></html>`);
-    w.document.close();
+      </body></html>`;
+
+    const blob = new Blob([fullHtml], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const popup = window.open(url, "_blank", "width=960,height=780,left=60,top=40");
+
+    const startPrint = (win: Window) => {
+      const run = () => {
+        try {
+          win.focus();
+          win.print();
+        } catch {
+          /* ignore */
+        }
+      };
+      if (win.document.readyState === "complete") {
+        window.setTimeout(run, 120);
+      } else {
+        win.onload = () => window.setTimeout(run, 120);
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 15000);
+    };
+
+    if (popup) {
+      startPrint(popup);
+      return;
+    }
+
+    // Popup blocked — print via hidden iframe
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText =
+      "position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0;opacity:0;pointer-events:none;z-index:-1;";
+    document.body.appendChild(iframe);
+    const win = iframe.contentWindow;
+    const doc = iframe.contentDocument || win?.document;
+    if (!win || !doc) {
+      iframe.remove();
+      URL.revokeObjectURL(url);
+      window.alert("تعذر فتح تقرير الطباعة — اسمح بالنوافذ المنبثقة ثم أعد المحاولة");
+      return;
+    }
+    doc.open();
+    doc.write(fullHtml);
+    doc.close();
+    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } finally {
+        window.setTimeout(() => iframe.remove(), 1500);
+      }
+    }, 200);
   };
 
   const printDebtsReport = () => {
@@ -898,29 +975,33 @@ export default function SuppliersPage() {
         ? formatDate(statementToDate)
         : "—";
     const rows = statement.lines
-      .map(
-        (l) =>
-          `<tr>
-            <td dir="ltr">${l.date ? formatDate(l.date) : "—"}</td>
-            <td>${statementDocType(l)}</td>
-            <td>${l.invoiceNo}</td>
-            <td>${l.description || "—"}</td>
-            <td dir="ltr">${fmtMoney(l.debit)}</td>
-            <td dir="ltr">${fmtMoney(l.credit)}</td>
-            <td dir="ltr" class="${l.balance > 0 ? "pos" : l.balance < 0 ? "neg" : ""}">${fmtMoney(l.balance)}</td>
-          </tr>`
-      )
+      .map((l) => {
+        const type = statementDocType(l);
+        return `<tr>
+            <td dir="ltr">${escHtml(l.date ? formatDate(l.date) : "—")}</td>
+            <td class="${statementDocTypePrintClass(type)}">${escHtml(type)}</td>
+            <td>${escHtml(String(l.invoiceNo ?? "—"))}</td>
+            <td>${escHtml(l.description || "—")}</td>
+            <td dir="ltr">${escHtml(fmtMoney(l.debit))}</td>
+            <td dir="ltr">${escHtml(fmtMoney(l.credit))}</td>
+            <td dir="ltr" class="${l.balance > 0 ? "pos" : l.balance < 0 ? "neg" : ""}">${escHtml(
+              fmtMoney(l.balance)
+            )}</td>
+          </tr>`;
+      })
       .join("");
     printBlock(
       `كشف حساب المورد — ${statement.supplier.name}`,
       `<div class="meta">
-         المطعم: ${restaurantName}<br/>
-         كود المورد: ${statement.supplier.code}<br/>
-         الفترة: من ${fromLabel} إلى ${toLabel}<br/>
-         رصيد مرحّل: ${fmtMoney(statement.openingBalance ?? 0)} |
-         مجموع مدين: ${fmtMoney(statement.totalDebit ?? 0)} |
-         مجموع دائن: ${fmtMoney(statement.totalCredit ?? 0)} |
-         الرصيد النهائي: ${fmtMoney(statement.balance)} (${statement.balanceLabel})
+         المطعم: ${escHtml(restaurantName)}<br/>
+         كود المورد: ${escHtml(String(statement.supplier.code))}<br/>
+         الفترة: من ${escHtml(fromLabel)} إلى ${escHtml(toLabel)}<br/>
+         رصيد مرحّل: ${escHtml(fmtMoney(statement.openingBalance ?? 0))} |
+         مجموع مدين: ${escHtml(fmtMoney(statement.totalDebit ?? 0))} |
+         مجموع دائن: ${escHtml(fmtMoney(statement.totalCredit ?? 0))} |
+         الرصيد النهائي: ${escHtml(fmtMoney(statement.balance))} (${escHtml(
+           statement.balanceLabel
+         )})
        </div>
        <table>
          <thead>
@@ -2001,7 +2082,7 @@ export default function SuppliersPage() {
               type="button"
               variant="outline"
               className="rounded-full h-11 px-5 text-[15px] font-bold touch-manipulation"
-              disabled={!statement || statement.lines.length === 0}
+              disabled={!statement}
               onClick={printStatement}
             >
               <Printer className="w-4 h-4 me-1.5" /> تقرير الكشف
@@ -2142,7 +2223,11 @@ export default function SuppliersPage() {
                         <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
                           {l.date ? formatDate(l.date) : "—"}
                         </td>
-                        <td className="p-2.5 text-center font-extrabold">
+                        <td
+                          className={`p-2.5 text-center font-extrabold ${statementDocTypeTone(
+                            statementDocType(l)
+                          )}`}
+                        >
                           {statementDocType(l)}
                         </td>
                         <td className="p-2.5 text-center font-mono font-bold">{l.invoiceNo}</td>
