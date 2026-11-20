@@ -290,7 +290,7 @@ export function SupplierReturnsPanel({
     if (items.some((i) => !(i.qty > 0))) return setFormError("تحقق من الكميات");
     setFormError("");
     if (totals.discountAmount + totals.paidAmount > totals.totalAmount + 0.001) {
-      return setFormError("مجموع الدفع والخصم لا يمكن أن يتجاوز مجموع الفاتورة");
+      return setFormError("مجموع الواصل والخصم لا يمكن أن يتجاوز مجموع الفاتورة");
     }
     const body = {
       invoiceNo,
@@ -332,6 +332,7 @@ export function SupplierReturnsPanel({
     const newBalance = currentBalance;
     printSupplierPurchaseThermal({
       docTitle: "فاتورة مرجوع إلى المورد",
+      paidLabel: "مبلغ واصل",
       restaurantName: restaurantName || "المطعم",
       logoUrl: restaurantLogoUrl || null,
       mobile: restaurantMobile || null,
@@ -650,7 +651,7 @@ export function SupplierReturnsPanel({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <label className="text-[15px] font-bold text-foreground mb-1 block">
-                  مبلغ الدفع
+                  مبلغ واصل
                 </label>
                 <Input
                   type="number"
@@ -797,7 +798,7 @@ export function SupplierReturnsPanel({
                     <th className="text-center p-2.5 font-bold">التاريخ</th>
                     <th className="text-center p-2.5 font-bold">اسم المورد</th>
                     <th className="text-center p-2.5 font-bold">مجموع مبلغ</th>
-                    <th className="text-center p-2.5 font-bold">مبلغ الدفع</th>
+                    <th className="text-center p-2.5 font-bold">مبلغ واصل</th>
                     <th className="text-center p-2.5 font-bold">خصم</th>
                     <th className="text-center p-2.5 font-bold">باقي قائمة</th>
                     <th className="text-center p-2.5 font-bold">إجراءات</th>
@@ -896,7 +897,7 @@ export function SupplierReturnsPanel({
                       <span dir="ltr">{fmtMoney(p.totalAmount)}</span>
                     </div>
                     <div className="rounded-lg bg-secondary/40 px-2 py-1.5 flex justify-between gap-1">
-                      <span className="text-muted-foreground">دفع</span>
+                      <span className="text-muted-foreground">واصل</span>
                       <span dir="ltr">{fmtMoney(p.paidAmount || 0)}</span>
                     </div>
                     <div className="rounded-lg bg-secondary/40 px-2 py-1.5 flex justify-between gap-1">

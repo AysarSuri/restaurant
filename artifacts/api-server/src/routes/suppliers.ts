@@ -134,6 +134,28 @@ async function nextReturnInvoiceNo(): Promise<string> {
   return String(max + 1);
 }
 
+async function isDuplicateMovementInvoiceNo(invoiceNo: string) {
+  const normalized = invoiceNo.trim().toLowerCase();
+  const rows = await db
+    .select({ id: supplierMovementsTable.id })
+    .from(supplierMovementsTable)
+    .where(sql`lower(${supplierMovementsTable.invoiceNo}) = ${normalized}`)
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function nextMovementInvoiceNo(): Promise<string> {
+  const rows = await db
+    .select({ invoiceNo: supplierMovementsTable.invoiceNo })
+    .from(supplierMovementsTable);
+  let max = 0;
+  for (const row of rows) {
+    const match = String(row.invoiceNo ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
 function mapSupplier(row: typeof suppliersTable.$inferSelect) {
   return {
     id: row.id,
@@ -840,7 +862,6 @@ router.get("/movements", async (_req, res) => {
 });
 
 router.post("/movements", async (req, res) => {
-  const invoiceNo = String(req.body?.invoiceNo ?? "").trim();
   const movementDate = normalizeDate(req.body?.movementDate) ?? todayDate();
   const movementTime = normalizeTime(req.body?.movementTime) ?? nowTime();
   const supplierId = Number(req.body?.supplierId);
@@ -848,7 +869,12 @@ router.post("/movements", async (req, res) => {
   const amount = num(req.body?.amount);
   const notes = String(req.body?.notes ?? "").trim() || null;
 
-  if (!invoiceNo) return res.status(400).json({ message: "رقم الفاتورة مطلوب" });
+  // Always assign next sequential invoice number (starts at 1, no duplicates)
+  let invoiceNo = await nextMovementInvoiceNo();
+  while (await isDuplicateMovementInvoiceNo(invoiceNo)) {
+    invoiceNo = String(Number(invoiceNo) + 1);
+  }
+
   if (!Number.isFinite(supplierId) || supplierId <= 0) {
     return res.status(400).json({ message: "اختر المورد" });
   }

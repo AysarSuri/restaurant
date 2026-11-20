@@ -121,6 +121,17 @@ function nextPurchaseInvoiceNo(list: SupplierPurchase[] | undefined): string {
   return String(max + 1);
 }
 
+function nextMovementInvoiceNo(
+  list: { invoiceNo?: string }[] | undefined
+): string {
+  let max = 0;
+  for (const m of list ?? []) {
+    const match = String(m.invoiceNo ?? "").trim().match(/(\d+)\s*$/);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return String(max + 1);
+}
+
 function apiErrorMessage(error: unknown, fallback: string) {
   const e = error as { data?: { message?: string }; message?: string } | null;
   const fromData = e?.data?.message?.trim();
@@ -214,7 +225,7 @@ export default function SuppliersPage() {
     movementTime: nowTime(),
     supplierId: "",
     amountType: "paid" as SupplierAmountType,
-    amount: 0,
+    amount: "" as number | "",
     notes: "",
   });
   const [movementError, setMovementError] = useState("");
@@ -580,12 +591,12 @@ export default function SuppliersPage() {
 
   const openNewMovement = () => {
     setMovementForm({
-      invoiceNo: "",
+      invoiceNo: nextMovementInvoiceNo(movements),
       movementDate: todayDate(),
       movementTime: nowTime(),
       supplierId: "",
       amountType: "paid",
-      amount: 0,
+      amount: "",
       notes: "",
     });
     setMovementError("");
@@ -593,13 +604,15 @@ export default function SuppliersPage() {
   };
 
   const saveMovement = () => {
-    if (!movementForm.invoiceNo.trim()) return setMovementError("رقم الفاتورة مطلوب");
     if (!movementForm.supplierId) return setMovementError("اختر المورد");
-    if (!(Number(movementForm.amount) > 0)) return setMovementError("أدخل مبلغاً أكبر من صفر");
+    if (movementForm.amount === "" || !(Number(movementForm.amount) > 0)) {
+      return setMovementError("أدخل مبلغاً أكبر من صفر");
+    }
     setMovementError("");
+    const invoiceNo = nextMovementInvoiceNo(movements);
     createMovement(
       {
-        invoiceNo: movementForm.invoiceNo.trim(),
+        invoiceNo,
         movementDate: movementForm.movementDate,
         movementTime: movementForm.movementTime,
         supplierId: Number(movementForm.supplierId),
@@ -611,12 +624,15 @@ export default function SuppliersPage() {
         onSuccess: () => {
           setMovementFormOpen(false);
           setMovementForm({
-            invoiceNo: "",
+            invoiceNo: nextMovementInvoiceNo([
+              ...(movements ?? []),
+              { invoiceNo } as { invoiceNo: string },
+            ]),
             movementDate: todayDate(),
             movementTime: nowTime(),
             supplierId: "",
             amountType: "paid",
-            amount: 0,
+            amount: "",
             notes: "",
           });
           invalidateAll();
@@ -1957,27 +1973,33 @@ export default function SuppliersPage() {
         title="إضافة حركة مورد جديدة"
         maxWidth="max-w-2xl"
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5 touch-ui">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
-                رقم الفاتورة *
+              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
+                رقم الفاتورة
               </label>
-              <Input
-                className="h-11"
-                value={movementForm.invoiceNo}
-                onChange={(e) =>
-                  setMovementForm((f) => ({ ...f, invoiceNo: e.target.value }))
-                }
-              />
+              <div className="relative">
+                <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  className="h-12 ps-9 text-[16px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                  value={movementForm.invoiceNo || nextMovementInvoiceNo(movements)}
+                  readOnly
+                  disabled
+                  dir="ltr"
+                />
+              </div>
+              <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
+                يُولَّد تلقائياً من 1 ويزيد بدون تكرار
+              </p>
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
                 التاريخ *
               </label>
               <Input
                 type="date"
-                className="h-11"
+                className="h-12 text-[16px] font-bold"
                 dir="ltr"
                 value={movementForm.movementDate}
                 onChange={(e) =>
@@ -1986,11 +2008,11 @@ export default function SuppliersPage() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
                 الساعة
               </label>
               <Input
-                className="h-11 bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono tracking-wide"
+                className="h-12 text-[16px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono tracking-wide"
                 dir="ltr"
                 value={movementForm.movementTime}
                 readOnly
@@ -2004,7 +2026,8 @@ export default function SuppliersPage() {
               label="اسم المورد *"
               placeholder="اختر المورد"
               icon={Truck}
-              size="sm"
+              labelClassName="text-[16px] font-bold text-foreground"
+              valueClassName="text-[16px] font-bold"
             />
             <ModernCombobox
               value={movementForm.amountType}
@@ -2019,50 +2042,56 @@ export default function SuppliersPage() {
               placeholder="مدفوع"
               icon={Wallet}
               searchable={false}
-              size="sm"
+              labelClassName="text-[16px] font-bold text-foreground"
+              valueClassName="text-[16px] font-bold"
             />
             <div>
-              <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
                 المبلغ *
               </label>
               <Input
                 type="number"
                 min={0}
                 step="0.01"
-                className="h-11"
+                className="h-12 text-[16px] font-bold"
                 dir="ltr"
                 value={movementForm.amount}
+                placeholder="0"
                 onChange={(e) =>
-                  setMovementForm((f) => ({ ...f, amount: Number(e.target.value) || 0 }))
+                  setMovementForm((f) => ({
+                    ...f,
+                    amount: e.target.value === "" ? "" : Number(e.target.value),
+                  }))
                 }
               />
             </div>
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-muted-foreground mb-1 block">
+            <label className="text-[16px] font-bold text-foreground mb-1.5 block">
               ملاحظة
             </label>
             <Input
-              className="h-11"
+              className="h-12 text-[16px] font-bold"
               value={movementForm.notes}
               onChange={(e) => setMovementForm((f) => ({ ...f, notes: e.target.value }))}
+              placeholder="اختياري"
             />
           </div>
           {movementError ? (
-            <p className="text-xs font-semibold text-destructive">{movementError}</p>
+            <p className="text-[15px] font-bold text-destructive">{movementError}</p>
           ) : null}
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2.5 pt-1">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 h-11 rounded-full text-[15px] font-bold"
+              className="flex-1 h-12 rounded-full text-[16px] font-bold touch-manipulation"
               onClick={() => setMovementFormOpen(false)}
             >
               إلغاء
             </Button>
             <Button
               type="button"
-              className="flex-1 h-11 rounded-full text-[15px] font-bold"
+              className="flex-1 h-12 rounded-full text-[16px] font-bold touch-manipulation"
               disabled={creatingMovement}
               onClick={saveMovement}
             >

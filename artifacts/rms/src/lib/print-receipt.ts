@@ -383,6 +383,8 @@ export type SupplierPurchaseReceiptData = {
   mobile?: string | null;
   /** Document title under restaurant identity */
   docTitle?: string;
+  /** Label for paid/settled amount row (e.g. مبلغ الدفع / مبلغ واصل) */
+  paidLabel?: string;
   invoiceNo: string;
   invoiceDate: string;
   invoiceTime: string;
@@ -635,7 +637,7 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
     <hr class="rule-dashed" />
     <div class="row"><span>مجموع الكمية</span><span>${esc(data.formatMoney(data.totalQty))}</span></div>
     <div class="row"><span>مجموع المبلغ</span><span>${esc(data.formatMoney(data.totalAmount))}</span></div>
-    <div class="row"><span>مبلغ الدفع</span><span>${esc(data.formatMoney(data.paidAmount))}</span></div>
+    <div class="row"><span>${esc(data.paidLabel?.trim() || "مبلغ الدفع")}</span><span>${esc(data.formatMoney(data.paidAmount))}</span></div>
     <div class="row"><span>خصم</span><span>${esc(data.formatMoney(data.discountAmount))}</span></div>
     <div class="grand"><span>باقي قائمة</span><strong>${esc(data.formatMoney(data.remainingAmount))}</strong></div>
     <div class="balance-box">
