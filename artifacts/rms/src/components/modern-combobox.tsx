@@ -127,6 +127,7 @@ export function ModernCombobox({
           <button
             type="button"
             disabled={disabled}
+            data-enter-as-tab="true"
             className={cn(
               "group relative flex w-full items-center overflow-hidden border text-start transition-all duration-200",
               compact ? "h-10 gap-2 rounded-xl ps-2 pe-2.5" : "h-12 gap-2.5 rounded-xl ps-2.5 pe-3",

@@ -73,11 +73,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => navigate("/")}
-                className="inline-flex items-center gap-2 h-10 px-3 sm:px-4 rounded-full border-2 border-primary/40 bg-primary/10 text-primary text-sm font-bold hover:bg-primary/20 transition-colors flex-shrink-0"
+                className="inline-flex items-center gap-2 min-h-12 h-12 px-4 sm:px-5 rounded-full border-2 border-primary/40 bg-primary/10 text-primary text-[15px] font-bold hover:bg-primary/20 transition-colors flex-shrink-0 touch-manipulation"
               >
-                <Home className="w-4 h-4" />
+                <Home className="w-5 h-5" />
                 <span className="hidden sm:inline">{t("nav.home")}</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-5 h-5" />
               </button>
             ) : (
               <button
@@ -170,9 +170,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 xl:p-8 relative safe-pb">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 xl:p-8 relative safe-pb touch-ui">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 w-full max-w-[1920px] mx-auto">{children}</div>
+          <div className="relative z-10 w-full max-w-[1920px] mx-auto touch-ui">{children}</div>
         </div>
       </main>
     </div>

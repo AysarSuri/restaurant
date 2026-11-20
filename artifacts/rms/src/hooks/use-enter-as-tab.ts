@@ -38,6 +38,13 @@ function isEnterAsTabTarget(el: EventTarget | null): el is HTMLElement {
   if (tag === "TEXTAREA") return false;
   if (el.isContentEditable) return false;
 
+  // Closed combobox / custom triggers: Enter advances like Tab (does not open menu)
+  if (el.dataset.enterAsTab === "true") {
+    if (el.getAttribute("data-state") === "open") return false;
+    if (el.getAttribute("aria-expanded") === "true") return false;
+    return true;
+  }
+
   if (tag === "INPUT") {
     const type = ((el as HTMLInputElement).type || "text").toLowerCase();
     if (

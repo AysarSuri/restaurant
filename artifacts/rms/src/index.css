@@ -340,3 +340,48 @@
     --rms-body: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
   }
 }
+
+/* Touch-friendly admin UI (Layout pages only — not POS) */
+.touch-ui {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.touch-ui label,
+.touch-ui .touch-label {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
+}
+
+.touch-ui input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.touch-ui select,
+.touch-ui textarea {
+  min-height: 3rem;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.touch-ui button,
+.touch-ui [role="button"] {
+  touch-action: manipulation;
+  min-height: 2.75rem;
+}
+
+.touch-ui button.h-8,
+.touch-ui button.h-9 {
+  min-height: 2.75rem;
+  height: 2.75rem;
+}
+
+.touch-ui table th,
+.touch-ui table td {
+  font-size: 15px;
+  font-weight: 700;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.touch-ui .crud-touch-row {
+  min-height: 3.25rem;
+}

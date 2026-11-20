@@ -169,7 +169,7 @@ export function Dialog({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-full p-2 hover:bg-secondary transition-colors flex-shrink-0"
+                    className="rounded-full min-h-11 min-w-11 p-2.5 hover:bg-secondary transition-colors flex-shrink-0 touch-manipulation inline-flex items-center justify-center"
                   >
                     <X className="h-5 w-5" />
                   </button>

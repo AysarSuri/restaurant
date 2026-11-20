@@ -89,7 +89,7 @@ const EMPTY_PURCHASE_LINE = (): PurchaseLine => ({
   key: crypto.randomUUID(),
   menuItemId: "",
   qty: "",
-  unitKind: "minor",
+  unitKind: "major",
   price: "",
 });
 
@@ -787,32 +787,31 @@ export default function SuppliersPage() {
 
       {/* ── Purchase ── */}
       {section === "purchase" ? (
-        <div className="space-y-4">
-          <Card className="p-4 sm:p-6 border border-border/50 space-y-4">
-            <div>
-              <h2 className="text-xl font-extrabold">شراء من المورد</h2>
+        <div className="space-y-3">
+          <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg sm:text-xl font-extrabold leading-none">شراء من المورد</h2>
+              <span className="hidden sm:inline text-[12px] font-bold text-muted-foreground">
+                فاتورة · أصناف · دفع
+              </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div>
-                <label className="text-[15px] font-bold text-foreground mb-1.5 block">
-                  رقم الفاتورة
-                </label>
-                <div className="relative">
-                  <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    className="h-12 ps-9 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
-                    value={purchaseForm.invoiceNo || nextPurchaseInvoiceNo(purchases)}
-                    readOnly
-                    disabled
-                    dir="ltr"
-                  />
-                </div>
-                <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
-                  يُولَّد تلقائياً من 1 ويزيد بدون تكرار
-                </p>
+
+            {/* Header: supplier first on mobile, then date/time/invoice */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-2.5">
+              <div className="col-span-2 sm:col-span-3 xl:col-span-2 order-1">
+                <ModernCombobox
+                  value={purchaseForm.supplierId}
+                  onChange={(v) => setPurchaseForm((f) => ({ ...f, supplierId: v }))}
+                  options={supplierOptions}
+                  label="اسم المورد *"
+                  placeholder="اختر المورد"
+                  icon={Truck}
+                  labelClassName="text-[15px] font-bold text-foreground mb-1"
+                  valueClassName="text-[15px] font-bold"
+                />
               </div>
-              <div>
-                <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+              <div className="order-2">
+                <label className="text-[15px] font-bold text-foreground mb-1 block">
                   التاريخ *
                 </label>
                 <Input
@@ -825,8 +824,8 @@ export default function SuppliersPage() {
                   }
                 />
               </div>
-              <div>
-                <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+              <div className="order-3">
+                <label className="text-[15px] font-bold text-foreground mb-1 block">
                   الساعة
                 </label>
                 <Input
@@ -837,39 +836,43 @@ export default function SuppliersPage() {
                   disabled
                 />
               </div>
-              <ModernCombobox
-                value={purchaseForm.supplierId}
-                onChange={(v) => setPurchaseForm((f) => ({ ...f, supplierId: v }))}
-                options={supplierOptions}
-                label="اسم المورد *"
-                placeholder="اختر المورد"
-                icon={Truck}
-                labelClassName="text-[15px] font-bold text-foreground"
-                valueClassName="text-[15px] font-bold"
-              />
+              <div className="order-4 col-span-2 sm:col-span-1">
+                <label className="text-[15px] font-bold text-foreground mb-1 block">
+                  رقم الفاتورة
+                </label>
+                <div className="relative">
+                  <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    className="h-12 ps-9 text-[15px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                    value={purchaseForm.invoiceNo || nextPurchaseInvoiceNo(purchases)}
+                    readOnly
+                    disabled
+                    dir="ltr"
+                  />
+                </div>
+              </div>
             </div>
+
             <div>
-              <label className="text-[15px] font-bold text-foreground mb-1.5 block">
-                ملاحظة
-              </label>
+              <label className="text-[15px] font-bold text-foreground mb-1 block">ملاحظة</label>
               <div className="relative">
-                <StickyNote className="absolute start-3 top-3 w-4 h-4 text-muted-foreground" />
+                <StickyNote className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   className="h-12 ps-9 text-[15px] font-bold"
                   value={purchaseForm.notes}
                   onChange={(e) => setPurchaseForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="اختياري"
                 />
               </div>
             </div>
 
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3 sm:p-4 space-y-3">
+            <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/8 via-transparent to-amber-500/5 px-2.5 py-2 sm:px-3 sm:py-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[15px] font-bold">شراء الصنف</h3>
+                <h3 className="text-[15px] font-bold">أصناف الفاتورة</h3>
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  className="rounded-full h-10 text-[15px] font-bold"
+                  className="rounded-full h-11 px-4 text-[15px] font-bold touch-manipulation"
                   onClick={() =>
                     setPurchaseLines((rows) => [...rows, EMPTY_PURCHASE_LINE()])
                   }
@@ -877,42 +880,60 @@ export default function SuppliersPage() {
                   <Plus className="w-4 h-4 me-1" /> سطر صنف
                 </Button>
               </div>
-              <div className="rounded-xl border border-border/50 bg-background/80 overflow-hidden">
-                <div className="hidden lg:grid grid-cols-[minmax(0,1.35fr)_minmax(0,2.4fr)_auto] gap-2 px-3 pt-2 pb-1">
-                  <div className="text-[15px] font-bold text-foreground">الصنف *</div>
-                  <div className="grid grid-cols-4 gap-2 min-w-0">
-                    <div className="text-[15px] font-bold text-foreground">كمية *</div>
-                    <div className="text-[15px] font-bold text-foreground">الوحدة *</div>
-                    <div className="text-[15px] font-bold text-foreground">سعر *</div>
-                    <div className="text-[15px] font-bold text-foreground">مبلغ</div>
-                  </div>
-                  <div className="w-12" />
+
+              <div className="rounded-xl border border-border/50 bg-background/90 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[minmax(0,1.7fr)_minmax(4.75rem,0.7fr)_minmax(0,1fr)_minmax(4.75rem,0.7fr)_minmax(4.75rem,0.7fr)_2.75rem] gap-1.5 px-2.5 pt-1.5 pb-1 text-[13px] xl:text-[14px] font-bold text-muted-foreground">
+                  <div>الصنف *</div>
+                  <div>كمية *</div>
+                  <div>الوحدة *</div>
+                  <div>سعر *</div>
+                  <div>مبلغ</div>
+                  <div />
                 </div>
-                <div className="divide-y divide-border/30">
+
+                <div className="divide-y divide-border/25">
                   {purchaseLines.map((line, idx) => {
                     const amount = (Number(line.qty) || 0) * (Number(line.price) || 0);
                     return (
                       <div
                         key={line.key}
-                        className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,2.4fr)_auto] gap-2 px-3 py-1.5"
+                        className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-[minmax(0,1.7fr)_minmax(4.75rem,0.7fr)_minmax(0,1fr)_minmax(4.75rem,0.7fr)_minmax(4.75rem,0.7fr)_2.75rem] gap-1.5 px-2.5 py-1.5 items-end"
                       >
-                        <div className="min-w-0">
-                          <span className="lg:hidden text-[15px] font-bold mb-1 block">الصنف *</span>
+                        <div className="col-span-2 sm:col-span-4 md:col-span-1 min-w-0 order-1">
+                          <span className="md:hidden text-[13px] font-bold mb-0.5 block text-muted-foreground">
+                            الصنف *
+                          </span>
                           <ModernCombobox
                             value={line.menuItemId}
-                            onChange={(v) =>
+                            onChange={(v) => {
                               setPurchaseLines((rows) =>
                                 rows.map((r, i) =>
                                   i === idx
                                     ? {
                                         ...r,
                                         menuItemId: v,
-                                        unitKind: findMenu(v)?.majorUnit ? r.unitKind : "minor",
+                                        unitKind: findMenu(v)?.majorUnit?.trim()
+                                          ? "major"
+                                          : "minor",
                                       }
                                     : r
                                 )
-                              )
-                            }
+                              );
+                              if (!v) return;
+                              const qtyId = `purchase-qty-${line.key}`;
+                              window.setTimeout(() => {
+                                const qtyEl = document.getElementById(
+                                  qtyId
+                                ) as HTMLInputElement | null;
+                                if (!qtyEl) return;
+                                qtyEl.focus();
+                                try {
+                                  qtyEl.select();
+                                } catch {
+                                  /* ignore */
+                                }
+                              }, 0);
+                            }}
                             options={menuOptions}
                             placeholder="اختر الصنف"
                             emptyText="لا توجد أصناف من نوع تكلفة"
@@ -920,92 +941,108 @@ export default function SuppliersPage() {
                             valueClassName="text-[15px] font-bold"
                           />
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
-                          <div className="min-w-0">
-                            <span className="lg:hidden text-[15px] font-bold mb-1 block">كمية *</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.001"
-                              className="h-12 w-full text-[15px] font-bold"
-                              dir="ltr"
-                              value={line.qty}
-                              onChange={(e) =>
-                                setPurchaseLines((rows) =>
-                                  rows.map((r, i) =>
-                                    i === idx
-                                      ? {
-                                          ...r,
-                                          qty: e.target.value === "" ? "" : Number(e.target.value),
-                                        }
-                                      : r
-                                  )
+
+                        <div className="min-w-0 order-2">
+                          <span className="md:hidden text-[13px] font-bold mb-0.5 block text-muted-foreground">
+                            كمية *
+                          </span>
+                          <Input
+                            id={`purchase-qty-${line.key}`}
+                            type="number"
+                            min={0}
+                            step="0.001"
+                            className="h-12 w-full text-[15px] font-bold"
+                            dir="ltr"
+                            value={line.qty}
+                            onChange={(e) =>
+                              setPurchaseLines((rows) =>
+                                rows.map((r, i) =>
+                                  i === idx
+                                    ? {
+                                        ...r,
+                                        qty: e.target.value === "" ? "" : Number(e.target.value),
+                                      }
+                                    : r
                                 )
-                              }
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="lg:hidden text-[15px] font-bold mb-1 block">الوحدة *</span>
-                            <ModernCombobox
-                              value={line.unitKind}
-                              onChange={(v) =>
-                                setPurchaseLines((rows) =>
-                                  rows.map((r, i) =>
-                                    i === idx
-                                      ? { ...r, unitKind: (v as SupplierUnitKind) || "minor" }
-                                      : r
-                                  )
+                              )
+                            }
+                          />
+                        </div>
+
+                        <div className="min-w-0 order-3">
+                          <span className="md:hidden text-[13px] font-bold mb-0.5 block text-muted-foreground">
+                            الوحدة *
+                          </span>
+                          <ModernCombobox
+                            value={line.unitKind}
+                            onChange={(v) =>
+                              setPurchaseLines((rows) =>
+                                rows.map((r, i) =>
+                                  i === idx
+                                    ? { ...r, unitKind: (v as SupplierUnitKind) || "major" }
+                                    : r
                                 )
-                              }
-                              options={unitOptionsFor(line.menuItemId)}
-                              placeholder="كبيرة / صغيرة"
-                              icon={Scale}
-                              searchable={false}
-                              valueClassName="text-[15px] font-bold"
-                              className="w-full min-w-0"
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="lg:hidden text-[15px] font-bold mb-1 block">سعر *</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              className="h-12 w-full text-[15px] font-bold"
-                              dir="ltr"
-                              value={line.price}
-                              onChange={(e) =>
-                                setPurchaseLines((rows) =>
-                                  rows.map((r, i) =>
-                                    i === idx
-                                      ? {
-                                          ...r,
-                                          price:
-                                            e.target.value === "" ? "" : Number(e.target.value),
-                                        }
-                                      : r
-                                  )
+                              )
+                            }
+                            options={unitOptionsFor(line.menuItemId)}
+                            placeholder="وحدة"
+                            icon={Scale}
+                            searchable={false}
+                            valueClassName="text-[15px] font-bold"
+                            className="w-full min-w-0"
+                          />
+                        </div>
+
+                        <div className="min-w-0 order-4">
+                          <span className="md:hidden text-[13px] font-bold mb-0.5 block text-muted-foreground">
+                            سعر *
+                          </span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="h-12 w-full text-[15px] font-bold"
+                            dir="ltr"
+                            value={line.price}
+                            onChange={(e) =>
+                              setPurchaseLines((rows) =>
+                                rows.map((r, i) =>
+                                  i === idx
+                                    ? {
+                                        ...r,
+                                        price:
+                                          e.target.value === "" ? "" : Number(e.target.value),
+                                      }
+                                    : r
                                 )
-                              }
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="lg:hidden text-[15px] font-bold mb-1 block">مبلغ</span>
-                            <div className="h-12 w-full rounded-xl border border-border/60 bg-secondary/40 px-2 flex items-center text-[15px] font-bold" dir="ltr">
-                              {fmtMoney(amount)}
-                            </div>
+                              )
+                            }
+                          />
+                        </div>
+
+                        <div className="min-w-0 order-5">
+                          <span className="md:hidden text-[13px] font-bold mb-0.5 block text-muted-foreground">
+                            مبلغ
+                          </span>
+                          <div
+                            className="h-12 w-full rounded-xl border border-border/60 bg-secondary/40 px-2 flex items-center text-[15px] font-bold"
+                            dir="ltr"
+                          >
+                            {fmtMoney(amount)}
                           </div>
                         </div>
-                        <div className="flex items-center justify-end lg:justify-center">
+
+                        <div className="flex items-center justify-end order-6 col-span-2 sm:col-span-1 md:col-span-1 md:justify-center self-end">
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-12 w-12 text-destructive"
+                            className="h-11 w-11 text-destructive touch-manipulation"
                             disabled={purchaseLines.length <= 1}
                             onClick={() =>
                               setPurchaseLines((rows) => rows.filter((_, i) => i !== idx))
                             }
+                            aria-label="حذف السطر"
                           >
                             <Trash2 className="w-5 h-5" />
                           </Button>
@@ -1015,24 +1052,26 @@ export default function SuppliersPage() {
                   })}
                 </div>
               </div>
-              <div className="pt-2 border-t border-border/40 space-y-3">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-[15px] font-bold">
-                  <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                    مجموع كمية:{" "}
+
+              <div className="border-t border-border/40 pt-2 space-y-2">
+                <div className="grid grid-cols-2 gap-1.5 text-[14px] sm:text-[15px] font-bold">
+                  <div className="rounded-xl border border-border/50 bg-background/80 px-2.5 py-1.5 flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">مجموع كمية</span>
                     <span className="text-primary" dir="ltr">
                       {fmtMoney(purchaseTotals.totalQty)}
                     </span>
                   </div>
-                  <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                    مجموع المبلغ:{" "}
+                  <div className="rounded-xl border border-border/50 bg-background/80 px-2.5 py-1.5 flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">مجموع المبلغ</span>
                     <span className="text-primary" dir="ltr">
                       {fmtMoney(purchaseTotals.totalAmount)}
                     </span>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+                    <label className="text-[15px] font-bold text-foreground mb-1 block">
                       مبلغ الدفع
                     </label>
                     <Input
@@ -1051,9 +1090,7 @@ export default function SuppliersPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-[15px] font-bold text-foreground mb-1.5 block">
-                      خصم
-                    </label>
+                    <label className="text-[15px] font-bold text-foreground mb-1 block">خصم</label>
                     <Input
                       type="number"
                       min={0}
@@ -1070,7 +1107,7 @@ export default function SuppliersPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+                    <label className="text-[15px] font-bold text-foreground mb-1 block">
                       باقي قائمة
                     </label>
                     <div
@@ -1081,10 +1118,16 @@ export default function SuppliersPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex justify-end">
+
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-0.5">
+                  {purchaseError ? (
+                    <p className="text-[14px] font-bold text-destructive sm:me-auto">
+                      {purchaseError}
+                    </p>
+                  ) : null}
                   <Button
                     type="button"
-                    className="rounded-full h-12 text-[15px] font-bold"
+                    className="rounded-full h-12 px-6 text-[15px] font-bold w-full sm:w-auto touch-manipulation"
                     disabled={creatingPurchase}
                     onClick={savePurchase}
                   >
@@ -1092,32 +1135,31 @@ export default function SuppliersPage() {
                   </Button>
                 </div>
               </div>
-              {purchaseError ? (
-                <p className="text-[15px] font-bold text-destructive">{purchaseError}</p>
-              ) : null}
             </div>
           </Card>
 
-          <Card className="p-4 sm:p-6 border border-border/50 space-y-3">
-            <h3 className="font-extrabold">فواتير الشراء</h3>
+          <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2">
+            <h3 className="text-[15px] font-extrabold">فواتير الشراء</h3>
             {loadingPurchases ? (
-              <div className="py-8 flex justify-center">
+              <div className="py-6 flex justify-center">
                 <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
               </div>
             ) : (purchases ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">لا توجد فواتير بعد</p>
+              <p className="text-[14px] font-bold text-muted-foreground text-center py-5">
+                لا توجد فواتير بعد
+              </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {(purchases ?? []).map((p) => (
                   <div
                     key={p.id}
-                    className="rounded-2xl border border-border/40 p-3 flex flex-wrap items-center justify-between gap-2"
+                    className="rounded-xl border border-border/40 px-2.5 py-2 flex flex-wrap items-center justify-between gap-2"
                   >
-                    <div>
-                      <p className="font-extrabold">
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-extrabold truncate">
                         {p.invoiceNo} — {p.supplierName}
                       </p>
-                      <p className="text-xs text-muted-foreground font-semibold">
+                      <p className="text-[12px] text-muted-foreground font-semibold leading-snug">
                         {p.invoiceDate} {p.invoiceTime} · كمية {fmtMoney(p.totalQty)} · مبلغ{" "}
                         {fmtMoney(p.totalAmount)} · دفع {fmtMoney(p.paidAmount || 0)} · خصم{" "}
                         {fmtMoney(p.discountAmount || 0)} · باقي{" "}
@@ -1128,7 +1170,7 @@ export default function SuppliersPage() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-10 w-10 text-destructive"
+                      className="h-11 w-11 text-destructive touch-manipulation flex-shrink-0"
                       onClick={() => {
                         if (!confirm("حذف فاتورة الشراء؟")) return;
                         deletePurchase({ id: p.id }, { onSuccess: invalidateAll });

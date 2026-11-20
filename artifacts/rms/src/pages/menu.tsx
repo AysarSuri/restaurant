@@ -138,7 +138,7 @@ export default function Menu() {
   const [formData, setFormData] = useState({
     nameAr: "",
     name: "",
-    price: 0,
+    price: "" as string | number,
     costMode: "none" as "none" | "with",
     cost: 0,
     majorUnit: "",
@@ -324,7 +324,7 @@ export default function Menu() {
       setFormData({
         nameAr: "",
         name: "",
-        price: 0,
+        price: "",
         costMode: "none",
         cost: 0,
         majorUnit: "",
@@ -469,7 +469,10 @@ export default function Menu() {
     const data = {
       nameAr: formData.nameAr.trim(),
       name: formData.name.trim(),
-      price: formData.price,
+      price:
+        formData.price === "" || formData.price === null
+          ? 0
+          : Number(formData.price) || 0,
       cost: withCost ? Number(formData.cost) : null,
       majorUnit: withCost ? formData.majorUnit.trim() : null,
       subunitQty: withCost
@@ -687,14 +690,14 @@ export default function Menu() {
           <button
             type="button"
             onClick={() => toggleItemFlag(item, { isAvailable: hidden })}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-extrabold border transition-colors ${
+            className={`inline-flex items-center gap-2 min-h-11 px-3.5 py-2 rounded-full text-[15px] font-bold border transition-colors touch-manipulation ${
               hidden
                 ? "bg-destructive/15 text-destructive border-destructive/30"
                 : "bg-success/15 text-success border-success/30 hover:bg-success/25"
             }`}
             title={hidden ? "إظهار في نقطة البيع" : "إخفاء من نقطة البيع"}
           >
-            {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {hidden ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             {hidden ? "مخفي" : "ظاهر"}
           </button>
         );
@@ -709,14 +712,14 @@ export default function Menu() {
           <button
             type="button"
             onClick={() => toggleItemFlag(item, { isFavorite: !fav })}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-extrabold border transition-colors ${
+            className={`inline-flex items-center gap-2 min-h-11 px-3.5 py-2 rounded-full text-[15px] font-bold border transition-colors touch-manipulation ${
               fav
                 ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/35"
                 : "bg-secondary/60 text-muted-foreground border-border/60 hover:border-amber-500/35 hover:text-amber-600"
             }`}
             title={fav ? "إزالة من المفضلة" : "إضافة للمفضلة"}
           >
-            <Star className={`w-3.5 h-3.5 ${fav ? "fill-current" : ""}`} />
+            <Star className={`w-5 h-5 ${fav ? "fill-current" : ""}`} />
             {fav ? "مفضل" : "عادي"}
           </button>
         );
@@ -744,14 +747,14 @@ export default function Menu() {
             type="button"
             variant="outline"
             onClick={openCategoryManager}
-            className="rounded-full h-9 text-sm flex-shrink-0 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground hover:border-primary"
+            className="rounded-full h-12 px-5 text-[16px] font-bold flex-shrink-0 border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground hover:border-primary touch-manipulation"
           >
-            <Tags className="w-4 h-4 me-1.5" />
+            <Tags className="w-5 h-5 me-1.5" />
             التصنيفات
           </Button>
         }
         toolbar={
-          <div className="flex flex-col sm:flex-row sm:flex-wrap xl:flex-nowrap gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap xl:flex-nowrap gap-3">
             <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-[1.4]">
               <ModernCombobox
                 value={filterItemId}
@@ -763,7 +766,8 @@ export default function Menu() {
                 searchable
                 searchPlaceholder="اكتب للبحث عن صنف..."
                 emptyText="لا يوجد صنف مطابق"
-                size="sm"
+                labelClassName="text-[16px] font-bold text-foreground"
+                valueClassName="text-[16px] font-bold"
                 className="w-full min-w-0"
               />
             </div>
@@ -776,7 +780,8 @@ export default function Menu() {
                 placeholder="كل التصنيفات"
                 icon={Tags}
                 searchable
-                size="sm"
+                labelClassName="text-[16px] font-bold text-foreground"
+                valueClassName="text-[16px] font-bold"
                 className="w-full min-w-0"
               />
             </div>
@@ -789,7 +794,8 @@ export default function Menu() {
                 placeholder="كل الفروع"
                 icon={Building2}
                 searchable
-                size="sm"
+                labelClassName="text-[16px] font-bold text-foreground"
+                valueClassName="text-[16px] font-bold"
                 className="w-full min-w-0"
               />
             </div>
@@ -804,7 +810,8 @@ export default function Menu() {
                 placeholder="الكل"
                 icon={Eye}
                 searchable={false}
-                size="sm"
+                labelClassName="text-[16px] font-bold text-foreground"
+                valueClassName="text-[16px] font-bold"
                 className="w-full min-w-0"
               />
             </div>
@@ -819,7 +826,8 @@ export default function Menu() {
                 placeholder="الكل"
                 icon={Star}
                 searchable={false}
-                size="sm"
+                labelClassName="text-[16px] font-bold text-foreground"
+                valueClassName="text-[16px] font-bold"
                 className="w-full min-w-0"
               />
             </div>
@@ -833,7 +841,7 @@ export default function Menu() {
         title={editing ? "تعديل صنف" : "إضافة صنف"}
         maxWidth="max-w-5xl"
       >
-        <div className="space-y-4">
+        <div className="space-y-5 touch-manipulation">
           <input
             ref={itemImageInputRef}
             type="file"
@@ -847,11 +855,11 @@ export default function Menu() {
 
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-amber-500/5 to-transparent p-3 sm:p-4">
             <div className="flex flex-col md:flex-row md:items-stretch gap-3 sm:gap-4">
-              <div className="flex flex-col gap-2 flex-shrink-0 md:w-[9.5rem]">
+              <div className="flex flex-col gap-2 flex-shrink-0 md:w-[10.5rem]">
                 <button
                   type="button"
                   onClick={() => itemImageInputRef.current?.click()}
-                  className="relative group w-full h-36 md:h-full min-h-[9.5rem] rounded-2xl border-2 border-dashed border-primary/35 bg-background/70 hover:border-primary/60 hover:bg-primary/5 transition-colors overflow-hidden"
+                  className="relative group w-full h-40 md:h-full min-h-[10.5rem] rounded-2xl border-2 border-dashed border-primary/35 bg-background/70 hover:border-primary/60 hover:bg-primary/5 active:scale-[0.99] transition-colors overflow-hidden touch-manipulation"
                   title="رفع صورة الصنف"
                 >
                   {formData.imageUrl ? (
@@ -861,15 +869,15 @@ export default function Menu() {
                         alt="معاينة الصنف"
                         className="absolute inset-0 w-full h-full object-cover"
                       />
-                      <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[10px] font-bold py-1.5 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[16px] font-bold py-2 text-center">
                         تغيير الصورة
                       </span>
                     </>
                   ) : (
-                    <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-primary px-3 text-center">
-                      <ImagePlus className="w-7 h-7" />
-                      <span className="text-xs font-extrabold">رسم الصنف</span>
-                      <span className="text-[10px] text-muted-foreground font-semibold">
+                    <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-primary px-3 text-center">
+                      <ImagePlus className="w-9 h-9" />
+                      <span className="text-[16px] font-bold">رسم الصنف</span>
+                      <span className="text-[13px] text-muted-foreground font-semibold">
                         PNG / JPG / WEBP / GIF
                       </span>
                     </span>
@@ -879,54 +887,56 @@ export default function Menu() {
                   <button
                     type="button"
                     onClick={() => setFormData((f) => ({ ...f, imageUrl: "" }))}
-                    className="text-[11px] font-bold text-destructive hover:underline"
+                    className="text-[16px] font-bold text-destructive hover:underline min-h-11 touch-manipulation"
                   >
                     إزالة الصورة
                   </button>
                 )}
               </div>
 
-              <div className="flex-1 min-w-0 flex flex-col justify-center gap-3">
-                {/* Row 1: Arabic + English names */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="flex-1 min-w-0 flex flex-col justify-center gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                    <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                       الاسم (عربي) *
                     </label>
                     <Input
                       value={formData.nameAr}
                       onChange={(e) => setFormData((f) => ({ ...f, nameAr: e.target.value }))}
                       placeholder="مثال: برجر لحم"
-                      className="h-11"
+                      className="h-12 text-[16px] font-bold"
                       autoFocus
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                    <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                       الاسم (إنجليزي) *
                     </label>
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
                       placeholder="e.g. Beef Burger"
-                      className="h-11"
+                      className="h-12 text-[16px] font-bold"
                     />
                   </div>
                 </div>
 
-                {/* Row 2: Price + Category combobox */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
-                      السعر بوحدة الصغرى ({LOCKED_MINOR_UNIT}) — د.ع *
+                    <label className="text-[16px] font-bold mb-1.5 block text-foreground">
+                      السعر بوحدة الصغرى ({LOCKED_MINOR_UNIT}) — د.ع
                     </label>
                     <Input
                       type="number"
                       value={formData.price}
                       onChange={(e) =>
-                        setFormData((f) => ({ ...f, price: Number(e.target.value) }))
+                        setFormData((f) => ({
+                          ...f,
+                          price: e.target.value === "" ? "" : Number(e.target.value),
+                        }))
                       }
-                      className="h-11"
+                      placeholder="فارغ = صفر"
+                      className="h-12 text-[16px] font-bold placeholder:text-muted-foreground/35 placeholder:font-normal"
                       dir="ltr"
                     />
                   </div>
@@ -943,11 +953,12 @@ export default function Menu() {
                       emptyText="لا توجد تصنيفات"
                       icon={Tags}
                       searchable
+                      labelClassName="text-[16px] font-bold text-foreground"
+                      valueClassName="text-[16px] font-bold"
                     />
                   </div>
                 </div>
 
-                {/* Cost mode */}
                 <div>
                   <ModernCombobox
                     value={formData.costMode}
@@ -965,26 +976,28 @@ export default function Menu() {
                     placeholder="بدون تكلفة"
                     icon={BadgeDollarSign}
                     searchable={false}
+                    labelClassName="text-[16px] font-bold text-foreground"
+                    valueClassName="text-[16px] font-bold"
                   />
                 </div>
 
                 {formData.costMode === "with" ? (
-                  <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-extrabold text-amber-800 dark:text-amber-200">
+                  <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 sm:p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-[16px] font-bold text-amber-800 dark:text-amber-200">
                         تفاصيل الوحدات والتكلفة
                       </p>
                       <button
                         type="button"
                         onClick={openAddUnitDialog}
-                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-primary/35 bg-primary/10 text-primary text-[11px] font-extrabold hover:bg-primary/15"
+                        className="inline-flex items-center gap-1.5 h-12 px-4 rounded-xl border border-primary/35 bg-primary/10 text-primary text-[16px] font-bold hover:bg-primary/15 touch-manipulation"
                       >
-                        <Plus className="w-3.5 h-3.5" />
+                        <Plus className="w-5 h-5" />
                         إضافة وحدات
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <ModernCombobox
                         value={formData.majorUnit}
                         onChange={(v) =>
@@ -1004,24 +1017,26 @@ export default function Menu() {
                         emptyText="لا توجد وحدات — أضف وحدة أولاً"
                         icon={Package}
                         searchable
+                        labelClassName="text-[16px] font-bold text-foreground"
+                        valueClassName="text-[16px] font-bold"
                       />
                       <div>
-                        <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                        <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                           الوحدة الصغرى
                         </label>
-                        <div className="h-11 rounded-xl border border-border/70 bg-secondary/50 px-3 flex items-center justify-between gap-2">
-                          <span className="font-extrabold text-sm">{LOCKED_MINOR_UNIT}</span>
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
-                            <Lock className="w-3 h-3" />
+                        <div className="h-12 rounded-xl border border-border/70 bg-secondary/50 px-3 flex items-center justify-between gap-2">
+                          <span className="font-bold text-[16px]">{LOCKED_MINOR_UNIT}</span>
+                          <span className="inline-flex items-center gap-1 text-[13px] font-bold text-muted-foreground">
+                            <Lock className="w-4 h-4" />
                             ثابت
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                        <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                           عدد كمية فرعية *
                         </label>
                         <div className="relative">
@@ -1042,7 +1057,7 @@ export default function Menu() {
                                 ),
                               }));
                             }}
-                            className={`h-11 ${
+                            className={`h-12 text-[16px] font-bold ${
                               isSameUnit
                                 ? "bg-secondary/60 text-muted-foreground cursor-not-allowed pe-10"
                                 : ""
@@ -1050,10 +1065,10 @@ export default function Menu() {
                             dir="ltr"
                           />
                           {isSameUnit ? (
-                            <Lock className="absolute end-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Lock className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                           ) : null}
                         </div>
-                        <p className="text-[10px] text-muted-foreground mt-1 font-semibold">
+                        <p className="text-[13px] text-muted-foreground mt-1 font-semibold">
                           {isSameUnit
                             ? "الوحدة الكبرى = الصغرى، لذلك الكمية الفرعية ثابتة على 1"
                             : `كم «${LOCKED_MINOR_UNIT}» داخل الوحدة الكبرى${
@@ -1062,7 +1077,7 @@ export default function Menu() {
                         </p>
                       </div>
                       <div>
-                        <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                        <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                           تكلفة بوحدة الصغرى ({LOCKED_MINOR_UNIT}) — د.ع *
                         </label>
                         <Input
@@ -1075,7 +1090,7 @@ export default function Menu() {
                               cost: Number(e.target.value),
                             }))
                           }
-                          className="h-11"
+                          className="h-12 text-[16px] font-bold"
                           dir="ltr"
                           placeholder="0"
                         />
@@ -1083,7 +1098,7 @@ export default function Menu() {
                     </div>
 
                     {formData.majorUnit && Number(formData.subunitQty) > 0 ? (
-                      <p className="text-[11px] font-bold text-muted-foreground">
+                      <p className="text-[16px] font-bold text-muted-foreground">
                         1 {formData.majorUnit} = {formData.subunitQty} {LOCKED_MINOR_UNIT}
                         {Number(formData.cost) > 0
                           ? ` · تكلفة الكبرى ≈ ${new Intl.NumberFormat("en-IQ").format(
@@ -1094,27 +1109,27 @@ export default function Menu() {
                     ) : null}
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-border/70 bg-secondary/30 px-3 py-2.5 text-[11px] text-muted-foreground font-semibold">
+                  <div className="rounded-xl border border-dashed border-border/70 bg-secondary/30 px-3 py-3 text-[16px] text-muted-foreground font-bold">
                     لن تُحفظ تكلفة أو وحدات لهذا الصنف
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={() =>
                       setFormData((f) => ({ ...f, isAvailable: !f.isAvailable }))
                     }
-                    className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border-2 text-xs font-extrabold transition-colors ${
+                    className={`inline-flex items-center gap-2 min-h-12 px-4 rounded-xl border-2 text-[16px] font-bold transition-colors touch-manipulation active:scale-[0.98] ${
                       formData.isAvailable
                         ? "border-success/40 bg-success/10 text-success"
                         : "border-destructive/40 bg-destructive/10 text-destructive"
                     }`}
                   >
                     {formData.isAvailable ? (
-                      <Eye className="w-3.5 h-3.5" />
+                      <Eye className="w-5 h-5" />
                     ) : (
-                      <EyeOff className="w-3.5 h-3.5" />
+                      <EyeOff className="w-5 h-5" />
                     )}
                     {formData.isAvailable ? "ظاهر في البيع" : "مخفي من البيع"}
                   </button>
@@ -1123,14 +1138,14 @@ export default function Menu() {
                     onClick={() =>
                       setFormData((f) => ({ ...f, isFavorite: !f.isFavorite }))
                     }
-                    className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border-2 text-xs font-extrabold transition-colors ${
+                    className={`inline-flex items-center gap-2 min-h-12 px-4 rounded-xl border-2 text-[16px] font-bold transition-colors touch-manipulation active:scale-[0.98] ${
                       formData.isFavorite
                         ? "border-amber-500/45 bg-amber-500/15 text-amber-600 dark:text-amber-400"
                         : "border-border/70 bg-background/60 text-muted-foreground"
                     }`}
                   >
                     <Star
-                      className={`w-3.5 h-3.5 ${formData.isFavorite ? "fill-current" : ""}`}
+                      className={`w-5 h-5 ${formData.isFavorite ? "fill-current" : ""}`}
                     />
                     {formData.isFavorite ? "مفضل" : "إضافة للمفضلة"}
                   </button>
@@ -1140,26 +1155,26 @@ export default function Menu() {
           </div>
 
           <div>
-            <label className="text-sm font-semibold mb-2 block flex items-center gap-1.5">
-              <Building2 className="w-4 h-4 text-primary" />
+            <label className="text-[16px] font-bold mb-2 block flex items-center gap-1.5">
+              <Building2 className="w-5 h-5 text-primary" />
               الفروع <span className="text-destructive">*</span>
             </label>
-            <div className="rounded-2xl border border-border/60 bg-secondary/20 p-3 space-y-2.5">
-              <div className="flex flex-col sm:flex-row gap-2">
+            <div className="rounded-2xl border border-border/60 bg-secondary/20 p-3 sm:p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
                   onClick={selectAllBranches}
-                  className={`sm:w-auto h-11 px-4 rounded-xl border-2 text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                  className={`sm:w-auto min-h-12 px-5 rounded-xl border-2 text-[16px] font-bold transition-all flex items-center justify-center gap-2 touch-manipulation active:scale-[0.98] ${
                     formData.allBranches
                       ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
                       : "border-border bg-background/60 text-foreground hover:border-primary/40"
                   }`}
                 >
-                  <Check className={`w-4 h-4 ${formData.allBranches ? "opacity-100" : "opacity-30"}`} />
+                  <Check className={`w-5 h-5 ${formData.allBranches ? "opacity-100" : "opacity-30"}`} />
                   جميع الفروع
                 </button>
                 {(branches?.length ?? 0) > 0 && (
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {branches!.map((b) => {
                       const selected = !formData.allBranches && formData.branchIds.includes(b.id);
                       return (
@@ -1167,20 +1182,20 @@ export default function Menu() {
                           key={b.id}
                           type="button"
                           onClick={() => toggleBranch(b.id)}
-                          className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
+                          className={`min-h-12 px-3 rounded-xl border-2 text-[16px] font-bold transition-all flex items-center gap-2 text-start touch-manipulation active:scale-[0.98] ${
                             selected
                               ? "border-primary bg-primary/15 text-primary"
                               : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
                           }`}
                         >
                           <span
-                            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                            className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
                               selected
                                 ? "border-primary bg-primary text-primary-foreground"
                                 : "border-border"
                             }`}
                           >
-                            {selected && <Check className="w-3.5 h-3.5" />}
+                            {selected && <Check className="w-4 h-4" />}
                           </span>
                           <span className="truncate">{b.name}</span>
                         </button>
@@ -1190,11 +1205,11 @@ export default function Menu() {
                 )}
               </div>
               {(branches?.length ?? 0) === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-1">
+                <p className="text-[16px] font-bold text-muted-foreground text-center py-1">
                   لا توجد فروع مسجّلة — سيتم اعتبار الصنف لكل الفروع
                 </p>
               ) : (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[13px] font-semibold text-muted-foreground">
                   اختر «جميع الفروع» أو حدد فرعاً واحداً أو أكثر
                 </p>
               )}
@@ -1202,14 +1217,23 @@ export default function Menu() {
           </div>
 
           {formError && (
-            <p className="text-sm font-semibold text-destructive">{formError}</p>
+            <p className="text-[16px] font-bold text-destructive">{formError}</p>
           )}
 
-          <div className="pt-1 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setIsOpen(false)}>
+          <div className="pt-1 flex justify-end gap-3">
+            <Button
+              variant="ghost"
+              className="h-12 px-5 text-[16px] font-bold touch-manipulation"
+              onClick={() => setIsOpen(false)}
+            >
               إلغاء
             </Button>
-            <Button onClick={handleSubmit}>{editing ? "حفظ التعديلات" : "إضافة"}</Button>
+            <Button
+              className="h-12 px-6 text-[16px] font-bold touch-manipulation"
+              onClick={handleSubmit}
+            >
+              {editing ? "حفظ التعديلات" : "إضافة"}
+            </Button>
           </div>
         </div>
       </Dialog>
@@ -1223,26 +1247,25 @@ export default function Menu() {
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-amber-500 text-primary-foreground flex items-center justify-center shadow-md shadow-primary/25 flex-shrink-0">
-                <FolderPlus className="w-4 h-4" />
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-amber-500 text-primary-foreground flex items-center justify-center shadow-md shadow-primary/25 flex-shrink-0">
+                <FolderPlus className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground">قائمة التصنيفات</p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[16px] font-bold text-foreground">قائمة التصنيفات</p>
+                <p className="text-[14px] font-bold text-muted-foreground">
                   {categories?.length ?? 0} تصنيف — صورة PNG / JPG / WEBP / GIF
                 </p>
               </div>
             </div>
             <Button
               type="button"
-              size="sm"
               onClick={() => {
                 setShowAddCategory((v) => !v);
                 setEditingCategoryId(null);
                 setCategoryForm(EMPTY_CATEGORY_FORM);
                 setCategoryError("");
               }}
-              className="rounded-full h-9 flex-shrink-0"
+              className="rounded-full h-12 px-5 text-[16px] font-bold flex-shrink-0 touch-manipulation"
             >
               {showAddCategory ? (
                 <>
@@ -1293,7 +1316,7 @@ export default function Menu() {
 
                 <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                    <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                       الاسم (عربي) *
                     </label>
                     <Input
@@ -1302,12 +1325,12 @@ export default function Menu() {
                       onChange={(e) =>
                         setCategoryForm((f) => ({ ...f, nameAr: e.target.value }))
                       }
-                      className="h-11"
+                      className="h-12 text-[16px] font-bold"
                       autoFocus
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold mb-1 block text-muted-foreground">
+                    <label className="text-[16px] font-bold mb-1.5 block text-foreground">
                       الاسم (إنجليزي)
                     </label>
                     <Input
@@ -1316,7 +1339,7 @@ export default function Menu() {
                       onChange={(e) =>
                         setCategoryForm((f) => ({ ...f, name: e.target.value }))
                       }
-                      className="h-11"
+                      className="h-12 text-[16px] font-bold"
                     />
                   </div>
                 </div>
@@ -1326,8 +1349,7 @@ export default function Menu() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className="h-11"
+                      className="h-12 text-[16px] font-bold touch-manipulation"
                       onClick={() => setCategoryForm((f) => ({ ...f, imageUrl: "" }))}
                     >
                       إزالة الصورة
@@ -1335,7 +1357,7 @@ export default function Menu() {
                   )}
                   <Button
                     type="button"
-                    className="h-11 px-5"
+                    className="h-12 px-5 text-[16px] font-bold touch-manipulation"
                     isLoading={isCreatingCategory}
                     onClick={handleCreateCategory}
                   >
@@ -1398,7 +1420,7 @@ export default function Menu() {
                                 setEditForm((f) => ({ ...f, nameAr: e.target.value }))
                               }
                               placeholder="الاسم العربي"
-                              className="h-11 flex-1"
+                              className="h-12 text-[16px] font-bold flex-1"
                               autoFocus
                             />
                             <Input
@@ -1407,67 +1429,65 @@ export default function Menu() {
                                 setEditForm((f) => ({ ...f, name: e.target.value }))
                               }
                               placeholder="English name"
-                              className="h-11 flex-1"
+                              className="h-12 text-[16px] font-bold flex-1"
                             />
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                               <Button
                                 type="button"
                                 variant="ghost"
-                                size="sm"
-                                className="h-11"
+                                className="h-12 text-[16px] font-bold touch-manipulation"
                                 onClick={cancelEditCategory}
                               >
-                                <X className="w-4 h-4 me-1" />
+                                <X className="w-5 h-5 me-1" />
                                 إلغاء
                               </Button>
                               <Button
                                 type="button"
-                                size="sm"
-                                className="h-11"
+                                className="h-12 text-[16px] font-bold touch-manipulation"
                                 isLoading={isUpdatingCategory}
                                 onClick={() => handleSaveEditCategory(cat)}
                               >
-                                <Check className="w-4 h-4 me-1" />
+                                <Check className="w-5 h-5 me-1" />
                                 حفظ
                               </Button>
                             </div>
                           </div>
                           {categoryError && editingCategoryId === cat.id && (
-                            <p className="text-xs font-semibold text-destructive">{categoryError}</p>
+                            <p className="text-[14px] font-bold text-destructive">{categoryError}</p>
                           )}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-h-14">
                           <CategoryImageThumb src={cat.imageUrl} alt={cat.nameAr} />
                           <div className="min-w-0 flex-1">
-                            <p className="font-bold text-foreground truncate">{cat.nameAr}</p>
+                            <p className="text-[16px] font-bold text-foreground truncate">{cat.nameAr}</p>
                             {cat.name && (
-                              <p className="text-xs text-muted-foreground truncate font-display">
+                              <p className="text-[14px] text-muted-foreground truncate font-display">
                                 {cat.name}
                               </p>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
+                          <div className="flex items-center gap-2 flex-shrink-0">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-9 w-9 text-muted-foreground hover:text-primary"
+                              className="h-12 w-12 text-muted-foreground hover:text-primary touch-manipulation"
                               onClick={() => startEditCategory(cat)}
                               aria-label="تعديل التصنيف"
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="w-5 h-5" />
                             </Button>
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                              className="h-12 w-12 text-muted-foreground hover:text-destructive touch-manipulation"
                               disabled={isDeletingCategory}
                               onClick={() => handleDeleteCategory(cat)}
                               aria-label="حذف التصنيف"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-5 h-5" />
                             </Button>
                           </div>
                         </div>
@@ -1495,46 +1515,46 @@ export default function Menu() {
       >
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
+            <label className="text-[16px] font-bold text-foreground mb-1.5 block">
               اسم الوحدة (عربي) *
             </label>
             <Input
               value={newUnitNameAr}
               onChange={(e) => setNewUnitNameAr(e.target.value)}
               placeholder="مثال: كرتون"
-              className="h-11"
+              className="h-12 text-[16px] font-bold"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-xs font-bold text-muted-foreground mb-1.5 block">
+            <label className="text-[16px] font-bold text-foreground mb-1.5 block">
               الاسم (إنجليزي)
             </label>
             <Input
               value={newUnitNameEn}
               onChange={(e) => setNewUnitNameEn(e.target.value)}
               placeholder="e.g. Carton"
-              className="h-11"
+              className="h-12 text-[16px] font-bold"
             />
           </div>
           {unitError ? (
-            <p className="text-xs font-semibold text-destructive">{unitError}</p>
+            <p className="text-[14px] font-bold text-destructive">{unitError}</p>
           ) : null}
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 h-11"
+              className="flex-1 h-12 text-[16px] font-bold touch-manipulation"
               onClick={() => setIsUnitDialogOpen(false)}
               disabled={isCreatingUnit}
             >
               إلغاء
             </Button>
             <Button
-              className="flex-1 h-11 gap-1.5"
+              className="flex-1 h-12 text-[16px] font-bold gap-1.5 touch-manipulation"
               onClick={handleCreateUnit}
               isLoading={isCreatingUnit}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-5 h-5" />
               حفظ الوحدة
             </Button>
           </div>
