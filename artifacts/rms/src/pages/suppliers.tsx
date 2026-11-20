@@ -245,6 +245,11 @@ export default function SuppliersPage() {
     notes: "",
   });
   const [movementError, setMovementError] = useState("");
+  const [movementListFromDate, setMovementListFromDate] = useState(todayDate);
+  const [movementListToDate, setMovementListToDate] = useState(todayDate);
+  const [movementListInvoiceNo, setMovementListInvoiceNo] = useState("");
+  const [movementListSupplierId, setMovementListSupplierId] = useState("");
+  const [movementListAmountType, setMovementListAmountType] = useState("");
 
   // Live clock for new movement form only (not while editing)
   useEffect(() => {
@@ -282,6 +287,19 @@ export default function SuppliersPage() {
       {
         value: "",
         label: "كل الموردين",
+        subtitle: "عرض بدون فلتر",
+        icon: Truck,
+      },
+      ...supplierOptions,
+    ],
+    [supplierOptions]
+  );
+
+  const movementSupplierSearchOptions = useMemo<ComboboxOption[]>(
+    () => [
+      {
+        value: "",
+        label: "كل المندوبين",
         subtitle: "عرض بدون فلتر",
         icon: Truck,
       },
@@ -342,6 +360,48 @@ export default function SuppliersPage() {
     ],
     []
   );
+
+  const movementAmountTypeFilterOptions = useMemo<ComboboxOption[]>(
+    () => [
+      {
+        value: "",
+        label: "كل الأنواع",
+        subtitle: "عرض بدون فلتر",
+        icon: Wallet,
+      },
+      ...amountTypeOptions,
+    ],
+    [amountTypeOptions]
+  );
+
+  const filteredMovements = useMemo(() => {
+    const list = movements ?? [];
+    const invoiceQ = movementListInvoiceNo.trim().toLowerCase();
+    const from = movementListFromDate.trim();
+    const to = movementListToDate.trim();
+    return list.filter((m) => {
+      if (movementListSupplierId && String(m.supplierId) !== movementListSupplierId) {
+        return false;
+      }
+      if (movementListAmountType && m.amountType !== movementListAmountType) {
+        return false;
+      }
+      if (invoiceQ && !String(m.invoiceNo ?? "").toLowerCase().includes(invoiceQ)) {
+        return false;
+      }
+      const d = String(m.movementDate ?? "");
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }, [
+    movements,
+    movementListSupplierId,
+    movementListAmountType,
+    movementListFromDate,
+    movementListToDate,
+    movementListInvoiceNo,
+  ]);
 
   const purchaseTotals = useMemo(() => {
     let totalQty = 0;
@@ -1686,12 +1746,87 @@ export default function SuppliersPage() {
                 <Plus className="w-5 h-5 me-1.5" /> إضافة حركة جديدة
               </Button>
             </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 items-end">
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                  من تاريخ
+                </label>
+                <YmdDateInput
+                  className="h-11 text-[14px] font-bold"
+                  value={movementListFromDate}
+                  onChange={setMovementListFromDate}
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                  إلى تاريخ
+                </label>
+                <YmdDateInput
+                  className="h-11 text-[14px] font-bold"
+                  value={movementListToDate}
+                  onChange={setMovementListToDate}
+                />
+              </div>
+              <div className="min-w-0">
+                <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
+                  رقم الفاتورة
+                </label>
+                <div className="relative">
+                  <Hash className="absolute start-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    className="h-11 ps-8 text-[14px] font-bold"
+                    dir="ltr"
+                    value={movementListInvoiceNo}
+                    onChange={(e) => setMovementListInvoiceNo(e.target.value)}
+                    placeholder="بحث برقم الفاتورة"
+                  />
+                </div>
+              </div>
+              <div className="min-w-0 col-span-2 lg:col-span-1">
+                <ModernCombobox
+                  value={movementListSupplierId}
+                  onChange={setMovementListSupplierId}
+                  options={movementSupplierSearchOptions}
+                  label="المندوب"
+                  placeholder="كل المندوبين"
+                  icon={Truck}
+                  searchable
+                  size="sm"
+                  searchPlaceholder="ابحث عن مندوب..."
+                  emptyText="لا يوجد مندوب مطابق"
+                  labelClassName="text-[14px] font-bold text-foreground"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
+              </div>
+              <div className="min-w-0 col-span-2 lg:col-span-1">
+                <ModernCombobox
+                  value={movementListAmountType}
+                  onChange={setMovementListAmountType}
+                  options={movementAmountTypeFilterOptions}
+                  label="النوع"
+                  placeholder="كل الأنواع"
+                  icon={Wallet}
+                  searchable={false}
+                  size="sm"
+                  labelClassName="text-[14px] font-bold text-foreground"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
+              </div>
+            </div>
+
             {loadingMovements ? (
               <div className="py-8 flex justify-center">
                 <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
               </div>
             ) : (movements ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">لا توجد حركات بعد</p>
+            ) : filteredMovements.length === 0 ? (
+              <p className="text-[14px] font-bold text-muted-foreground text-center py-5">
+                لا توجد حركات مطابقة للبحث
+              </p>
             ) : (
               <div className="overflow-auto rounded-2xl border border-border/40">
                 <table className="w-full text-sm">
@@ -1700,14 +1835,14 @@ export default function SuppliersPage() {
                       <th className="text-center p-3 font-bold">الفاتورة</th>
                       <th className="text-center p-3 font-bold">التاريخ</th>
                       <th className="text-center p-3 font-bold">الساعة</th>
-                      <th className="text-center p-3 font-bold">المورد</th>
+                      <th className="text-center p-3 font-bold">المندوب</th>
                       <th className="text-center p-3 font-bold">النوع</th>
                       <th className="text-center p-3 font-bold">المبلغ</th>
                       <th className="text-center p-3 font-bold">إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(movements ?? []).map((m) => (
+                    {filteredMovements.map((m) => (
                       <tr
                         key={m.id}
                         className={`border-t border-border/30 ${

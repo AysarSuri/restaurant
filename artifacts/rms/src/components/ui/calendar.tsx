@@ -37,7 +37,7 @@ function Calendar({
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         isPicker &&
-          "rounded-2xl bg-[#f3f4f6] p-3.5 text-foreground shadow-none [--cell-size:2.55rem] dark:bg-zinc-900/90",
+          "rounded-2xl bg-[#f3f4f6] p-4 text-foreground shadow-none [--cell-size:3rem] dark:bg-zinc-900/90",
         className
       )}
       captionLayout={captionLayout}
@@ -101,7 +101,7 @@ function Calendar({
             ? "text-sm"
             : "[&>svg]:text-muted-foreground flex h-8 items-center gap-1 rounded-md pl-2 pr-1 text-sm [&>svg]:size-3.5",
           isPicker &&
-            "h-10 w-full justify-between rounded-xl px-3 text-[15px] font-semibold text-zinc-800 [&>svg]:size-4 [&>svg]:text-zinc-500 dark:text-zinc-100",
+            "h-11 w-full justify-between rounded-xl px-3.5 text-[16px] font-semibold text-zinc-800 [&>svg]:size-4.5 [&>svg]:size-[18px] [&>svg]:text-zinc-500 dark:text-zinc-100",
           defaultClassNames.caption_label
         ),
         table: "w-full border-collapse",
@@ -109,7 +109,7 @@ function Calendar({
         weekday: cn(
           "text-muted-foreground flex-1 select-none rounded-md text-[0.8rem] font-normal",
           isPicker &&
-            "text-[13px] font-medium text-zinc-500 dark:text-zinc-400",
+            "text-[14px] font-medium text-zinc-500 dark:text-zinc-400",
           defaultClassNames.weekday
         ),
         week: cn(
@@ -237,7 +237,7 @@ function CalendarDayButton({
       className={cn(
         "data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-ring/50 flex aspect-square h-auto w-full min-w-[--cell-size] flex-col gap-1 font-normal leading-none data-[range-end=true]:rounded-md data-[range-middle=true]:rounded-none data-[range-start=true]:rounded-md group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] [&>span]:text-xs [&>span]:opacity-70",
         picker &&
-          "rounded-full text-[15px] font-semibold text-zinc-800 hover:bg-zinc-200/80 data-[selected-single=true]:bg-[#3b82f6] data-[selected-single=true]:text-white data-[selected-single=true]:hover:bg-[#2563eb] data-[selected-single=true]:shadow-md data-[selected-single=true]:shadow-sky-500/25 group-data-[focused=true]/day:ring-sky-500/35 dark:text-zinc-100 dark:hover:bg-zinc-700/70 touch-manipulation",
+          "rounded-full text-[16px] font-semibold text-zinc-800 hover:bg-zinc-200/80 data-[selected-single=true]:bg-[#3b82f6] data-[selected-single=true]:text-white data-[selected-single=true]:hover:bg-[#2563eb] data-[selected-single=true]:shadow-md data-[selected-single=true]:shadow-sky-500/25 group-data-[focused=true]/day:ring-sky-500/35 dark:text-zinc-100 dark:hover:bg-zinc-700/70 touch-manipulation",
         defaultClassNames.day,
         className
       )}
