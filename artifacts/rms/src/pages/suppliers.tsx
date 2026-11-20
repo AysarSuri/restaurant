@@ -11,7 +11,9 @@ import {
   useDeleteSupplierPurchase,
   useGetSupplierMovements,
   useCreateSupplierMovement,
+  useUpdateSupplierMovement,
   useDeleteSupplierMovement,
+  type SupplierMovement,
   useGetSupplierStatement,
   useGetSupplierDebts,
   useGetMenuItems,
@@ -31,8 +33,13 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
-import { printSupplierPurchaseThermal } from "@/lib/print-receipt";
+import { YmdDateInput } from "@/components/ymd-date-input";
+import {
+  printSupplierPurchaseThermal,
+  printSupplierMovementThermal,
+} from "@/lib/print-receipt";
 import { SupplierReturnsPanel } from "@/components/supplier-returns-panel";
+import { useI18n } from "@/i18n";
 import {
   ArrowLeftRight,
   Building2,
@@ -83,6 +90,12 @@ function balanceLabel(balance: number) {
   if (balance > 0) return "باقي عندنا";
   if (balance < 0) return "باقي عنده";
   return "متوازن";
+}
+
+function movementAmountTypeLabel(type: SupplierAmountType | string) {
+  if (type === "received") return "واصل";
+  if (type === "discount") return "خصم";
+  return "مدفوع";
 }
 
 type PurchaseLine = {
@@ -143,6 +156,7 @@ function apiErrorMessage(error: unknown, fallback: string) {
 
 export default function SuppliersPage() {
   const queryClient = useQueryClient();
+  const { formatDate } = useI18n();
   const [section, setSection] = useState<Section>("hub");
 
   const { data: suppliers, isLoading: loadingSuppliers } = useGetSuppliers();
@@ -164,6 +178,7 @@ export default function SuppliersPage() {
   const { mutate: updatePurchase, isPending: updatingPurchase } = useUpdateSupplierPurchase();
   const { mutate: deletePurchase } = useDeleteSupplierPurchase();
   const { mutate: createMovement, isPending: creatingMovement } = useCreateSupplierMovement();
+  const { mutate: updateMovement, isPending: updatingMovement } = useUpdateSupplierMovement();
   const { mutate: deleteMovement } = useDeleteSupplierMovement();
 
   // ── names ──
@@ -219,6 +234,7 @@ export default function SuppliersPage() {
 
   // ── movement ──
   const [movementFormOpen, setMovementFormOpen] = useState(false);
+  const [editingMovementId, setEditingMovementId] = useState<number | null>(null);
   const [movementForm, setMovementForm] = useState({
     invoiceNo: "",
     movementDate: todayDate(),
@@ -230,9 +246,9 @@ export default function SuppliersPage() {
   });
   const [movementError, setMovementError] = useState("");
 
-  // Live clock for new movement form — same as purchase
+  // Live clock for new movement form only (not while editing)
   useEffect(() => {
-    if (!movementFormOpen) return;
+    if (!movementFormOpen || editingMovementId != null) return;
     const tick = () => {
       const clock = nowTime();
       setMovementForm((f) =>
@@ -242,7 +258,7 @@ export default function SuppliersPage() {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [movementFormOpen]);
+  }, [movementFormOpen, editingMovementId]);
 
   // ── statement ──
   const [statementSupplierId, setStatementSupplierId] = useState(0);
@@ -589,7 +605,8 @@ export default function SuppliersPage() {
     });
   };
 
-  const openNewMovement = () => {
+  const resetMovementForm = () => {
+    setEditingMovementId(null);
     setMovementForm({
       invoiceNo: nextMovementInvoiceNo(movements),
       movementDate: todayDate(),
@@ -600,7 +617,60 @@ export default function SuppliersPage() {
       notes: "",
     });
     setMovementError("");
+  };
+
+  const openNewMovement = () => {
+    resetMovementForm();
     setMovementFormOpen(true);
+  };
+
+  const openEditMovement = (m: SupplierMovement) => {
+    setEditingMovementId(m.id);
+    setMovementForm({
+      invoiceNo: m.invoiceNo,
+      movementDate: m.movementDate,
+      movementTime: m.movementTime || nowTime(),
+      supplierId: String(m.supplierId),
+      amountType: m.amountType,
+      amount: Number(m.amount) || "",
+      notes: m.notes?.trim() || "",
+    });
+    setMovementError("");
+    setMovementFormOpen(true);
+  };
+
+  const printMovementReport = async (m: SupplierMovement) => {
+    let settingsSnap = appSettings;
+    try {
+      const refreshed = await refetchSettings();
+      if (refreshed.data) settingsSnap = refreshed.data;
+    } catch {
+      /* keep cached */
+    }
+    const name = settingsSnap?.restaurantName?.trim() || restaurantName || "المطعم";
+    const logo = settingsSnap?.logoUrl?.trim() || restaurantLogoUrl || "";
+    const phone = settingsSnap?.mobile?.trim() || restaurantMobile || "";
+    const supplier = (suppliers ?? []).find((s) => s.id === m.supplierId);
+    const currentBalance = Number(supplier?.balance) || 0;
+    const amount = Number(m.amount) || 0;
+    // Movements reduce balance — reverse for "old" snapshot
+    const oldBalance = Number((currentBalance + amount).toFixed(2));
+    const newBalance = currentBalance;
+    printSupplierMovementThermal({
+      restaurantName: name,
+      logoUrl: logo || null,
+      mobile: phone || null,
+      invoiceNo: m.invoiceNo,
+      movementDate: m.movementDate,
+      movementTime: m.movementTime,
+      supplierName: m.supplierName || supplier?.name || "—",
+      amountTypeLabel: movementAmountTypeLabel(m.amountType),
+      amount,
+      notes: m.notes,
+      oldBalance,
+      newBalance,
+      formatMoney: fmtMoney,
+    });
   };
 
   const saveMovement = () => {
@@ -609,37 +679,42 @@ export default function SuppliersPage() {
       return setMovementError("أدخل مبلغاً أكبر من صفر");
     }
     setMovementError("");
-    const invoiceNo = nextMovementInvoiceNo(movements);
-    createMovement(
-      {
-        invoiceNo,
-        movementDate: movementForm.movementDate,
-        movementTime: movementForm.movementTime,
-        supplierId: Number(movementForm.supplierId),
-        amountType: movementForm.amountType,
-        amount: Number(movementForm.amount),
-        notes: movementForm.notes.trim(),
+    const body = {
+      invoiceNo:
+        editingMovementId != null
+          ? movementForm.invoiceNo
+          : nextMovementInvoiceNo(movements),
+      movementDate: movementForm.movementDate,
+      movementTime: movementForm.movementTime,
+      supplierId: Number(movementForm.supplierId),
+      amountType: movementForm.amountType,
+      amount: Number(movementForm.amount),
+      notes: movementForm.notes.trim(),
+    };
+
+    if (editingMovementId != null) {
+      updateMovement(
+        { id: editingMovementId, data: body },
+        {
+          onSuccess: () => {
+            setMovementFormOpen(false);
+            resetMovementForm();
+            invalidateAll();
+          },
+          onError: (e) => setMovementError(apiErrorMessage(e, "تعذر تعديل الحركة")),
+        }
+      );
+      return;
+    }
+
+    createMovement(body, {
+      onSuccess: () => {
+        setMovementFormOpen(false);
+        resetMovementForm();
+        invalidateAll();
       },
-      {
-        onSuccess: () => {
-          setMovementFormOpen(false);
-          setMovementForm({
-            invoiceNo: nextMovementInvoiceNo([
-              ...(movements ?? []),
-              { invoiceNo } as { invoiceNo: string },
-            ]),
-            movementDate: todayDate(),
-            movementTime: nowTime(),
-            supplierId: "",
-            amountType: "paid",
-            amount: "",
-            notes: "",
-          });
-          invalidateAll();
-        },
-        onError: (e) => setMovementError(apiErrorMessage(e, "تعذر حفظ الحركة")),
-      }
-    );
+      onError: (e) => setMovementError(apiErrorMessage(e, "تعذر حفظ الحركة")),
+    });
   };
 
   const printBlock = (title: string, html: string) => {
@@ -721,7 +796,7 @@ export default function SuppliersPage() {
     const rows = statement.lines
       .map(
         (l) =>
-          `<tr><td>${l.date || "—"} ${l.time || ""}</td><td>${l.invoiceNo}</td><td>${l.description}</td><td>${fmtMoney(l.debit)}</td><td>${fmtMoney(l.credit)}</td><td>${fmtMoney(l.balance)}</td></tr>`
+          `<tr><td dir="ltr">${l.date ? formatDate(l.date) : "—"} ${l.time || ""}</td><td>${l.invoiceNo}</td><td>${l.description}</td><td>${fmtMoney(l.debit)}</td><td>${fmtMoney(l.credit)}</td><td>${fmtMoney(l.balance)}</td></tr>`
       )
       .join("");
     printBlock(
@@ -1025,13 +1100,11 @@ export default function SuppliersPage() {
                 <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   التاريخ *
                 </label>
-                <Input
-                  type="date"
+                <YmdDateInput
                   className="h-10 text-[14px] font-bold"
-                  dir="ltr"
                   value={purchaseForm.invoiceDate}
-                  onChange={(e) =>
-                    setPurchaseForm((f) => ({ ...f, invoiceDate: e.target.value }))
+                  onChange={(invoiceDate) =>
+                    setPurchaseForm((f) => ({ ...f, invoiceDate }))
                   }
                 />
               </div>
@@ -1358,24 +1431,20 @@ export default function SuppliersPage() {
                 <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   من تاريخ
                 </label>
-                <Input
-                  type="date"
+                <YmdDateInput
                   className="h-11 text-[14px] font-bold"
-                  dir="ltr"
                   value={purchaseListFromDate}
-                  onChange={(e) => setPurchaseListFromDate(e.target.value)}
+                  onChange={setPurchaseListFromDate}
                 />
               </div>
               <div className="min-w-0">
                 <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   إلى تاريخ
                 </label>
-                <Input
-                  type="date"
+                <YmdDateInput
                   className="h-11 text-[14px] font-bold"
-                  dir="ltr"
                   value={purchaseListToDate}
-                  onChange={(e) => setPurchaseListToDate(e.target.value)}
+                  onChange={setPurchaseListToDate}
                 />
               </div>
               <div className="min-w-0">
@@ -1449,8 +1518,8 @@ export default function SuppliersPage() {
                           }`}
                         >
                           <td className="p-2.5 text-center font-mono font-bold">{p.invoiceNo}</td>
-                          <td className="p-2.5 text-center font-bold" dir="ltr">
-                            {p.invoiceDate}
+                          <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
+                            {formatDate(p.invoiceDate)}
                           </td>
                           <td className="p-2.5 text-center font-bold">{p.supplierName || "—"}</td>
                           <td className="p-2.5 text-center font-bold" dir="ltr">
@@ -1523,8 +1592,8 @@ export default function SuppliersPage() {
                           <p className="text-[15px] font-extrabold">
                             #{p.invoiceNo} — {p.supplierName || "—"}
                           </p>
-                          <p className="text-[13px] font-bold text-muted-foreground" dir="ltr">
-                            {p.invoiceDate}
+                          <p className="text-[13px] font-bold text-muted-foreground tabular-nums" dir="ltr">
+                            {formatDate(p.invoiceDate)}
                           </p>
                         </div>
                       </div>
@@ -1628,45 +1697,77 @@ export default function SuppliersPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-secondary/50 text-primary">
                     <tr>
-                      <th className="text-start p-3">الفاتورة</th>
-                      <th className="text-start p-3">التاريخ</th>
-                      <th className="text-start p-3">المورد</th>
-                      <th className="text-start p-3">النوع</th>
-                      <th className="text-start p-3">المبلغ</th>
-                      <th className="text-end p-3">حذف</th>
+                      <th className="text-center p-3 font-bold">الفاتورة</th>
+                      <th className="text-center p-3 font-bold">التاريخ</th>
+                      <th className="text-center p-3 font-bold">الساعة</th>
+                      <th className="text-center p-3 font-bold">المورد</th>
+                      <th className="text-center p-3 font-bold">النوع</th>
+                      <th className="text-center p-3 font-bold">المبلغ</th>
+                      <th className="text-center p-3 font-bold">إجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(movements ?? []).map((m) => (
-                      <tr key={m.id} className="border-t border-border/30">
-                        <td className="p-3 font-bold">{m.invoiceNo}</td>
-                        <td className="p-3">
-                          {m.movementDate} {m.movementTime}
+                      <tr
+                        key={m.id}
+                        className={`border-t border-border/30 ${
+                          editingMovementId === m.id ? "bg-primary/5" : ""
+                        }`}
+                      >
+                        <td className="p-3 text-center font-mono font-bold">{m.invoiceNo}</td>
+                        <td className="p-3 text-center font-bold tabular-nums" dir="ltr">
+                          {formatDate(m.movementDate)}
                         </td>
-                        <td className="p-3">{m.supplierName}</td>
-                        <td className="p-3">
-                          {m.amountType === "paid"
-                            ? "مدفوع"
-                            : m.amountType === "received"
-                              ? "واصل"
-                              : "خصم"}
+                        <td className="p-3 text-center font-bold tabular-nums font-mono" dir="ltr">
+                          {m.movementTime}
                         </td>
-                        <td className="p-3 font-bold" dir="ltr">
+                        <td className="p-3 text-center font-bold">{m.supplierName}</td>
+                        <td className="p-3 text-center font-bold">
+                          {movementAmountTypeLabel(m.amountType)}
+                        </td>
+                        <td className="p-3 text-center font-bold" dir="ltr">
                           {fmtMoney(m.amount)}
                         </td>
-                        <td className="p-3 text-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-10 w-10 text-destructive"
-                            onClick={() => {
-                              if (!confirm("حذف الحركة؟")) return;
-                              deleteMovement({ id: m.id }, { onSuccess: invalidateAll });
-                            }}
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </Button>
+                        <td className="p-3">
+                          <div className="flex justify-center gap-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-11 w-11 text-muted-foreground hover:text-primary touch-manipulation"
+                              title="تعديل"
+                              onClick={() => openEditMovement(m)}
+                            >
+                              <Pencil className="w-5 h-5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-11 w-11 text-muted-foreground hover:text-primary touch-manipulation"
+                              title="تقرير حراري 80×80"
+                              onClick={() => void printMovementReport(m)}
+                            >
+                              <Printer className="w-5 h-5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-11 w-11 text-destructive touch-manipulation"
+                              title="حذف"
+                              onClick={() => {
+                                if (!confirm("حذف الحركة؟")) return;
+                                if (editingMovementId === m.id) {
+                                  setMovementFormOpen(false);
+                                  resetMovementForm();
+                                }
+                                deleteMovement({ id: m.id }, { onSuccess: invalidateAll });
+                              }}
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1755,8 +1856,8 @@ export default function SuppliersPage() {
                   <tbody>
                     {statement.lines.map((l) => (
                       <tr key={l.id} className="border-t border-border/30">
-                        <td className="p-3">
-                          {l.date || "—"} {l.time}
+                        <td className="p-3 tabular-nums" dir="ltr">
+                          {l.date ? formatDate(l.date) : "—"} {l.time}
                         </td>
                         <td className="p-3 font-bold">{l.invoiceNo}</td>
                         <td className="p-3">{l.description}</td>
@@ -1969,8 +2070,11 @@ export default function SuppliersPage() {
 
       <Dialog
         isOpen={movementFormOpen}
-        onClose={() => setMovementFormOpen(false)}
-        title="إضافة حركة مورد جديدة"
+        onClose={() => {
+          setMovementFormOpen(false);
+          resetMovementForm();
+        }}
+        title={editingMovementId != null ? "تعديل حركة مورد" : "إضافة حركة مورد جديدة"}
         maxWidth="max-w-2xl"
       >
         <div className="space-y-3.5 touch-ui">
@@ -1990,20 +2094,20 @@ export default function SuppliersPage() {
                 />
               </div>
               <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
-                يُولَّد تلقائياً من 1 ويزيد بدون تكرار
+                {editingMovementId != null
+                  ? "رقم الفاتورة ثابت ولا يتغير عند التعديل"
+                  : "يُولَّد تلقائياً من 1 ويزيد بدون تكرار"}
               </p>
             </div>
             <div>
               <label className="text-[16px] font-bold text-foreground mb-1.5 block">
                 التاريخ *
               </label>
-              <Input
-                type="date"
-                className="h-12 text-[16px] font-bold"
-                dir="ltr"
+              <YmdDateInput
+                className="h-12 text-[16px] font-bold tabular-nums tracking-wide"
                 value={movementForm.movementDate}
-                onChange={(e) =>
-                  setMovementForm((f) => ({ ...f, movementDate: e.target.value }))
+                onChange={(movementDate) =>
+                  setMovementForm((f) => ({ ...f, movementDate }))
                 }
               />
             </div>
@@ -2085,17 +2189,20 @@ export default function SuppliersPage() {
               type="button"
               variant="outline"
               className="flex-1 h-12 rounded-full text-[16px] font-bold touch-manipulation"
-              onClick={() => setMovementFormOpen(false)}
+              onClick={() => {
+                setMovementFormOpen(false);
+                resetMovementForm();
+              }}
             >
               إلغاء
             </Button>
             <Button
               type="button"
               className="flex-1 h-12 rounded-full text-[16px] font-bold touch-manipulation"
-              disabled={creatingMovement}
+              disabled={creatingMovement || updatingMovement}
               onClick={saveMovement}
             >
-              حفظ الحركة
+              {editingMovementId != null ? "حفظ التعديلات" : "حفظ الحركة"}
             </Button>
           </div>
         </div>

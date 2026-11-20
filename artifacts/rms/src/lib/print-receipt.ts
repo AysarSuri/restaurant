@@ -1,3 +1,5 @@
+import { formatDisplayDateForApp } from "@/lib/date-format";
+
 export type ReceiptLineItem = {
   name: string;
   quantity: number;
@@ -203,7 +205,7 @@ function buildReceiptHtml(data: ThermalReceiptData) {
     </p>
     <hr class="rule" />
     <div class="row"><span>رقم الفاتورة</span><span>${esc(data.invoiceNumber)}</span></div>
-    <div class="row"><span>التاريخ</span><span>${esc(data.dateLabel)}</span></div>
+    <div class="row"><span>التاريخ</span><span dir="ltr">${esc(data.dateLabel)}</span></div>
     <div class="row"><span>الوقت</span><span>${esc(data.timeLabel)}</span></div>
     <div class="row"><span>نوع الطلب</span><span>${esc(data.orderTypeLabel)}</span></div>
     ${data.seatLabel ? `<div class="row"><span>المكان</span><span>${esc(data.seatLabel)}</span></div>` : ""}
@@ -614,7 +616,7 @@ function buildSupplierPurchaseHtml(data: SupplierPurchaseReceiptData) {
     <p class="doc-title">${esc(data.docTitle?.trim() || "فاتورة شراء من المورد")}</p>
     <hr class="rule" />
     <div class="row"><span>رقم الفاتورة</span><span>${esc(data.invoiceNo)}</span></div>
-    <div class="row"><span>التاريخ</span><span>${esc(data.invoiceDate)}</span></div>
+    <div class="row"><span>التاريخ</span><span dir="ltr">${esc(formatDisplayDateForApp(data.invoiceDate, data.invoiceDate))}</span></div>
     <div class="row"><span>الساعة</span><span>${esc(data.invoiceTime)}</span></div>
     <div class="row"><span>المورد</span><span>${esc(data.supplierName)}</span></div>
     ${
@@ -690,6 +692,291 @@ export function printSupplierPurchaseThermal(data: SupplierPurchaseReceiptData) 
   URL.revokeObjectURL(url);
   const iframe = document.createElement("iframe");
   iframe.title = "فاتورة شراء 80×80";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;left:-10000px;top:0;width:80mm;height:1400px;border:0;opacity:0;pointer-events:none;z-index:-1;";
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument || win?.document;
+  if (!win || !doc) {
+    iframe.remove();
+    throw new Error("تعذر تجهيز نافذة الطباعة — افتح النظام في المتصفح واسمح بالنوافذ المنبثقة");
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  void waitForImages(doc).then(() => {
+    window.setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } finally {
+        window.setTimeout(() => iframe.remove(), 1500);
+      }
+    }, 100);
+  });
+}
+
+export type SupplierMovementReceiptData = {
+  restaurantName: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
+  invoiceNo: string;
+  movementDate: string;
+  movementTime: string;
+  supplierName: string;
+  amountTypeLabel: string;
+  amount: number;
+  notes?: string | null;
+  oldBalance: number;
+  newBalance: number;
+  formatMoney: (n: number) => string;
+};
+
+function buildSupplierMovementHtml(data: SupplierMovementReceiptData) {
+  const oldParty = purchaseBalancePartyLabel(
+    data.oldBalance,
+    data.supplierName,
+    data.restaurantName
+  );
+  const newParty = purchaseBalancePartyLabel(
+    data.newBalance,
+    data.supplierName,
+    data.restaurantName
+  );
+  const rawLogo = data.logoUrl?.trim() || "";
+  const logoSrc = rawLogo.replace(/"/g, "");
+  const logo = logoSrc ? `<img class="logo" src="${logoSrc}" alt="" />` : "";
+  const phone = data.mobile?.trim() || "";
+  const dateLabel = formatDisplayDateForApp(data.movementDate, data.movementDate);
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>حركة مورد ${esc(data.invoiceNo)} — 80×80</title>
+  <style>
+    @page { size: 80mm auto; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: #fff;
+      color: #000;
+      font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Arial", sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body { width: 80mm; }
+    .ticket {
+      width: 72mm;
+      margin: 0 auto;
+      padding: 3.5mm 4mm 4.5mm;
+      color: #000;
+    }
+    .identity { text-align: center; margin-bottom: 2.5mm; }
+    .logo {
+      display: block;
+      max-width: 22mm;
+      max-height: 18mm;
+      margin: 0 auto 1.5mm;
+      object-fit: contain;
+    }
+    .brand {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      line-height: 1.25;
+      color: #000;
+    }
+    .phone {
+      margin-top: 0.8mm;
+      font-size: 12px;
+      font-weight: 700;
+      color: #000;
+      direction: ltr;
+      unicode-bidi: plaintext;
+    }
+    .doc-title {
+      margin: 2mm 0 2.2mm;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: #000;
+      letter-spacing: 0.04em;
+    }
+    .rule {
+      border: 0;
+      border-top: 1.4px solid #000;
+      margin: 1.8mm 0;
+    }
+    .rule-soft {
+      border: 0;
+      border-top: 1px dashed #222;
+      margin: 1.6mm 0;
+    }
+    .meta { display: grid; gap: 1.2mm; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 2mm;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #000;
+      line-height: 1.35;
+    }
+    .row span:last-child {
+      font-weight: 800;
+      text-align: left;
+      direction: ltr;
+      unicode-bidi: plaintext;
+      white-space: nowrap;
+    }
+    .row .label { font-weight: 700; color: #000; }
+    .amount-card {
+      margin: 2.2mm 0;
+      padding: 2.4mm 2.2mm;
+      border: 1.6px solid #000;
+      border-radius: 1.6mm;
+      text-align: center;
+    }
+    .amount-card .kicker {
+      font-size: 11px;
+      font-weight: 700;
+      color: #000;
+      margin-bottom: 0.8mm;
+    }
+    .amount-card .value {
+      font-size: 18px;
+      font-weight: 900;
+      color: #000;
+      letter-spacing: 0.03em;
+      direction: ltr;
+      unicode-bidi: plaintext;
+    }
+    .amount-card .type {
+      margin-top: 1mm;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #000;
+    }
+    .balance-box {
+      margin-top: 1.5mm;
+      padding: 1.8mm 1.6mm;
+      border: 1px solid #111;
+      border-radius: 1.4mm;
+    }
+    .balance-box .row {
+      font-size: 12px;
+      margin: 0.6mm 0;
+    }
+    .party {
+      display: block;
+      font-size: 10.5px;
+      font-weight: 700;
+      opacity: 0.85;
+      margin-top: 0.3mm;
+    }
+    .notes {
+      margin-top: 1.6mm;
+      font-size: 12px;
+      font-weight: 700;
+      color: #000;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .footer {
+      margin-top: 3mm;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: #000;
+      letter-spacing: 0.06em;
+    }
+    @media print {
+      html, body { width: 80mm; }
+      .ticket { width: 72mm; padding-left: 4mm; padding-right: 4mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="identity">
+      ${logo}
+      <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
+      ${phone ? `<p class="phone">${esc(phone)}</p>` : ""}
+    </div>
+    <p class="doc-title">حركة مورد</p>
+    <hr class="rule" />
+    <div class="meta">
+      <div class="row"><span class="label">رقم الفاتورة</span><span>${esc(data.invoiceNo)}</span></div>
+      <div class="row"><span class="label">التاريخ</span><span>${esc(dateLabel)}</span></div>
+      <div class="row"><span class="label">الساعة</span><span>${esc(data.movementTime)}</span></div>
+      <div class="row"><span class="label">المورد</span><span style="white-space:normal;text-align:start;direction:rtl">${esc(data.supplierName)}</span></div>
+    </div>
+    <div class="amount-card">
+      <div class="kicker">المبلغ</div>
+      <div class="value">${esc(data.formatMoney(data.amount))}</div>
+      <div class="type">${esc(data.amountTypeLabel)}</div>
+    </div>
+    <hr class="rule-soft" />
+    <div class="balance-box">
+      <div class="row">
+        <span>رصيد قديم<span class="party">${esc(oldParty)}</span></span>
+        <span>${esc(data.formatMoney(Math.abs(data.oldBalance)))}</span>
+      </div>
+      <div class="row">
+        <span>باقي الرصيد<span class="party">${esc(newParty)}</span></span>
+        <span>${esc(data.formatMoney(Math.abs(data.newBalance)))}</span>
+      </div>
+    </div>
+    ${
+      data.notes?.trim()
+        ? `<p class="notes"><strong>ملاحظة:</strong> ${esc(data.notes.trim())}</p>`
+        : ""
+    }
+    <p class="footer">شكراً لتعاملكم</p>
+  </div>
+</body>
+</html>`;
+}
+
+/** Professional supplier movement voucher for 80mm thermal paper */
+export function printSupplierMovementThermal(data: SupplierMovementReceiptData) {
+  const html = buildSupplierMovementHtml(data);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const popup = window.open(
+    url,
+    "rms-supplier-movement-receipt",
+    "width=420,height=760,left=80,top=40"
+  );
+
+  if (popup) {
+    let printed = false;
+    const start = () => {
+      if (printed) return;
+      printed = true;
+      printFromWindow(popup);
+      window.setTimeout(() => URL.revokeObjectURL(url), 8000);
+    };
+    popup.onload = start;
+    window.setTimeout(() => {
+      try {
+        if (popup.document?.readyState === "complete") start();
+      } catch {
+        start();
+      }
+    }, 400);
+    return;
+  }
+
+  URL.revokeObjectURL(url);
+  const iframe = document.createElement("iframe");
+  iframe.title = "حركة مورد 80×80";
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
     "position:fixed;left:-10000px;top:0;width:80mm;height:1400px;border:0;opacity:0;pointer-events:none;z-index:-1;";

@@ -13,7 +13,9 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { YmdDateInput } from "@/components/ymd-date-input";
 import { printSupplierPurchaseThermal } from "@/lib/print-receipt";
+import { useI18n } from "@/i18n";
 import {
   Hash,
   Package,
@@ -95,6 +97,7 @@ export function SupplierReturnsPanel({
   restaurantMobile,
   onInvalidate,
 }: Props) {
+  const { formatDate } = useI18n();
   const queryClient = useQueryClient();
   const { data: returns, isLoading: loadingReturns } = useGetSupplierReturns();
   const { mutate: createReturn, isPending: creatingReturn } = useCreateSupplierReturn();
@@ -401,12 +404,10 @@ export function SupplierReturnsPanel({
             <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
               التاريخ *
             </label>
-            <Input
-              type="date"
+            <YmdDateInput
               className="h-10 text-[14px] font-bold"
-              dir="ltr"
               value={form.invoiceDate}
-              onChange={(e) => setForm((f) => ({ ...f, invoiceDate: e.target.value }))}
+              onChange={(invoiceDate) => setForm((f) => ({ ...f, invoiceDate }))}
             />
           </div>
           <div className="min-w-0">
@@ -723,24 +724,20 @@ export function SupplierReturnsPanel({
             <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
               من تاريخ
             </label>
-            <Input
-              type="date"
+            <YmdDateInput
               className="h-11 text-[14px] font-bold"
-              dir="ltr"
               value={listFromDate}
-              onChange={(e) => setListFromDate(e.target.value)}
+              onChange={setListFromDate}
             />
           </div>
           <div className="min-w-0">
             <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
               إلى تاريخ
             </label>
-            <Input
-              type="date"
+            <YmdDateInput
               className="h-11 text-[14px] font-bold"
-              dir="ltr"
               value={listToDate}
-              onChange={(e) => setListToDate(e.target.value)}
+              onChange={setListToDate}
             />
           </div>
           <div className="min-w-0">
@@ -813,8 +810,8 @@ export function SupplierReturnsPanel({
                       }`}
                     >
                       <td className="p-2.5 text-center font-mono font-bold">{p.invoiceNo}</td>
-                      <td className="p-2.5 text-center font-bold" dir="ltr">
-                        {p.invoiceDate}
+                      <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
+                        {formatDate(p.invoiceDate)}
                       </td>
                       <td className="p-2.5 text-center font-bold">{p.supplierName || "—"}</td>
                       <td className="p-2.5 text-center font-bold" dir="ltr">
@@ -886,8 +883,8 @@ export function SupplierReturnsPanel({
                       <p className="text-[15px] font-extrabold">
                         #{p.invoiceNo} — {p.supplierName || "—"}
                       </p>
-                      <p className="text-[13px] font-bold text-muted-foreground" dir="ltr">
-                        {p.invoiceDate}
+                      <p className="text-[13px] font-bold text-muted-foreground tabular-nums" dir="ltr">
+                        {formatDate(p.invoiceDate)}
                       </p>
                     </div>
                   </div>

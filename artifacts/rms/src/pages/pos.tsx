@@ -135,13 +135,6 @@ function formatClock(date: Date) {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
 
-function formatDateAr(date: Date) {
-  const day = pad2(date.getDate());
-  const month = pad2(date.getMonth() + 1);
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
-
 interface CartItem extends MenuItem {
   cartQuantity: number;
   price: number;
@@ -176,7 +169,7 @@ function menuItemDisplayName(
 }
 
 export default function POS() {
-  const { t, locale } = useI18n();
+  const { t, locale, formatDate } = useI18n();
   const queryClient = useQueryClient();
   const { selectedBranchId, branchLabel } = useBranch();
   const { data: categories } = useGetMenuCategories();
@@ -364,7 +357,7 @@ export default function POS() {
   const formatIQD = (val: number) => formatValue(val);
 
   const liveClock = formatClock(now);
-  const liveDate = formatDateAr(now);
+  const liveDate = formatDate(now);
 
   const filteredItems = items
     ?.filter((item) => {
@@ -648,7 +641,7 @@ export default function POS() {
       address: currentBranch?.address,
       logoUrl: currentBranch?.logoUrl,
       invoiceNumber,
-      dateLabel: formatDateAr(nowStamp),
+      dateLabel: formatDate(nowStamp),
       timeLabel: formatClock(nowStamp),
       orderTypeLabel: orderTypeLabels[orderType],
       seatLabel: orderType === "dine_in" ? seatLabel(selectedTable, t) : null,

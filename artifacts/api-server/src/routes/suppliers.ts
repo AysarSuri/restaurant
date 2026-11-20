@@ -907,6 +907,57 @@ router.post("/movements", async (req, res) => {
   res.status(201).json(full);
 });
 
+router.put("/movements/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const [existing] = await db
+    .select()
+    .from(supplierMovementsTable)
+    .where(eq(supplierMovementsTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "الحركة غير موجودة" });
+
+  const movementDate = normalizeDate(req.body?.movementDate) ?? existing.movementDate;
+  const movementTime = normalizeTime(req.body?.movementTime) ?? existing.movementTime;
+  const supplierId = Number(req.body?.supplierId);
+  const amountType = String(req.body?.amountType ?? existing.amountType).trim();
+  const amount = num(req.body?.amount);
+  const notes = String(req.body?.notes ?? "").trim() || null;
+
+  if (!Number.isFinite(supplierId) || supplierId <= 0) {
+    return res.status(400).json({ message: "اختر المورد" });
+  }
+  if (!AMOUNT_TYPES.has(amountType)) {
+    return res.status(400).json({ message: "نوع المبلغ غير صالح" });
+  }
+  if (!(amount > 0)) return res.status(400).json({ message: "المبلغ يجب أن يكون أكبر من صفر" });
+
+  const [supplier] = await db
+    .select()
+    .from(suppliersTable)
+    .where(eq(suppliersTable.id, supplierId))
+    .limit(1);
+  if (!supplier) return res.status(400).json({ message: "المورد غير موجود" });
+
+  const [row] = await db
+    .update(supplierMovementsTable)
+    .set({
+      // invoice number stays locked after create
+      movementDate,
+      movementTime,
+      supplierId,
+      amountType,
+      amount: money(amount),
+      notes,
+    })
+    .where(eq(supplierMovementsTable.id, id))
+    .returning();
+
+  const [full] = await enrichMovements([row]);
+  res.json(full);
+});
+
 router.delete("/movements/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });

@@ -17,6 +17,8 @@ import {
   ToggleLeft, ToggleRight, AlertTriangle, Building2, Check,
 } from "lucide-react";
 import type { Employee } from "@workspace/api-client-react";
+import { YmdDateInput } from "@/components/ymd-date-input";
+import { useI18n } from "@/i18n";
 
 const ROLES: { value: string; label: string; color: string }[] = [
   { value: "admin",   label: "مدير النظام",   color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
@@ -52,6 +54,7 @@ const EMPTY_FORM = {
 type FormData = typeof EMPTY_FORM;
 
 export default function Employees() {
+  const { formatDate } = useI18n();
   const { data: employees, isLoading, refetch } = useGetEmployees();
   const { data: branches } = useGetBranches({
     query: { staleTime: 60_000, refetchOnMount: false },
@@ -258,7 +261,7 @@ export default function Employees() {
                   <div><span className="text-muted-foreground text-xs">الهاتف: </span><span dir="ltr">{emp.phone || "—"}</span></div>
                   <div><span className="text-muted-foreground text-xs">الراتب: </span><span className="text-green-400 font-bold">{formatIQD(emp.salary)}</span></div>
                   <div className="col-span-2"><span className="text-muted-foreground text-xs">الفرع: </span><span className="font-semibold">{branchLabel(emp)}</span></div>
-                  <div><span className="text-muted-foreground text-xs">التعيين: </span>{emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-IQ") : "—"}</div>
+                  <div><span className="text-muted-foreground text-xs">التعيين: </span><span dir="ltr" className="tabular-nums">{emp.hireDate ? formatDate(emp.hireDate) : "—"}</span></div>
                   <div className="truncate"><span className="text-muted-foreground text-xs">البريد: </span><span dir="ltr" className="text-xs">{emp.email || "—"}</span></div>
                 </div>
                 <div className="flex gap-2 pt-1">
@@ -343,8 +346,8 @@ export default function Employees() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground font-display">
-                          {emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-IQ") : "—"}
+                        <span className="text-sm text-muted-foreground font-display tabular-nums" dir="ltr">
+                          {emp.hireDate ? formatDate(emp.hireDate) : "—"}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -530,11 +533,9 @@ export default function Employees() {
                 <CalendarDays className="w-4 h-4 inline me-1 text-primary" />
                 تاريخ التعيين
               </label>
-              <Input
-                type="date"
+              <YmdDateInput
                 value={form.hireDate}
-                onChange={(e) => set("hireDate", e.target.value)}
-                dir="ltr"
+                onChange={(hireDate) => set("hireDate", hireDate)}
               />
             </div>
           </div>

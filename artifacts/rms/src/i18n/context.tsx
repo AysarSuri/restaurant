@@ -7,6 +7,11 @@ import {
   type MessageParams,
 } from "./types";
 import { messages } from "./messages";
+import {
+  formatDisplayDate,
+  formatDisplayDateTime,
+  usesYmdSlash,
+} from "@/lib/date-format";
 
 type I18nContextValue = {
   locale: Locale;
@@ -14,6 +19,10 @@ type I18nContextValue = {
   setLocale: (locale: Locale) => void;
   t: (key: string, params?: MessageParams) => string;
   dateLocale: string;
+  /** ar/ku → yyyy/mm/dd; en → short locale date */
+  formatDate: (value: string | Date | null | undefined, fallback?: string) => string;
+  formatDateTime: (value: string | Date | null | undefined, fallback?: string) => string;
+  usesYmdSlash: boolean;
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -79,6 +88,18 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   const meta = LOCALES.find((l) => l.id === locale) ?? LOCALES[0];
 
+  const formatDate = useCallback(
+    (value: string | Date | null | undefined, fallback = "—") =>
+      formatDisplayDate(value, locale, fallback),
+    [locale]
+  );
+
+  const formatDateTime = useCallback(
+    (value: string | Date | null | undefined, fallback = "—") =>
+      formatDisplayDateTime(value, locale, fallback),
+    [locale]
+  );
+
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,
@@ -86,8 +107,11 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       setLocale,
       t,
       dateLocale: meta.dateLocale,
+      formatDate,
+      formatDateTime,
+      usesYmdSlash: usesYmdSlash(locale),
     }),
-    [locale, meta.dir, meta.dateLocale, setLocale, t]
+    [locale, meta.dir, meta.dateLocale, setLocale, t, formatDate, formatDateTime]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

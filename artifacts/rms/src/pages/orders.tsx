@@ -7,7 +7,7 @@ import { useI18n } from "@/i18n";
 
 export default function Orders() {
   const { data: orders, isLoading } = useGetOrders();
-  const { t, dateLocale } = useI18n();
+  const { t, formatDateTime } = useI18n();
 
   const columns = [
     { key: "orderNumber", header: t("orders.number"), render: (item: Order) => <span className="font-display font-bold text-primary">#{item.orderNumber.slice(-6)}</span> },
@@ -18,7 +18,7 @@ export default function Orders() {
         {item.status}
       </Badge>
     )},
-    { key: "createdAt", header: t("common.time"), render: (item: Order) => <span className="font-display">{new Date(item.createdAt).toLocaleString(dateLocale)}</span> }
+    { key: "createdAt", header: t("common.time"), render: (item: Order) => <span className="font-display tabular-nums" dir="ltr">{formatDateTime(item.createdAt)}</span> }
   ];
 
   return (

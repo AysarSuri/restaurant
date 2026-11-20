@@ -24,7 +24,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { branchLabel } = useBranch();
-  const { t, dateLocale } = useI18n();
+  const { t, dateLocale, formatDate, usesYmdSlash } = useI18n();
   const { data: appSettings } = useGetSettings({
     query: { staleTime: 60_000, refetchOnWindowFocus: false },
   });
@@ -113,11 +113,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   const day = String(d.getDate()).padStart(2, "0");
                   const month = String(d.getMonth() + 1).padStart(2, "0");
                   const year = d.getFullYear();
+                  const numeric = usesYmdSlash
+                    ? formatDate(d)
+                    : `${day}/${month}/${year}`;
                   return (
                     <>
                       {weekday}{" "}
-                      <span className="font-display" dir="ltr">
-                        {day}/{month}/{year}
+                      <span className="font-display tabular-nums" dir="ltr">
+                        {numeric}
                       </span>
                     </>
                   );

@@ -408,6 +408,24 @@ export function useCreateSupplierMovement(
   });
 }
 
+export function useUpdateSupplierMovement(
+  options?: UseMutationOptions<
+    SupplierMovement,
+    ErrorType<unknown>,
+    { id: number; data: BodyType<CreateSupplierMovementBody> }
+  >
+) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      customFetch<SupplierMovement>(`${base}/movements/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      }),
+    ...options,
+  });
+}
+
 export function useDeleteSupplierMovement(
   options?: UseMutationOptions<{ ok: boolean }, ErrorType<unknown>, { id: number }>
 ) {
