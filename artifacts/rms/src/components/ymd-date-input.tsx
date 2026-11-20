@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
-import { Input, cn } from "@/components/ui-elements";
+import { cn } from "@/components/ui-elements";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useI18n } from "@/i18n";
-import { parseDateParts, toIsoDate, usesYmdSlash } from "@/lib/date-format";
+import { parseDateParts, toIsoDate } from "@/lib/date-format";
 
 type YmdDateInputProps = {
   value: string;
@@ -54,8 +53,11 @@ function normalizeParts(parts: DatePartsState): DatePartsState {
   return { year, month, day };
 }
 
+const PICKER_START = new Date(2000, 0);
+const PICKER_END = new Date(2100, 11);
+
 /**
- * Three boxes: Year / Month / Day (LTR) for Arabic & Kurdish.
+ * Three boxes Year / Month / Day (LTR) + modern calendar picker.
  * Value stays ISO yyyy-mm-dd for the API.
  */
 export function YmdDateInput({
@@ -66,10 +68,11 @@ export function YmdDateInput({
   disabled,
   required,
 }: YmdDateInputProps) {
-  const { locale } = useI18n();
-  const slashYmd = usesYmdSlash(locale);
   const [open, setOpen] = useState(false);
   const [parts, setParts] = useState<DatePartsState>(() => partsFromIso(value));
+  const [calendarMonth, setCalendarMonth] = useState<Date>(
+    () => isoToDate(value) ?? new Date()
+  );
   const yearRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
   const dayRef = useRef<HTMLInputElement>(null);
@@ -81,6 +84,11 @@ export function YmdDateInput({
   }, [value]);
 
   const selected = useMemo(() => isoToDate(value), [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    setCalendarMonth(selected ?? new Date());
+  }, [open, selected]);
 
   const tryCommit = (next: DatePartsState) => {
     const normalized = normalizeParts(next);
@@ -163,22 +171,6 @@ export function YmdDateInput({
     }
   };
 
-  if (!slashYmd) {
-    return (
-      <Input
-        id={id}
-        type="date"
-        className={className}
-        dir="ltr"
-        lang="en"
-        value={value}
-        disabled={disabled}
-        required={required}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    );
-  }
-
   const boxClass = cn(
     "h-full min-h-0 border-0 bg-transparent p-0 m-0 shadow-none rounded-md",
     "text-center font-bold tabular-nums tracking-wide text-foreground",
@@ -197,7 +189,6 @@ export function YmdDateInput({
       dir="ltr"
     >
       <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 px-1.5 sm:gap-1 sm:px-2.5">
-        {/* Year (left) */}
         <input
           ref={yearRef}
           id={id}
@@ -226,7 +217,6 @@ export function YmdDateInput({
         >
           /
         </span>
-        {/* Month (middle) */}
         <input
           ref={monthRef}
           type="text"
@@ -253,7 +243,6 @@ export function YmdDateInput({
         >
           /
         </span>
-        {/* Day (right) */}
         <input
           ref={dayRef}
           type="text"
@@ -282,33 +271,50 @@ export function YmdDateInput({
             type="button"
             disabled={disabled}
             className={cn(
-              "inline-flex w-10 shrink-0 items-center justify-center border-s border-border/60",
-              "text-muted-foreground hover:bg-secondary/70 hover:text-foreground transition-colors",
+              "inline-flex w-11 shrink-0 items-center justify-center border-s border-border/60",
+              "bg-gradient-to-b from-secondary/40 to-secondary/10",
+              "text-primary hover:bg-primary/10 hover:text-primary transition-colors",
               "touch-manipulation disabled:pointer-events-none"
             )}
-            aria-label="اختيار التاريخ"
+            aria-label="اختيار التاريخ من التقويم"
             tabIndex={-1}
           >
-            <CalendarIcon className="h-[18px] w-[18px]" />
+            <CalendarIcon className="h-5 w-5" strokeWidth={2.25} />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end" sideOffset={6} dir="ltr">
-          <Calendar
-            mode="single"
-            captionLayout="dropdown"
-            selected={selected}
-            defaultMonth={selected}
-            onSelect={(day) => {
-              if (!day) return;
-              const iso = toIsoDate(day);
-              if (!iso) return;
-              editingRef.current = false;
-              setParts(partsFromIso(iso));
-              onChange(iso);
-              setOpen(false);
-            }}
-            disabled={disabled}
-          />
+        <PopoverContent
+          className={cn(
+            "w-auto border-0 bg-transparent p-0 shadow-none",
+            "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          )}
+          align="end"
+          sideOffset={8}
+          dir="ltr"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="overflow-hidden rounded-2xl border border-black/5 bg-[#f3f4f6] shadow-2xl shadow-black/15 ring-1 ring-black/5 dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/50">
+            <Calendar
+              mode="single"
+              variant="picker"
+              captionLayout="dropdown"
+              startMonth={PICKER_START}
+              endMonth={PICKER_END}
+              selected={selected}
+              month={calendarMonth}
+              onMonthChange={setCalendarMonth}
+              onSelect={(day) => {
+                if (!day) return;
+                const iso = toIsoDate(day);
+                if (!iso) return;
+                editingRef.current = false;
+                setParts(partsFromIso(iso));
+                setCalendarMonth(day);
+                onChange(iso);
+                setOpen(false);
+              }}
+              disabled={disabled}
+            />
+          </div>
         </PopoverContent>
       </Popover>
     </div>
