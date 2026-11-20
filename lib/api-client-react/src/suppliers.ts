@@ -299,6 +299,24 @@ export function useCreateSupplierPurchase(
   });
 }
 
+export function useUpdateSupplierPurchase(
+  options?: UseMutationOptions<
+    SupplierPurchase,
+    ErrorType<unknown>,
+    { id: number; data: BodyType<CreateSupplierPurchaseBody> }
+  >
+) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      customFetch<SupplierPurchase>(`${base}/purchases/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      }),
+    ...options,
+  });
+}
+
 export function useDeleteSupplierPurchase(
   options?: UseMutationOptions<{ ok: boolean }, ErrorType<unknown>, { id: number }>
 ) {

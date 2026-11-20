@@ -364,30 +364,48 @@ router.get("/purchases", async (_req, res) => {
   res.json(await enrichPurchases(rows));
 });
 
-router.post("/purchases", async (req, res) => {
-  const invoiceDate = normalizeDate(req.body?.invoiceDate) ?? todayDate();
-  const invoiceTime = normalizeTime(req.body?.invoiceTime) ?? nowTime();
-  const supplierId = Number(req.body?.supplierId);
-  const notes = String(req.body?.notes ?? "").trim() || null;
-  const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+type ParsedPurchaseItem = {
+  menuItemId: number;
+  qty: string;
+  unitKind: string;
+  unitLabel: string;
+  price: string;
+  amount: string;
+};
 
-  // Always assign next sequential invoice number (starts at 1)
-  let invoiceNo = await nextPurchaseInvoiceNo();
-  while (await isDuplicatePurchaseInvoiceNo(invoiceNo)) {
-    invoiceNo = String(Number(invoiceNo) + 1);
-  }
+async function parsePurchaseBody(body: any): Promise<
+  | { ok: false; status: number; message: string }
+  | {
+      ok: true;
+      invoiceDate: string;
+      invoiceTime: string;
+      supplierId: number;
+      notes: string | null;
+      items: ParsedPurchaseItem[];
+      totalQty: number;
+      totalAmount: number;
+      paidAmount: number;
+      discountAmount: number;
+      remainingAmount: number;
+    }
+> {
+  const invoiceDate = normalizeDate(body?.invoiceDate) ?? todayDate();
+  const invoiceTime = normalizeTime(body?.invoiceTime) ?? nowTime();
+  const supplierId = Number(body?.supplierId);
+  const notes = String(body?.notes ?? "").trim() || null;
+  const rawItems = Array.isArray(body?.items) ? body.items : [];
 
   if (!Number.isFinite(supplierId) || supplierId <= 0) {
-    return res.status(400).json({ message: "اختر المورد" });
+    return { ok: false, status: 400, message: "اختر المورد" };
   }
   const [supplier] = await db
     .select()
     .from(suppliersTable)
     .where(eq(suppliersTable.id, supplierId))
     .limit(1);
-  if (!supplier) return res.status(400).json({ message: "المورد غير موجود" });
+  if (!supplier) return { ok: false, status: 400, message: "المورد غير موجود" };
   if (rawItems.length === 0) {
-    return res.status(400).json({ message: "أضف صنفاً واحداً على الأقل" });
+    return { ok: false, status: 400, message: "أضف صنفاً واحداً على الأقل" };
   }
 
   const menuIds = [
@@ -406,30 +424,24 @@ router.post("/purchases", async (req, res) => {
           .where(inArray(menuItemsTable.id, menuIds));
   const menuMap = new Map(menuRows.map((m) => [m.id, m]));
 
-  const items: {
-    menuItemId: number;
-    qty: string;
-    unitKind: string;
-    unitLabel: string;
-    price: string;
-    amount: string;
-  }[] = [];
-
+  const items: ParsedPurchaseItem[] = [];
   let totalQty = 0;
   let totalAmount = 0;
 
   for (const it of rawItems) {
     const menuItemId = Number(it.menuItemId);
     const menu = menuMap.get(menuItemId);
-    if (!menu) return res.status(400).json({ message: "صنف غير صالح في فاتورة الشراء" });
+    if (!menu) return { ok: false, status: 400, message: "صنف غير صالح في فاتورة الشراء" };
     const unitKind = String(it.unitKind ?? "minor").trim();
     if (!UNIT_KINDS.has(unitKind)) {
-      return res.status(400).json({ message: "وحدة الصنف يجب أن تكون كبيرة أو صغيرة" });
+      return { ok: false, status: 400, message: "وحدة الصنف يجب أن تكون كبيرة أو صغيرة" };
     }
     const qty = num(it.qty);
     const price = num(it.price);
-    if (!(qty > 0)) return res.status(400).json({ message: "كمية الصنف يجب أن تكون أكبر من صفر" });
-    if (!(price >= 0)) return res.status(400).json({ message: "سعر الصنف غير صالح" });
+    if (!(qty > 0)) {
+      return { ok: false, status: 400, message: "كمية الصنف يجب أن تكون أكبر من صفر" };
+    }
+    if (!(price >= 0)) return { ok: false, status: 400, message: "سعر الصنف غير صالح" };
     const amount = Number((qty * price).toFixed(2));
     const unitLabel =
       unitKind === "major"
@@ -447,35 +459,62 @@ router.post("/purchases", async (req, res) => {
     totalAmount += amount;
   }
 
-  const discountAmount = Math.max(0, num(req.body?.discountAmount));
-  const paidAmount = Math.max(0, num(req.body?.paidAmount));
+  const discountAmount = Math.max(0, num(body?.discountAmount));
+  const paidAmount = Math.max(0, num(body?.paidAmount));
   if (discountAmount + paidAmount > totalAmount + 0.001) {
-    return res
-      .status(400)
-      .json({ message: "مجموع الدفع والخصم لا يمكن أن يتجاوز مجموع الفاتورة" });
+    return {
+      ok: false,
+      status: 400,
+      message: "مجموع الدفع والخصم لا يمكن أن يتجاوز مجموع الفاتورة",
+    };
   }
   const remainingAmount = Number(
     Math.max(0, totalAmount - discountAmount - paidAmount).toFixed(2)
   );
 
+  return {
+    ok: true,
+    invoiceDate,
+    invoiceTime,
+    supplierId,
+    notes,
+    items,
+    totalQty,
+    totalAmount,
+    paidAmount,
+    discountAmount,
+    remainingAmount,
+  };
+}
+
+router.post("/purchases", async (req, res) => {
+  const parsed = await parsePurchaseBody(req.body);
+  if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
+
+  // Always assign next sequential invoice number (starts at 1)
+  let invoiceNo = await nextPurchaseInvoiceNo();
+  while (await isDuplicatePurchaseInvoiceNo(invoiceNo)) {
+    invoiceNo = String(Number(invoiceNo) + 1);
+  }
+
   const [purchase] = await db
     .insert(supplierPurchasesTable)
     .values({
       invoiceNo,
-      invoiceDate,
-      invoiceTime,
-      supplierId,
-      notes,
-      totalQty: qtyStr(totalQty),
-      totalAmount: money(totalAmount),
-      paidAmount: money(paidAmount),
-      discountAmount: money(discountAmount),
-      remainingAmount: money(remainingAmount),
+      invoiceDate: parsed.invoiceDate,
+      invoiceTime: parsed.invoiceTime,
+      supplierId: parsed.supplierId,
+      notes: parsed.notes,
+      totalQty: qtyStr(parsed.totalQty),
+      totalAmount: money(parsed.totalAmount),
+      paidAmount: money(parsed.paidAmount),
+      discountAmount: money(parsed.discountAmount),
+      remainingAmount: money(parsed.remainingAmount),
     })
     .returning();
 
   await db.insert(supplierPurchaseItemsTable).values(
-    items.map((it) => ({
+    parsed.items.map((it) => ({
       purchaseId: purchase.id,
       ...it,
     }))
@@ -483,6 +522,50 @@ router.post("/purchases", async (req, res) => {
 
   const [full] = await enrichPurchases([purchase]);
   res.status(201).json(full);
+});
+
+router.put("/purchases/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const [existing] = await db
+    .select()
+    .from(supplierPurchasesTable)
+    .where(eq(supplierPurchasesTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "فاتورة الشراء غير موجودة" });
+
+  const parsed = await parsePurchaseBody(req.body);
+  if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
+
+  const [purchase] = await db
+    .update(supplierPurchasesTable)
+    .set({
+      invoiceDate: parsed.invoiceDate,
+      invoiceTime: parsed.invoiceTime,
+      supplierId: parsed.supplierId,
+      notes: parsed.notes,
+      totalQty: qtyStr(parsed.totalQty),
+      totalAmount: money(parsed.totalAmount),
+      paidAmount: money(parsed.paidAmount),
+      discountAmount: money(parsed.discountAmount),
+      remainingAmount: money(parsed.remainingAmount),
+    })
+    .where(eq(supplierPurchasesTable.id, id))
+    .returning();
+
+  await db
+    .delete(supplierPurchaseItemsTable)
+    .where(eq(supplierPurchaseItemsTable.purchaseId, id));
+  await db.insert(supplierPurchaseItemsTable).values(
+    parsed.items.map((it) => ({
+      purchaseId: id,
+      ...it,
+    }))
+  );
+
+  const [full] = await enrichPurchases([purchase]);
+  res.json(full);
 });
 
 router.delete("/purchases/:id", async (req, res) => {

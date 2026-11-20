@@ -7,6 +7,7 @@ import {
   useDeleteSupplier,
   useGetSupplierPurchases,
   useCreateSupplierPurchase,
+  useUpdateSupplierPurchase,
   useDeleteSupplierPurchase,
   useGetSupplierMovements,
   useCreateSupplierMovement,
@@ -14,6 +15,7 @@ import {
   useGetSupplierStatement,
   useGetSupplierDebts,
   useGetMenuItems,
+  useGetSettings,
   getGetSuppliersQueryKey,
   getGetSupplierPurchasesQueryKey,
   getGetSupplierMovementsQueryKey,
@@ -27,6 +29,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { printSupplierPurchaseThermal } from "@/lib/print-receipt";
 import {
   ArrowLeftRight,
   Building2,
@@ -44,6 +47,7 @@ import {
   Wallet,
   Pencil,
   BadgeDollarSign,
+  X,
 } from "lucide-react";
 
 type Section = "hub" | "names" | "purchase" | "movement" | "statement" | "debts";
@@ -131,11 +135,16 @@ export default function SuppliersPage() {
   const { data: movements, isLoading: loadingMovements } = useGetSupplierMovements();
   const { data: debts, isLoading: loadingDebts, refetch: refetchDebts } = useGetSupplierDebts();
   const { data: menuItems } = useGetMenuItems();
+  const { data: appSettings } = useGetSettings({
+    query: { staleTime: 60_000, refetchOnWindowFocus: false },
+  });
+  const restaurantName = appSettings?.restaurantName?.trim() || "المطعم";
 
   const { mutate: createSupplier, isPending: creatingSupplier } = useCreateSupplier();
   const { mutate: updateSupplier, isPending: updatingSupplier } = useUpdateSupplier();
   const { mutate: deleteSupplier } = useDeleteSupplier();
   const { mutate: createPurchase, isPending: creatingPurchase } = useCreateSupplierPurchase();
+  const { mutate: updatePurchase, isPending: updatingPurchase } = useUpdateSupplierPurchase();
   const { mutate: deletePurchase } = useDeleteSupplierPurchase();
   const { mutate: createMovement, isPending: creatingMovement } = useCreateSupplierMovement();
   const { mutate: deleteMovement } = useDeleteSupplierMovement();
@@ -161,18 +170,21 @@ export default function SuppliersPage() {
     EMPTY_PURCHASE_LINE(),
   ]);
   const [purchaseError, setPurchaseError] = useState("");
+  const [editingPurchaseId, setEditingPurchaseId] = useState<number | null>(null);
 
   useEffect(() => {
     if (section !== "purchase") return;
+    if (editingPurchaseId != null) return;
     setPurchaseForm((f) => ({
       ...f,
       invoiceNo: nextPurchaseInvoiceNo(purchases),
     }));
-  }, [section, purchases]);
+  }, [section, purchases, editingPurchaseId]);
 
-  // Live clock for purchase form — same behavior as POS
+  // Live clock for purchase form — same behavior as POS (paused while editing)
   useEffect(() => {
     if (section !== "purchase") return;
+    if (editingPurchaseId != null) return;
     const tick = () => {
       const clock = nowTime();
       setPurchaseForm((f) =>
@@ -182,7 +194,7 @@ export default function SuppliersPage() {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [section]);
+  }, [section, editingPurchaseId]);
 
   // ── movement ──
   const [movementFormOpen, setMovementFormOpen] = useState(false);
@@ -373,9 +385,53 @@ export default function SuppliersPage() {
     return opts;
   };
 
+  const resetPurchaseForm = () => {
+    setEditingPurchaseId(null);
+    setPurchaseError("");
+    setPurchaseLines([EMPTY_PURCHASE_LINE()]);
+    setPurchaseForm({
+      invoiceNo: nextPurchaseInvoiceNo(purchases),
+      invoiceDate: todayDate(),
+      invoiceTime: nowTime(),
+      supplierId: "",
+      notes: "",
+      paidAmount: 0,
+      discountAmount: 0,
+    });
+  };
+
+  const openEditPurchase = (p: SupplierPurchase) => {
+    setEditingPurchaseId(p.id);
+    setPurchaseError("");
+    setPurchaseForm({
+      invoiceNo: p.invoiceNo,
+      invoiceDate: p.invoiceDate,
+      invoiceTime: p.invoiceTime || nowTime(),
+      supplierId: String(p.supplierId),
+      notes: p.notes || "",
+      paidAmount: Number(p.paidAmount) || 0,
+      discountAmount: Number(p.discountAmount) || 0,
+    });
+    setPurchaseLines(
+      p.items.length > 0
+        ? p.items.map((it) => ({
+            key: crypto.randomUUID(),
+            menuItemId: String(it.menuItemId),
+            qty: Number(it.qty) || "",
+            unitKind: (it.unitKind as SupplierUnitKind) || "major",
+            price: Number(it.price) || "",
+          }))
+        : [EMPTY_PURCHASE_LINE()]
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const savePurchase = () => {
     if (!purchaseForm.supplierId) return setPurchaseError("اختر المورد");
-    const invoiceNo = nextPurchaseInvoiceNo(purchases);
+    const invoiceNo =
+      editingPurchaseId != null
+        ? purchaseForm.invoiceNo
+        : nextPurchaseInvoiceNo(purchases);
     const items = purchaseLines
       .filter((l) => l.menuItemId)
       .map((l) => ({
@@ -393,37 +449,67 @@ export default function SuppliersPage() {
     ) {
       return setPurchaseError("مجموع الدفع والخصم لا يمكن أن يتجاوز مجموع الفاتورة");
     }
-    createPurchase(
-      {
-        invoiceNo,
-        invoiceDate: purchaseForm.invoiceDate,
-        invoiceTime: purchaseForm.invoiceTime,
-        supplierId: Number(purchaseForm.supplierId),
-        notes: purchaseForm.notes.trim(),
-        paidAmount: purchaseTotals.paidAmount,
-        discountAmount: purchaseTotals.discountAmount,
-        items,
+    const body = {
+      invoiceNo,
+      invoiceDate: purchaseForm.invoiceDate,
+      invoiceTime: purchaseForm.invoiceTime,
+      supplierId: Number(purchaseForm.supplierId),
+      notes: purchaseForm.notes.trim(),
+      paidAmount: purchaseTotals.paidAmount,
+      discountAmount: purchaseTotals.discountAmount,
+      items,
+    };
+    if (editingPurchaseId != null) {
+      updatePurchase(
+        { id: editingPurchaseId, data: body },
+        {
+          onSuccess: () => {
+            resetPurchaseForm();
+            invalidateAll();
+          },
+          onError: (e) => setPurchaseError(apiErrorMessage(e, "تعذر تعديل فاتورة الشراء")),
+        }
+      );
+      return;
+    }
+    createPurchase(body, {
+      onSuccess: () => {
+        resetPurchaseForm();
+        invalidateAll();
       },
-      {
-        onSuccess: () => {
-          setPurchaseForm((f) => ({
-            ...f,
-            invoiceNo: nextPurchaseInvoiceNo([
-              ...(purchases ?? []),
-              { invoiceNo } as SupplierPurchase,
-            ]),
-            invoiceDate: todayDate(),
-            invoiceTime: nowTime(),
-            notes: "",
-            paidAmount: 0,
-            discountAmount: 0,
-          }));
-          setPurchaseLines([EMPTY_PURCHASE_LINE()]);
-          invalidateAll();
-        },
-        onError: (e) => setPurchaseError(apiErrorMessage(e, "تعذر حفظ فاتورة الشراء")),
-      }
-    );
+      onError: (e) => setPurchaseError(apiErrorMessage(e, "تعذر حفظ فاتورة الشراء")),
+    });
+  };
+
+  const printPurchaseReport = (p: SupplierPurchase) => {
+    const supplier = (suppliers ?? []).find((s) => s.id === p.supplierId);
+    const currentBalance = Number(supplier?.balance) || 0;
+    const remaining = Number(p.remainingAmount) || 0;
+    const oldBalance = Number((currentBalance - remaining).toFixed(2));
+    const newBalance = currentBalance;
+    printSupplierPurchaseThermal({
+      restaurantName,
+      invoiceNo: p.invoiceNo,
+      invoiceDate: p.invoiceDate,
+      invoiceTime: p.invoiceTime,
+      supplierName: p.supplierName || supplier?.name || "—",
+      notes: p.notes,
+      items: (p.items ?? []).map((it) => ({
+        name: it.itemNameAr || it.itemName || `صنف #${it.menuItemId}`,
+        qty: Number(it.qty) || 0,
+        unitLabel: it.unitLabel || "",
+        price: Number(it.price) || 0,
+        amount: Number(it.amount) || 0,
+      })),
+      totalQty: Number(p.totalQty) || 0,
+      totalAmount: Number(p.totalAmount) || 0,
+      paidAmount: Number(p.paidAmount) || 0,
+      discountAmount: Number(p.discountAmount) || 0,
+      remainingAmount: remaining,
+      oldBalance,
+      newBalance,
+      formatMoney: fmtMoney,
+    });
   };
 
   const openNewMovement = () => {
@@ -789,11 +875,26 @@ export default function SuppliersPage() {
       {section === "purchase" ? (
         <div className="space-y-3">
           <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg sm:text-xl font-extrabold leading-none">شراء من المورد</h2>
-              <span className="hidden sm:inline text-[12px] font-bold text-muted-foreground">
-                فاتورة · أصناف · دفع
-              </span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-extrabold leading-none">
+                {editingPurchaseId != null ? "تعديل فاتورة شراء" : "شراء من المورد"}
+              </h2>
+              <div className="flex items-center gap-2">
+                {editingPurchaseId != null ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full h-11 px-4 text-[15px] font-bold touch-manipulation"
+                    onClick={resetPurchaseForm}
+                  >
+                    <X className="w-4 h-4 me-1" /> إلغاء التعديل
+                  </Button>
+                ) : (
+                  <span className="hidden sm:inline text-[12px] font-bold text-muted-foreground">
+                    فاتورة · أصناف · دفع
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Header: supplier first on mobile, then date/time/invoice */}
@@ -1128,17 +1229,17 @@ export default function SuppliersPage() {
                   <Button
                     type="button"
                     className="rounded-full h-12 px-6 text-[15px] font-bold w-full sm:w-auto touch-manipulation"
-                    disabled={creatingPurchase}
+                    disabled={creatingPurchase || updatingPurchase}
                     onClick={savePurchase}
                   >
-                    حفظ فاتورة الشراء
+                    {editingPurchaseId != null ? "حفظ التعديلات" : "حفظ فاتورة الشراء"}
                   </Button>
                 </div>
               </div>
             </div>
           </Card>
 
-          <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2">
+          <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2 overflow-hidden">
             <h3 className="text-[15px] font-extrabold">فواتير الشراء</h3>
             {loadingPurchases ? (
               <div className="py-6 flex justify-center">
@@ -1149,38 +1250,163 @@ export default function SuppliersPage() {
                 لا توجد فواتير بعد
               </p>
             ) : (
-              <div className="space-y-1.5">
-                {(purchases ?? []).map((p) => (
-                  <div
-                    key={p.id}
-                    className="rounded-xl border border-border/40 px-2.5 py-2 flex flex-wrap items-center justify-between gap-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[15px] font-extrabold truncate">
-                        {p.invoiceNo} — {p.supplierName}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground font-semibold leading-snug">
-                        {p.invoiceDate} {p.invoiceTime} · كمية {fmtMoney(p.totalQty)} · مبلغ{" "}
-                        {fmtMoney(p.totalAmount)} · دفع {fmtMoney(p.paidAmount || 0)} · خصم{" "}
-                        {fmtMoney(p.discountAmount || 0)} · باقي{" "}
-                        {fmtMoney(p.remainingAmount ?? p.totalAmount)} · {p.items.length} أصناف
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-11 w-11 text-destructive touch-manipulation flex-shrink-0"
-                      onClick={() => {
-                        if (!confirm("حذف فاتورة الشراء؟")) return;
-                        deletePurchase({ id: p.id }, { onSuccess: invalidateAll });
-                      }}
+              <>
+                {/* Desktop / tablet table */}
+                <div className="hidden md:block overflow-auto rounded-xl border border-border/40">
+                  <table className="w-full text-[14px] xl:text-[15px]">
+                    <thead className="bg-secondary/50 text-primary">
+                      <tr>
+                        <th className="text-start p-2.5 font-bold">رقم الفاتورة</th>
+                        <th className="text-start p-2.5 font-bold">التاريخ</th>
+                        <th className="text-start p-2.5 font-bold">اسم المورد</th>
+                        <th className="text-start p-2.5 font-bold">مجموع مبلغ</th>
+                        <th className="text-start p-2.5 font-bold">مبلغ الدفع</th>
+                        <th className="text-start p-2.5 font-bold">خصم</th>
+                        <th className="text-start p-2.5 font-bold">باقي قائمة</th>
+                        <th className="text-end p-2.5 font-bold">إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(purchases ?? []).map((p) => (
+                        <tr
+                          key={p.id}
+                          className={`border-t border-border/30 ${
+                            editingPurchaseId === p.id ? "bg-primary/5" : ""
+                          }`}
+                        >
+                          <td className="p-2.5 font-mono font-bold">{p.invoiceNo}</td>
+                          <td className="p-2.5 font-bold" dir="ltr">
+                            {p.invoiceDate}
+                          </td>
+                          <td className="p-2.5 font-bold">{p.supplierName || "—"}</td>
+                          <td className="p-2.5 font-bold" dir="ltr">
+                            {fmtMoney(p.totalAmount)}
+                          </td>
+                          <td className="p-2.5 font-bold" dir="ltr">
+                            {fmtMoney(p.paidAmount || 0)}
+                          </td>
+                          <td className="p-2.5 font-bold" dir="ltr">
+                            {fmtMoney(p.discountAmount || 0)}
+                          </td>
+                          <td className="p-2.5 font-bold text-amber-700 dark:text-amber-300" dir="ltr">
+                            {fmtMoney(p.remainingAmount ?? 0)}
+                          </td>
+                          <td className="p-2.5">
+                            <div className="flex justify-end gap-1.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11 text-muted-foreground hover:text-primary touch-manipulation"
+                                title="تعديل"
+                                onClick={() => openEditPurchase(p)}
+                              >
+                                <Pencil className="w-5 h-5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11 text-muted-foreground hover:text-primary touch-manipulation"
+                                title="تقرير حراري"
+                                onClick={() => printPurchaseReport(p)}
+                              >
+                                <Printer className="w-5 h-5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11 text-destructive touch-manipulation"
+                                title="حذف"
+                                onClick={() => {
+                                  if (!confirm("حذف فاتورة الشراء؟")) return;
+                                  if (editingPurchaseId === p.id) resetPurchaseForm();
+                                  deletePurchase({ id: p.id }, { onSuccess: invalidateAll });
+                                }}
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-2">
+                  {(purchases ?? []).map((p) => (
+                    <div
+                      key={p.id}
+                      className={`rounded-xl border border-border/40 px-2.5 py-2 space-y-2 ${
+                        editingPurchaseId === p.id ? "border-primary/40 bg-primary/5" : ""
+                      }`}
                     >
-                      <Trash2 className="w-5 h-5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[15px] font-extrabold">
+                            #{p.invoiceNo} — {p.supplierName || "—"}
+                          </p>
+                          <p className="text-[13px] font-bold text-muted-foreground" dir="ltr">
+                            {p.invoiceDate}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[13px] font-bold">
+                        <div className="rounded-lg bg-secondary/40 px-2 py-1.5 flex justify-between gap-1">
+                          <span className="text-muted-foreground">مجموع</span>
+                          <span dir="ltr">{fmtMoney(p.totalAmount)}</span>
+                        </div>
+                        <div className="rounded-lg bg-secondary/40 px-2 py-1.5 flex justify-between gap-1">
+                          <span className="text-muted-foreground">دفع</span>
+                          <span dir="ltr">{fmtMoney(p.paidAmount || 0)}</span>
+                        </div>
+                        <div className="rounded-lg bg-secondary/40 px-2 py-1.5 flex justify-between gap-1">
+                          <span className="text-muted-foreground">خصم</span>
+                          <span dir="ltr">{fmtMoney(p.discountAmount || 0)}</span>
+                        </div>
+                        <div className="rounded-lg bg-amber-500/10 px-2 py-1.5 flex justify-between gap-1 text-amber-700 dark:text-amber-300">
+                          <span>باقي</span>
+                          <span dir="ltr">{fmtMoney(p.remainingAmount ?? 0)}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 h-11 text-[14px] font-bold gap-1.5 touch-manipulation"
+                          onClick={() => openEditPurchase(p)}
+                        >
+                          <Pencil className="w-4 h-4" /> تعديل
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 h-11 text-[14px] font-bold gap-1.5 touch-manipulation"
+                          onClick={() => printPurchaseReport(p)}
+                        >
+                          <Printer className="w-4 h-4" /> تقرير
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 text-destructive touch-manipulation"
+                          onClick={() => {
+                            if (!confirm("حذف فاتورة الشراء؟")) return;
+                            if (editingPurchaseId === p.id) resetPurchaseForm();
+                            deletePurchase({ id: p.id }, { onSuccess: invalidateAll });
+                          }}
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </Card>
         </div>
