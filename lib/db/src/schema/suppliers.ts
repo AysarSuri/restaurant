@@ -9,6 +9,8 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { menuItemsTable } from "./menuItems";
+import { branchesTable } from "./branches";
+import { cardsTable } from "./cards";
 
 /** Supplier master data */
 export const suppliersTable = pgTable("suppliers", {
@@ -48,6 +50,11 @@ export const supplierPurchasesTable = pgTable("supplier_purchases", {
   remainingAmount: numeric("remaining_amount", { precision: 14, scale: 2 })
     .default("0")
     .notNull(),
+  /** Branch for this purchase (used for card filtering) */
+  branchId: integer("branch_id").references(() => branchesTable.id),
+  /** cash = بدون بطاقة | card = بطاقة */
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  cardId: integer("card_id").references(() => cardsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -92,6 +99,11 @@ export const supplierReturnsTable = pgTable("supplier_returns", {
   remainingAmount: numeric("remaining_amount", { precision: 14, scale: 2 })
     .default("0")
     .notNull(),
+  /** Branch for this return (used for card filtering) */
+  branchId: integer("branch_id").references(() => branchesTable.id),
+  /** cash = بدون بطاقة | card = بطاقة */
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  cardId: integer("card_id").references(() => cardsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -127,6 +139,11 @@ export const supplierMovementsTable = pgTable("supplier_movements", {
   amountType: text("amount_type").notNull(),
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   notes: text("notes"),
+  /** Branch for this movement (used for card filtering) */
+  branchId: integer("branch_id").references(() => branchesTable.id),
+  /** cash = بدون بطاقة | card = بطاقة — only for paid/received */
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  cardId: integer("card_id").references(() => cardsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

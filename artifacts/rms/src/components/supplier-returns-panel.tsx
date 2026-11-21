@@ -5,9 +5,12 @@ import {
   useCreateSupplierReturn,
   useUpdateSupplierReturn,
   useDeleteSupplierReturn,
+  useGetBranches,
+  useGetCards,
   getGetSupplierReturnsQueryKey,
   type SupplierReturn,
   type SupplierUnitKind,
+  type SupplierPaymentMethod,
   type MenuItem,
   type Supplier,
 } from "@workspace/api-client-react";
@@ -17,6 +20,8 @@ import { YmdDateInput } from "@/components/ymd-date-input";
 import { printSupplierPurchaseThermal } from "@/lib/print-receipt";
 import { useI18n } from "@/i18n";
 import {
+  Building2,
+  CreditCard,
   Hash,
   Package,
   Pencil,
@@ -27,6 +32,7 @@ import {
   Trash2,
   Truck,
   Undo2,
+  Wallet,
   X,
 } from "lucide-react";
 
@@ -100,6 +106,8 @@ export function SupplierReturnsPanel({
   const { formatDate } = useI18n();
   const queryClient = useQueryClient();
   const { data: returns, isLoading: loadingReturns } = useGetSupplierReturns();
+  const { data: branches } = useGetBranches();
+  const { data: cards } = useGetCards();
   const { mutate: createReturn, isPending: creatingReturn } = useCreateSupplierReturn();
   const { mutate: updateReturn, isPending: updatingReturn } = useUpdateSupplierReturn();
   const { mutate: deleteReturn } = useDeleteSupplierReturn();
@@ -112,6 +120,9 @@ export function SupplierReturnsPanel({
     notes: "",
     paidAmount: 0,
     discountAmount: 0,
+    branchId: "",
+    paymentMethod: "cash" as SupplierPaymentMethod,
+    cardId: "",
   });
   const [lines, setLines] = useState<ReturnLine[]>([EMPTY_LINE()]);
   const [formError, setFormError] = useState("");
@@ -150,6 +161,29 @@ export function SupplierReturnsPanel({
       })),
     [suppliers]
   );
+
+  const branchOptions = useMemo<ComboboxOption[]>(
+    () =>
+      (branches ?? []).map((b) => ({
+        value: String(b.id),
+        label: b.name,
+        icon: Building2,
+      })),
+    [branches]
+  );
+
+  const branchCardOptions = useMemo<ComboboxOption[]>(() => {
+    const branchId = Number(form.branchId) || 0;
+    return (cards ?? [])
+      .filter((c) => c.isActive !== false)
+      .filter((c) => (branchId ? (c.branchIds ?? []).includes(branchId) : false))
+      .map((c) => ({
+        value: String(c.id),
+        label: c.name,
+        subtitle: fmtMoney(Number(c.balance) || 0),
+        icon: CreditCard,
+      }));
+  }, [cards, form.branchId]);
 
   const supplierNameSearchOptions = useMemo<ComboboxOption[]>(
     () => [
@@ -248,6 +282,9 @@ export function SupplierReturnsPanel({
       notes: "",
       paidAmount: 0,
       discountAmount: 0,
+      branchId: "",
+      paymentMethod: "cash",
+      cardId: "",
     });
   };
 
@@ -262,6 +299,9 @@ export function SupplierReturnsPanel({
       notes: p.notes || "",
       paidAmount: Number(p.paidAmount) || 0,
       discountAmount: Number(p.discountAmount) || 0,
+      branchId: p.branchId ? String(p.branchId) : "",
+      paymentMethod: p.paymentMethod === "card" ? "card" : "cash",
+      cardId: p.cardId ? String(p.cardId) : "",
     });
     setLines(
       p.items.length > 0
@@ -279,6 +319,10 @@ export function SupplierReturnsPanel({
 
   const saveReturn = () => {
     if (!form.supplierId) return setFormError("اختر المورد");
+    if (!form.branchId) return setFormError("اختر الفرع");
+    if (form.paymentMethod === "card" && !form.cardId) {
+      return setFormError("اختر البطاقة");
+    }
     const invoiceNo =
       editingReturnId != null ? form.invoiceNo : nextInvoiceNo(returns);
     const items = lines
@@ -303,6 +347,9 @@ export function SupplierReturnsPanel({
       notes: form.notes.trim(),
       paidAmount: totals.paidAmount,
       discountAmount: totals.discountAmount,
+      branchId: Number(form.branchId) || null,
+      paymentMethod: form.paymentMethod,
+      cardId: form.paymentMethod === "card" ? Number(form.cardId) || null : null,
       items,
     };
     if (editingReturnId != null) {
@@ -382,7 +429,7 @@ export function SupplierReturnsPanel({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_minmax(0,0.75fr)] gap-x-2 gap-y-1 items-end">
+        <div className="grid grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,0.7fr)] gap-x-2 gap-y-1 items-end">
           <div className="col-span-2 lg:col-span-1 min-w-0">
             <ModernCombobox
               value={form.supplierId}
@@ -394,6 +441,29 @@ export function SupplierReturnsPanel({
               searchable
               searchPlaceholder="ابحث باسم أو كود المورد..."
               emptyText="لا يوجد مورد مطابق"
+              size="sm"
+              labelClassName="text-[14px] font-bold text-foreground !mb-0"
+              valueClassName="text-[14px] font-bold"
+              className="[&>div:first-child]:mb-0.5"
+            />
+          </div>
+          <div className="min-w-0">
+            <ModernCombobox
+              value={form.branchId}
+              onChange={(branchId) =>
+                setForm((f) => ({
+                  ...f,
+                  branchId,
+                  cardId: "",
+                }))
+              }
+              options={branchOptions}
+              label="الفرع *"
+              placeholder="اختر الفرع"
+              icon={Building2}
+              searchable
+              searchPlaceholder="ابحث عن الفرع..."
+              emptyText="لا يوجد فرع"
               size="sm"
               labelClassName="text-[14px] font-bold text-foreground !mb-0"
               valueClassName="text-[14px] font-bold"
@@ -697,6 +767,60 @@ export function SupplierReturnsPanel({
                   {fmtMoney(totals.remainingAmount)}
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl border border-border/60 bg-secondary/40">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, paymentMethod: "cash", cardId: "" }))
+                  }
+                  className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
+                    form.paymentMethod === "cash"
+                      ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" />
+                  بدون بطاقة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, paymentMethod: "card" }))}
+                  className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
+                    form.paymentMethod === "card"
+                      ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  بطاقة
+                </button>
+              </div>
+              {form.paymentMethod === "card" ? (
+                <ModernCombobox
+                  value={form.cardId}
+                  onChange={(cardId) => setForm((f) => ({ ...f, cardId }))}
+                  options={branchCardOptions}
+                  label="البطاقة *"
+                  placeholder={
+                    form.branchId ? "اختر البطاقة حسب الفرع" : "اختر الفرع أولاً"
+                  }
+                  icon={CreditCard}
+                  searchable
+                  searchPlaceholder="ابحث عن البطاقة..."
+                  emptyText={
+                    form.branchId
+                      ? "لا توجد بطاقة لهذا الفرع"
+                      : "اختر الفرع أولاً لعرض البطاقات"
+                  }
+                  size="sm"
+                  labelClassName="text-[14px] font-bold text-foreground !mb-0"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
+              ) : null}
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-0.5">

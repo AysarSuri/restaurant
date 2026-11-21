@@ -52,6 +52,8 @@ export interface SupplierPurchaseItem {
   subunitQty?: number | null;
 }
 
+export type SupplierPaymentMethod = "cash" | "card";
+
 export interface SupplierPurchase {
   id: number;
   invoiceNo: string;
@@ -66,6 +68,11 @@ export interface SupplierPurchase {
   paidAmount: number;
   discountAmount: number;
   remainingAmount: number;
+  branchId?: number | null;
+  branchName?: string;
+  paymentMethod?: SupplierPaymentMethod;
+  cardId?: number | null;
+  cardName?: string;
   items: SupplierPurchaseItem[];
   createdAt?: string;
 }
@@ -82,6 +89,9 @@ export interface CreateSupplierPurchaseBody {
   notes?: string;
   paidAmount?: number;
   discountAmount?: number;
+  branchId?: number | null;
+  paymentMethod?: SupplierPaymentMethod;
+  cardId?: number | null;
   items: Array<{
     menuItemId: number;
     qty: number;
@@ -103,6 +113,11 @@ export interface SupplierMovement {
   amountType: SupplierAmountType;
   amount: number;
   notes?: string | null;
+  branchId?: number | null;
+  branchName?: string;
+  paymentMethod?: SupplierPaymentMethod;
+  cardId?: number | null;
+  cardName?: string;
   createdAt?: string;
 }
 
@@ -114,6 +129,9 @@ export interface CreateSupplierMovementBody {
   amountType: SupplierAmountType;
   amount: number;
   notes?: string;
+  branchId?: number | null;
+  paymentMethod?: SupplierPaymentMethod;
+  cardId?: number | null;
 }
 
 export interface SupplierStatementLine {

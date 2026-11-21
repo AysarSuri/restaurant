@@ -8,6 +8,8 @@ import {
   supplierReturnItemsTable,
   supplierMovementsTable,
   menuItemsTable,
+  branchesTable,
+  cardsTable,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
@@ -400,9 +402,24 @@ async function enrichPurchases(rows: (typeof supplierPurchasesTable.$inferSelect
           .where(inArray(suppliersTable.id, supplierIds));
   const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
   const itemsMap = await loadPurchaseItems(rows.map((r) => r.id));
+  const branchIds = [
+    ...new Set(rows.map((r) => r.branchId).filter(Boolean)),
+  ] as number[];
+  const cardIds = [...new Set(rows.map((r) => r.cardId).filter(Boolean))] as number[];
+  const branches =
+    branchIds.length === 0
+      ? []
+      : await db.select().from(branchesTable).where(inArray(branchesTable.id, branchIds));
+  const cards =
+    cardIds.length === 0
+      ? []
+      : await db.select().from(cardsTable).where(inArray(cardsTable.id, cardIds));
+  const branchMap = new Map(branches.map((b) => [b.id, b.name]));
+  const cardMap = new Map(cards.map((c) => [c.id, c.name]));
 
   return rows.map((r) => {
     const s = supplierMap.get(r.supplierId);
+    const paymentMethod = r.paymentMethod === "card" ? "card" : "cash";
     return {
       id: r.id,
       invoiceNo: r.invoiceNo,
@@ -417,6 +434,11 @@ async function enrichPurchases(rows: (typeof supplierPurchasesTable.$inferSelect
       paidAmount: num(r.paidAmount),
       discountAmount: num(r.discountAmount),
       remainingAmount: num(r.remainingAmount),
+      branchId: r.branchId,
+      branchName: r.branchId ? branchMap.get(r.branchId) || "" : "",
+      paymentMethod,
+      cardId: r.cardId,
+      cardName: r.cardId ? cardMap.get(r.cardId) || "" : "",
       items: itemsMap.get(r.id) ?? [],
       createdAt: r.createdAt,
     };
@@ -454,6 +476,9 @@ async function parsePurchaseBody(body: any): Promise<
       paidAmount: number;
       discountAmount: number;
       remainingAmount: number;
+      branchId: number | null;
+      paymentMethod: "cash" | "card";
+      cardId: number | null;
     }
 > {
   const invoiceDate = normalizeDate(body?.invoiceDate) ?? todayDate();
@@ -461,10 +486,30 @@ async function parsePurchaseBody(body: any): Promise<
   const supplierId = Number(body?.supplierId);
   const notes = String(body?.notes ?? "").trim() || null;
   const rawItems = Array.isArray(body?.items) ? body.items : [];
+  const paymentMethodRaw = String(body?.paymentMethod ?? body?.payMethod ?? "cash")
+    .trim()
+    .toLowerCase();
+  const paymentMethod: "cash" | "card" =
+    paymentMethodRaw === "card" || paymentMethodRaw === "بطاقة" ? "card" : "cash";
+  const branchIdRaw = Number(body?.branchId);
+  const branchId =
+    Number.isFinite(branchIdRaw) && branchIdRaw > 0 ? branchIdRaw : null;
+  const cardIdRaw = Number(body?.cardId);
+  let cardId =
+    paymentMethod === "card" && Number.isFinite(cardIdRaw) && cardIdRaw > 0
+      ? cardIdRaw
+      : null;
 
   if (!Number.isFinite(supplierId) || supplierId <= 0) {
     return { ok: false, status: 400, message: "اختر المورد" };
   }
+  if (!branchId) {
+    return { ok: false, status: 400, message: "اختر الفرع" };
+  }
+  if (paymentMethod === "card" && !cardId) {
+    return { ok: false, status: 400, message: "اختر البطاقة" };
+  }
+  if (paymentMethod === "cash") cardId = null;
   const [supplier] = await db
     .select()
     .from(suppliersTable)
@@ -551,6 +596,9 @@ async function parsePurchaseBody(body: any): Promise<
     paidAmount,
     discountAmount,
     remainingAmount,
+    branchId,
+    paymentMethod,
+    cardId,
   };
 }
 
@@ -577,6 +625,9 @@ router.post("/purchases", async (req, res) => {
       paidAmount: money(parsed.paidAmount),
       discountAmount: money(parsed.discountAmount),
       remainingAmount: money(parsed.remainingAmount),
+      branchId: parsed.branchId,
+      paymentMethod: parsed.paymentMethod,
+      cardId: parsed.cardId,
     })
     .returning();
 
@@ -617,6 +668,9 @@ router.put("/purchases/:id", async (req, res) => {
       paidAmount: money(parsed.paidAmount),
       discountAmount: money(parsed.discountAmount),
       remainingAmount: money(parsed.remainingAmount),
+      branchId: parsed.branchId,
+      paymentMethod: parsed.paymentMethod,
+      cardId: parsed.cardId,
     })
     .where(eq(supplierPurchasesTable.id, id))
     .returning();
@@ -703,9 +757,24 @@ async function enrichReturns(rows: (typeof supplierReturnsTable.$inferSelect)[])
           .where(inArray(suppliersTable.id, supplierIds));
   const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
   const itemsMap = await loadReturnItems(rows.map((r) => r.id));
+  const branchIds = [
+    ...new Set(rows.map((r) => r.branchId).filter(Boolean)),
+  ] as number[];
+  const cardIds = [...new Set(rows.map((r) => r.cardId).filter(Boolean))] as number[];
+  const branches =
+    branchIds.length === 0
+      ? []
+      : await db.select().from(branchesTable).where(inArray(branchesTable.id, branchIds));
+  const cards =
+    cardIds.length === 0
+      ? []
+      : await db.select().from(cardsTable).where(inArray(cardsTable.id, cardIds));
+  const branchMap = new Map(branches.map((b) => [b.id, b.name]));
+  const cardMap = new Map(cards.map((c) => [c.id, c.name]));
 
   return rows.map((r) => {
     const s = supplierMap.get(r.supplierId);
+    const paymentMethod = r.paymentMethod === "card" ? "card" : "cash";
     return {
       id: r.id,
       invoiceNo: r.invoiceNo,
@@ -720,6 +789,11 @@ async function enrichReturns(rows: (typeof supplierReturnsTable.$inferSelect)[])
       paidAmount: num(r.paidAmount),
       discountAmount: num(r.discountAmount),
       remainingAmount: num(r.remainingAmount),
+      branchId: r.branchId,
+      branchName: r.branchId ? branchMap.get(r.branchId) || "" : "",
+      paymentMethod,
+      cardId: r.cardId,
+      cardName: r.cardId ? cardMap.get(r.cardId) || "" : "",
       items: itemsMap.get(r.id) ?? [],
       createdAt: r.createdAt,
     };
@@ -756,6 +830,9 @@ router.post("/returns", async (req, res) => {
       paidAmount: money(parsed.paidAmount),
       discountAmount: money(parsed.discountAmount),
       remainingAmount: money(parsed.remainingAmount),
+      branchId: parsed.branchId,
+      paymentMethod: parsed.paymentMethod,
+      cardId: parsed.cardId,
     })
     .returning();
 
@@ -796,6 +873,9 @@ router.put("/returns/:id", async (req, res) => {
       paidAmount: money(parsed.paidAmount),
       discountAmount: money(parsed.discountAmount),
       remainingAmount: money(parsed.remainingAmount),
+      branchId: parsed.branchId,
+      paymentMethod: parsed.paymentMethod,
+      cardId: parsed.cardId,
     })
     .where(eq(supplierReturnsTable.id, id))
     .returning();
@@ -835,8 +915,23 @@ async function enrichMovements(rows: (typeof supplierMovementsTable.$inferSelect
           .from(suppliersTable)
           .where(inArray(suppliersTable.id, supplierIds));
   const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
+  const branchIds = [
+    ...new Set(rows.map((r) => r.branchId).filter(Boolean)),
+  ] as number[];
+  const cardIds = [...new Set(rows.map((r) => r.cardId).filter(Boolean))] as number[];
+  const branches =
+    branchIds.length === 0
+      ? []
+      : await db.select().from(branchesTable).where(inArray(branchesTable.id, branchIds));
+  const cards =
+    cardIds.length === 0
+      ? []
+      : await db.select().from(cardsTable).where(inArray(cardsTable.id, cardIds));
+  const branchMap = new Map(branches.map((b) => [b.id, b.name]));
+  const cardMap = new Map(cards.map((c) => [c.id, c.name]));
   return rows.map((r) => {
     const s = supplierMap.get(r.supplierId);
+    const paymentMethod = r.paymentMethod === "card" ? "card" : "cash";
     return {
       id: r.id,
       invoiceNo: r.invoiceNo,
@@ -848,9 +943,52 @@ async function enrichMovements(rows: (typeof supplierMovementsTable.$inferSelect
       amountType: r.amountType,
       amount: num(r.amount),
       notes: r.notes,
+      branchId: r.branchId,
+      branchName: r.branchId ? branchMap.get(r.branchId) || "" : "",
+      paymentMethod,
+      cardId: r.cardId,
+      cardName: r.cardId ? cardMap.get(r.cardId) || "" : "",
       createdAt: r.createdAt,
     };
   });
+}
+
+function parseMovementPayment(body: any, amountType: string) {
+  const needsPayment = amountType === "paid" || amountType === "received";
+  const branchIdRaw = Number(body?.branchId);
+  const branchId =
+    Number.isFinite(branchIdRaw) && branchIdRaw > 0 ? branchIdRaw : null;
+  const paymentMethodRaw = String(body?.paymentMethod ?? body?.payMethod ?? "cash")
+    .trim()
+    .toLowerCase();
+  let paymentMethod: "cash" | "card" =
+    needsPayment &&
+    (paymentMethodRaw === "card" || paymentMethodRaw === "بطاقة")
+      ? "card"
+      : "cash";
+  const cardIdRaw = Number(body?.cardId);
+  let cardId =
+    paymentMethod === "card" && Number.isFinite(cardIdRaw) && cardIdRaw > 0
+      ? cardIdRaw
+      : null;
+
+  if (!branchId) {
+    return { ok: false as const, status: 400, message: "اختر الفرع" };
+  }
+  if (!needsPayment) {
+    paymentMethod = "cash";
+    cardId = null;
+  } else if (paymentMethod === "card" && !cardId) {
+    return { ok: false as const, status: 400, message: "اختر البطاقة" };
+  }
+  if (paymentMethod === "cash") cardId = null;
+
+  return {
+    ok: true as const,
+    branchId,
+    paymentMethod,
+    cardId,
+  };
 }
 
 router.get("/movements", async (_req, res) => {
@@ -883,6 +1021,9 @@ router.post("/movements", async (req, res) => {
   }
   if (!(amount > 0)) return res.status(400).json({ message: "المبلغ يجب أن يكون أكبر من صفر" });
 
+  const payment = parseMovementPayment(req.body, amountType);
+  if (!payment.ok) return res.status(payment.status).json({ message: payment.message });
+
   const [supplier] = await db
     .select()
     .from(suppliersTable)
@@ -900,6 +1041,9 @@ router.post("/movements", async (req, res) => {
       amountType,
       amount: money(amount),
       notes,
+      branchId: payment.branchId,
+      paymentMethod: payment.paymentMethod,
+      cardId: payment.cardId,
     })
     .returning();
 
@@ -933,6 +1077,9 @@ router.put("/movements/:id", async (req, res) => {
   }
   if (!(amount > 0)) return res.status(400).json({ message: "المبلغ يجب أن يكون أكبر من صفر" });
 
+  const payment = parseMovementPayment(req.body, amountType);
+  if (!payment.ok) return res.status(payment.status).json({ message: payment.message });
+
   const [supplier] = await db
     .select()
     .from(suppliersTable)
@@ -950,6 +1097,9 @@ router.put("/movements/:id", async (req, res) => {
       amountType,
       amount: money(amount),
       notes,
+      branchId: payment.branchId,
+      paymentMethod: payment.paymentMethod,
+      cardId: payment.cardId,
     })
     .where(eq(supplierMovementsTable.id, id))
     .returning();

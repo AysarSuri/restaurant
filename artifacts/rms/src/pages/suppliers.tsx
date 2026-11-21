@@ -18,6 +18,8 @@ import {
   useGetSupplierDebts,
   useGetMenuItems,
   useGetSettings,
+  useGetBranches,
+  useGetCards,
   getGetSettingsQueryKey,
   getGetSuppliersQueryKey,
   getGetSupplierPurchasesQueryKey,
@@ -29,6 +31,7 @@ import {
   type SupplierPurchase,
   type SupplierAmountType,
   type SupplierUnitKind,
+  type SupplierPaymentMethod,
   type MenuItem,
 } from "@workspace/api-client-react";
 import { Button, Input, Dialog, Card } from "@/components/ui-elements";
@@ -44,6 +47,7 @@ import { useI18n } from "@/i18n";
 import {
   ArrowLeftRight,
   Building2,
+  CreditCard,
   FileSpreadsheet,
   FileText,
   Hash,
@@ -196,6 +200,8 @@ export default function SuppliersPage() {
   const { data: movements, isLoading: loadingMovements } = useGetSupplierMovements();
   const { data: debts, isLoading: loadingDebts, refetch: refetchDebts } = useGetSupplierDebts();
   const { data: menuItems } = useGetMenuItems();
+  const { data: branches } = useGetBranches();
+  const { data: cards } = useGetCards();
   const { data: appSettings, refetch: refetchSettings } = useGetSettings({
     query: { staleTime: 30_000, refetchOnWindowFocus: true },
   });
@@ -229,6 +235,9 @@ export default function SuppliersPage() {
     notes: "",
     paidAmount: 0,
     discountAmount: 0,
+    branchId: "",
+    paymentMethod: "cash" as SupplierPaymentMethod,
+    cardId: "",
   });
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([
     EMPTY_PURCHASE_LINE(),
@@ -236,6 +245,7 @@ export default function SuppliersPage() {
   const [purchaseError, setPurchaseError] = useState("");
   const [editingPurchaseId, setEditingPurchaseId] = useState<number | null>(null);
   const [purchaseListSupplierId, setPurchaseListSupplierId] = useState("");
+  const [purchaseListBranchId, setPurchaseListBranchId] = useState("");
   const [purchaseListFromDate, setPurchaseListFromDate] = useState(todayDate);
   const [purchaseListToDate, setPurchaseListToDate] = useState(todayDate);
   const [purchaseListInvoiceNo, setPurchaseListInvoiceNo] = useState("");
@@ -275,12 +285,16 @@ export default function SuppliersPage() {
     amountType: "paid" as SupplierAmountType,
     amount: "" as number | "",
     notes: "",
+    branchId: "",
+    paymentMethod: "cash" as SupplierPaymentMethod,
+    cardId: "",
   });
   const [movementError, setMovementError] = useState("");
   const [movementListFromDate, setMovementListFromDate] = useState(todayDate);
   const [movementListToDate, setMovementListToDate] = useState(todayDate);
   const [movementListInvoiceNo, setMovementListInvoiceNo] = useState("");
   const [movementListSupplierId, setMovementListSupplierId] = useState("");
+  const [movementListBranchId, setMovementListBranchId] = useState("");
   const [movementListAmountType, setMovementListAmountType] = useState("");
 
   // Live clock for new movement form only (not while editing)
@@ -328,6 +342,45 @@ export default function SuppliersPage() {
     [suppliers]
   );
 
+  const branchOptions = useMemo<ComboboxOption[]>(
+    () =>
+      (branches ?? []).map((b) => ({
+        value: String(b.id),
+        label: b.name,
+        icon: Building2,
+      })),
+    [branches]
+  );
+
+  const purchaseBranchCardOptions = useMemo<ComboboxOption[]>(() => {
+    const branchId = Number(purchaseForm.branchId) || 0;
+    return (cards ?? [])
+      .filter((c) => c.isActive !== false)
+      .filter((c) => (branchId ? (c.branchIds ?? []).includes(branchId) : false))
+      .map((c) => ({
+        value: String(c.id),
+        label: c.name,
+        subtitle: fmtMoney(Number(c.balance) || 0),
+        icon: CreditCard,
+      }));
+  }, [cards, purchaseForm.branchId]);
+
+  const movementBranchCardOptions = useMemo<ComboboxOption[]>(() => {
+    const branchId = Number(movementForm.branchId) || 0;
+    return (cards ?? [])
+      .filter((c) => c.isActive !== false)
+      .filter((c) => (branchId ? (c.branchIds ?? []).includes(branchId) : false))
+      .map((c) => ({
+        value: String(c.id),
+        label: c.name,
+        subtitle: fmtMoney(Number(c.balance) || 0),
+        icon: CreditCard,
+      }));
+  }, [cards, movementForm.branchId]);
+
+  const movementNeedsPayment =
+    movementForm.amountType === "paid" || movementForm.amountType === "received";
+
   const supplierNameSearchOptions = useMemo<ComboboxOption[]>(
     () => [
       {
@@ -360,6 +413,19 @@ export default function SuppliersPage() {
     return list.filter((s) => String(s.id) === supplierNameFilterId);
   }, [suppliers, supplierNameFilterId]);
 
+  const branchSearchOptions = useMemo<ComboboxOption[]>(
+    () => [
+      {
+        value: "",
+        label: "كل الفروع",
+        subtitle: "عرض بدون فلتر",
+        icon: Building2,
+      },
+      ...branchOptions,
+    ],
+    [branchOptions]
+  );
+
   const filteredPurchases = useMemo(() => {
     const list = purchases ?? [];
     const invoiceQ = purchaseListInvoiceNo.trim().toLowerCase();
@@ -367,6 +433,9 @@ export default function SuppliersPage() {
     const to = purchaseListToDate.trim();
     return list.filter((p) => {
       if (purchaseListSupplierId && String(p.supplierId) !== purchaseListSupplierId) {
+        return false;
+      }
+      if (purchaseListBranchId && String(p.branchId ?? "") !== purchaseListBranchId) {
         return false;
       }
       if (invoiceQ && !String(p.invoiceNo ?? "").toLowerCase().includes(invoiceQ)) {
@@ -380,6 +449,7 @@ export default function SuppliersPage() {
   }, [
     purchases,
     purchaseListSupplierId,
+    purchaseListBranchId,
     purchaseListFromDate,
     purchaseListToDate,
     purchaseListInvoiceNo,
@@ -429,6 +499,9 @@ export default function SuppliersPage() {
       if (movementListSupplierId && String(m.supplierId) !== movementListSupplierId) {
         return false;
       }
+      if (movementListBranchId && String(m.branchId ?? "") !== movementListBranchId) {
+        return false;
+      }
       if (movementListAmountType && m.amountType !== movementListAmountType) {
         return false;
       }
@@ -443,6 +516,7 @@ export default function SuppliersPage() {
   }, [
     movements,
     movementListSupplierId,
+    movementListBranchId,
     movementListAmountType,
     movementListFromDate,
     movementListToDate,
@@ -580,6 +654,9 @@ export default function SuppliersPage() {
       notes: "",
       paidAmount: 0,
       discountAmount: 0,
+      branchId: "",
+      paymentMethod: "cash",
+      cardId: "",
     });
   };
 
@@ -594,6 +671,9 @@ export default function SuppliersPage() {
       notes: p.notes || "",
       paidAmount: Number(p.paidAmount) || 0,
       discountAmount: Number(p.discountAmount) || 0,
+      branchId: p.branchId ? String(p.branchId) : "",
+      paymentMethod: p.paymentMethod === "card" ? "card" : "cash",
+      cardId: p.cardId ? String(p.cardId) : "",
     });
     setPurchaseLines(
       p.items.length > 0
@@ -611,6 +691,10 @@ export default function SuppliersPage() {
 
   const savePurchase = () => {
     if (!purchaseForm.supplierId) return setPurchaseError("اختر المورد");
+    if (!purchaseForm.branchId) return setPurchaseError("اختر الفرع");
+    if (purchaseForm.paymentMethod === "card" && !purchaseForm.cardId) {
+      return setPurchaseError("اختر البطاقة");
+    }
     const invoiceNo =
       editingPurchaseId != null
         ? purchaseForm.invoiceNo
@@ -640,6 +724,12 @@ export default function SuppliersPage() {
       notes: purchaseForm.notes.trim(),
       paidAmount: purchaseTotals.paidAmount,
       discountAmount: purchaseTotals.discountAmount,
+      branchId: Number(purchaseForm.branchId) || null,
+      paymentMethod: purchaseForm.paymentMethod,
+      cardId:
+        purchaseForm.paymentMethod === "card"
+          ? Number(purchaseForm.cardId) || null
+          : null,
       items,
     };
     if (editingPurchaseId != null) {
@@ -721,6 +811,9 @@ export default function SuppliersPage() {
       amountType: "paid",
       amount: "",
       notes: "",
+      branchId: "",
+      paymentMethod: "cash",
+      cardId: "",
     });
     setMovementError("");
   };
@@ -740,6 +833,9 @@ export default function SuppliersPage() {
       amountType: m.amountType,
       amount: Number(m.amount) || "",
       notes: m.notes?.trim() || "",
+      branchId: m.branchId ? String(m.branchId) : "",
+      paymentMethod: m.paymentMethod === "card" ? "card" : "cash",
+      cardId: m.cardId ? String(m.cardId) : "",
     });
     setMovementError("");
     setMovementFormOpen(true);
@@ -781,8 +877,14 @@ export default function SuppliersPage() {
 
   const saveMovement = () => {
     if (!movementForm.supplierId) return setMovementError("اختر المورد");
+    if (!movementForm.branchId) return setMovementError("اختر الفرع");
     if (movementForm.amount === "" || !(Number(movementForm.amount) > 0)) {
       return setMovementError("أدخل مبلغاً أكبر من صفر");
+    }
+    const needsPayment =
+      movementForm.amountType === "paid" || movementForm.amountType === "received";
+    if (needsPayment && movementForm.paymentMethod === "card" && !movementForm.cardId) {
+      return setMovementError("اختر البطاقة");
     }
     setMovementError("");
     const body = {
@@ -796,6 +898,12 @@ export default function SuppliersPage() {
       amountType: movementForm.amountType,
       amount: Number(movementForm.amount),
       notes: movementForm.notes.trim(),
+      branchId: Number(movementForm.branchId) || null,
+      paymentMethod: needsPayment ? movementForm.paymentMethod : ("cash" as const),
+      cardId:
+        needsPayment && movementForm.paymentMethod === "card"
+          ? Number(movementForm.cardId) || null
+          : null,
     };
 
     if (editingMovementId != null) {
@@ -1287,7 +1395,7 @@ export default function SuppliersPage() {
             </div>
 
             {/* Header fields — one compact row */}
-            <div className="grid grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_minmax(0,0.75fr)] gap-x-2 gap-y-1 items-end">
+            <div className="grid grid-cols-2 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,0.65fr)_minmax(0,0.7fr)] gap-x-2 gap-y-1 items-end">
               <div className="col-span-2 lg:col-span-1 min-w-0">
                 <ModernCombobox
                   value={purchaseForm.supplierId}
@@ -1299,6 +1407,29 @@ export default function SuppliersPage() {
                   searchable
                   searchPlaceholder="ابحث باسم أو كود المورد..."
                   emptyText="لا يوجد مورد مطابق"
+                  size="sm"
+                  labelClassName="text-[14px] font-bold text-foreground !mb-0"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
+              </div>
+              <div className="min-w-0">
+                <ModernCombobox
+                  value={purchaseForm.branchId}
+                  onChange={(branchId) =>
+                    setPurchaseForm((f) => ({
+                      ...f,
+                      branchId,
+                      cardId: "",
+                    }))
+                  }
+                  options={branchOptions}
+                  label="الفرع *"
+                  placeholder="اختر الفرع"
+                  icon={Building2}
+                  searchable
+                  searchPlaceholder="ابحث عن الفرع..."
+                  emptyText="لا يوجد فرع"
                   size="sm"
                   labelClassName="text-[14px] font-bold text-foreground !mb-0"
                   valueClassName="text-[14px] font-bold"
@@ -1614,6 +1745,70 @@ export default function SuppliersPage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl border border-border/60 bg-secondary/40">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPurchaseForm((f) => ({
+                          ...f,
+                          paymentMethod: "cash",
+                          cardId: "",
+                        }))
+                      }
+                      className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
+                        purchaseForm.paymentMethod === "cash"
+                          ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                      }`}
+                    >
+                      <Wallet className="w-4 h-4" />
+                      بدون بطاقة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPurchaseForm((f) => ({ ...f, paymentMethod: "card" }))
+                      }
+                      className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
+                        purchaseForm.paymentMethod === "card"
+                          ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                      }`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      بطاقة
+                    </button>
+                  </div>
+                  {purchaseForm.paymentMethod === "card" ? (
+                    <ModernCombobox
+                      value={purchaseForm.cardId}
+                      onChange={(cardId) =>
+                        setPurchaseForm((f) => ({ ...f, cardId }))
+                      }
+                      options={purchaseBranchCardOptions}
+                      label="البطاقة *"
+                      placeholder={
+                        purchaseForm.branchId
+                          ? "اختر البطاقة حسب الفرع"
+                          : "اختر الفرع أولاً"
+                      }
+                      icon={CreditCard}
+                      searchable
+                      searchPlaceholder="ابحث عن البطاقة..."
+                      emptyText={
+                        purchaseForm.branchId
+                          ? "لا توجد بطاقة لهذا الفرع"
+                          : "اختر الفرع أولاً لعرض البطاقات"
+                      }
+                      size="sm"
+                      labelClassName="text-[14px] font-bold text-foreground !mb-0"
+                      valueClassName="text-[14px] font-bold"
+                      className="[&>div:first-child]:mb-0.5"
+                    />
+                  ) : null}
+                </div>
+
                 <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-0.5">
                   {purchaseError ? (
                     <p className="text-[14px] font-bold text-destructive sm:me-auto">
@@ -1635,7 +1830,7 @@ export default function SuppliersPage() {
 
           <Card className="px-3 py-2.5 sm:px-4 sm:py-3 border border-border/50 space-y-2 overflow-hidden">
             <h3 className="text-[15px] font-extrabold">فواتير الشراء</h3>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 items-end">
               <div className="min-w-0">
                 <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   من تاريخ
@@ -1670,6 +1865,23 @@ export default function SuppliersPage() {
                     placeholder="بحث برقم الفاتورة"
                   />
                 </div>
+              </div>
+              <div className="min-w-0">
+                <ModernCombobox
+                  value={purchaseListBranchId}
+                  onChange={setPurchaseListBranchId}
+                  options={branchSearchOptions}
+                  label="الفرع"
+                  placeholder="كل الفروع"
+                  icon={Building2}
+                  searchable
+                  size="sm"
+                  searchPlaceholder="ابحث عن فرع..."
+                  emptyText="لا يوجد فرع مطابق"
+                  labelClassName="text-[14px] font-bold text-foreground"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
               </div>
               <div className="min-w-0 col-span-2 lg:col-span-1">
                 <ModernCombobox
@@ -1896,7 +2108,7 @@ export default function SuppliersPage() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 items-end">
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 items-end">
               <div className="min-w-0">
                 <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
                   من تاريخ
@@ -1932,7 +2144,24 @@ export default function SuppliersPage() {
                   />
                 </div>
               </div>
-              <div className="min-w-0 col-span-2 lg:col-span-1">
+              <div className="min-w-0">
+                <ModernCombobox
+                  value={movementListBranchId}
+                  onChange={setMovementListBranchId}
+                  options={branchSearchOptions}
+                  label="الفرع"
+                  placeholder="كل الفروع"
+                  icon={Building2}
+                  searchable
+                  size="sm"
+                  searchPlaceholder="ابحث عن فرع..."
+                  emptyText="لا يوجد فرع مطابق"
+                  labelClassName="text-[14px] font-bold text-foreground"
+                  valueClassName="text-[14px] font-bold"
+                  className="[&>div:first-child]:mb-0.5"
+                />
+              </div>
+              <div className="min-w-0">
                 <ModernCombobox
                   value={movementListSupplierId}
                   onChange={setMovementListSupplierId}
@@ -1949,7 +2178,7 @@ export default function SuppliersPage() {
                   className="[&>div:first-child]:mb-0.5"
                 />
               </div>
-              <div className="min-w-0 col-span-2 lg:col-span-1">
+              <div className="min-w-0">
                 <ModernCombobox
                   value={movementListAmountType}
                   onChange={setMovementListAmountType}
@@ -2507,13 +2736,33 @@ export default function SuppliersPage() {
               valueClassName="text-[16px] font-bold"
             />
             <ModernCombobox
-              value={movementForm.amountType}
-              onChange={(v) =>
+              value={movementForm.branchId}
+              onChange={(branchId) =>
                 setMovementForm((f) => ({
                   ...f,
-                  amountType: (v as SupplierAmountType) || "paid",
+                  branchId,
+                  cardId: "",
                 }))
               }
+              options={branchOptions}
+              label="الفرع *"
+              placeholder="اختر الفرع"
+              icon={Building2}
+              labelClassName="text-[16px] font-bold text-foreground"
+              valueClassName="text-[16px] font-bold"
+            />
+            <ModernCombobox
+              value={movementForm.amountType}
+              onChange={(v) => {
+                const amountType = (v as SupplierAmountType) || "paid";
+                setMovementForm((f) => ({
+                  ...f,
+                  amountType,
+                  ...(amountType === "discount"
+                    ? { paymentMethod: "cash" as const, cardId: "" }
+                    : {}),
+                }));
+              }}
               options={amountTypeOptions}
               label="نوع المبلغ *"
               placeholder="مدفوع"
@@ -2543,6 +2792,69 @@ export default function SuppliersPage() {
               />
             </div>
           </div>
+          {movementNeedsPayment ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl border border-border/60 bg-secondary/40">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMovementForm((f) => ({
+                      ...f,
+                      paymentMethod: "cash",
+                      cardId: "",
+                    }))
+                  }
+                  className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
+                    movementForm.paymentMethod === "cash"
+                      ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" />
+                  بدون بطاقة
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMovementForm((f) => ({ ...f, paymentMethod: "card" }))
+                  }
+                  className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
+                    movementForm.paymentMethod === "card"
+                      ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  بطاقة
+                </button>
+              </div>
+              {movementForm.paymentMethod === "card" ? (
+                <ModernCombobox
+                  value={movementForm.cardId}
+                  onChange={(cardId) =>
+                    setMovementForm((f) => ({ ...f, cardId }))
+                  }
+                  options={movementBranchCardOptions}
+                  label="البطاقة *"
+                  placeholder={
+                    movementForm.branchId
+                      ? "اختر البطاقة حسب الفرع"
+                      : "اختر الفرع أولاً"
+                  }
+                  icon={CreditCard}
+                  searchable
+                  searchPlaceholder="ابحث عن البطاقة..."
+                  emptyText={
+                    movementForm.branchId
+                      ? "لا توجد بطاقة لهذا الفرع"
+                      : "اختر الفرع أولاً لعرض البطاقات"
+                  }
+                  labelClassName="text-[16px] font-bold text-foreground"
+                  valueClassName="text-[16px] font-bold"
+                />
+              ) : null}
+            </div>
+          ) : null}
           <div>
             <label className="text-[16px] font-bold text-foreground mb-1.5 block">
               ملاحظة
