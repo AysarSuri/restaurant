@@ -97,11 +97,15 @@ router.get("/", async (req, res) => {
   const to = normalizeDate(req.query.to);
   const kind = String(req.query.kind ?? "").trim().toLowerCase();
   const invoiceNo = String(req.query.invoiceNo ?? "").trim().toLowerCase();
+  const filterBranchId = Number(req.query.filterBranchId ?? req.query.branchFilter);
 
   if (from) conditions.push(sql`${cashMovementsTable.movementDate} >= ${from}`);
   if (to) conditions.push(sql`${cashMovementsTable.movementDate} <= ${to}`);
   if (kind && KINDS.has(kind)) {
     conditions.push(eq(cashMovementsTable.kind, kind));
+  }
+  if (Number.isFinite(filterBranchId) && filterBranchId > 0) {
+    conditions.push(eq(cashMovementsTable.branchId, filterBranchId));
   }
   if (invoiceNo) {
     conditions.push(sql`lower(${cashMovementsTable.invoiceNo}) like ${`%${invoiceNo}%`}`);
@@ -128,6 +132,9 @@ router.post("/", async (req, res) => {
   if (!(amount > 0)) return res.status(400).json({ message: "أدخل مبلغاً أكبر من صفر" });
 
   const resolvedBranchId = resolveWriteBranchId(scope, Number(req.body?.branchId) || null);
+  if (!resolvedBranchId) {
+    return res.status(400).json({ message: "اختر فرعاً قبل حفظ السحب أو المرجوع" });
+  }
   if (!invoiceNo) invoiceNo = await nextInvoiceNo();
 
   const [row] = await db
@@ -175,6 +182,9 @@ router.put("/:id", async (req, res) => {
   const resolvedBranchId =
     resolveWriteBranchId(scope, Number(req.body?.branchId) || existing.branchId) ||
     existing.branchId;
+  if (!resolvedBranchId) {
+    return res.status(400).json({ message: "اختر فرعاً قبل حفظ السحب أو المرجوع" });
+  }
 
   const [row] = await db
     .update(cashMovementsTable)

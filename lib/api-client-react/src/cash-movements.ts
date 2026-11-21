@@ -45,6 +45,7 @@ export interface ListCashMovementsParams {
   to?: string;
   kind?: CashMovementKind | "";
   invoiceNo?: string;
+  filterBranchId?: number;
 }
 
 const base = "/api/cash-movements";
@@ -55,6 +56,9 @@ function qs(params?: ListCashMovementsParams) {
   if (params.from) sp.set("from", params.from);
   if (params.to) sp.set("to", params.to);
   if (params.kind) sp.set("kind", params.kind);
+  if (params.filterBranchId && params.filterBranchId > 0) {
+    sp.set("filterBranchId", String(params.filterBranchId));
+  }
   if (params.invoiceNo?.trim()) sp.set("invoiceNo", params.invoiceNo.trim());
   const s = sp.toString();
   return s ? `?${s}` : "";

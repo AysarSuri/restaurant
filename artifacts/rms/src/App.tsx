@@ -18,6 +18,7 @@ import Employees from "@/pages/employees";
 import Shifts from "@/pages/shifts";
 import Suppliers from "@/pages/suppliers";
 import Expenses from "@/pages/expenses";
+import CashMovements from "@/pages/cash-movements";
 import Branches from "@/pages/branches";
 import Cards from "@/pages/cards";
 import Settings from "@/pages/settings";
@@ -185,6 +186,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/shifts": ["admin", "manager"],
   "/suppliers": ["admin", "manager"],
   "/expenses": ["admin", "manager"],
+  "/cash-movements": ["admin", "manager"],
   "/branches": ["admin", "manager"],
   "/cards": ["admin", "manager"],
   "/settings": ["admin", "manager"],
@@ -241,6 +243,7 @@ function Router() {
       <Route path="/shifts" component={Shifts} />
       <Route path="/suppliers" component={Suppliers} />
       <Route path="/expenses" component={Expenses} />
+      <Route path="/cash-movements" component={CashMovements} />
       <Route path="/branches" component={Branches} />
       <Route path="/cards" component={Cards} />
       <Route path="/settings" component={Settings} />
