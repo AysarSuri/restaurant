@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Button, Input, Card } from "./ui-elements";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Printer } from "lucide-react";
 import { useI18n } from "@/i18n";
 
 export interface Column<T> {
@@ -17,8 +17,12 @@ interface CrudTableProps<T> {
   onAdd?: () => void;
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
+  /** Optional thermal / print action per row */
+  onPrint?: (item: T) => void;
   searchKey?: keyof T;
   isLoading?: boolean;
+  /** Hide the built-in search box (use toolbar filters instead) */
+  hideSearch?: boolean;
   /** Extra header actions (rendered before the main Add button) */
   headerActions?: React.ReactNode;
   /** Extra filter/search row rendered under the header, inside the card */
@@ -26,7 +30,7 @@ interface CrudTableProps<T> {
 }
 
 export function CrudTable<T extends { id: number }>({
-  title, titleEn, data, columns, onAdd, onEdit, onDelete, searchKey, isLoading, headerActions, toolbar
+  title, titleEn, data, columns, onAdd, onEdit, onDelete, onPrint, searchKey, isLoading, hideSearch, headerActions, toolbar
 }: CrudTableProps<T>) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
@@ -49,7 +53,7 @@ export function CrudTable<T extends { id: number }>({
           <p className="text-xs text-primary font-display tracking-widest uppercase">{titleEn}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {searchKey && (
+          {searchKey && !hideSearch && (
             <div className="relative flex-1 min-w-[180px] max-w-xs">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
@@ -104,8 +108,17 @@ export function CrudTable<T extends { id: number }>({
                   </div>
                 ))}
               </div>
-              {(onEdit || onDelete) && (
+              {(onEdit || onDelete || onPrint) && (
                 <div className="flex gap-3 pt-1">
+                  {onPrint && (
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-12 text-[16px] font-bold gap-2 touch-manipulation"
+                      onClick={() => onPrint(item)}
+                    >
+                      <Printer className="w-5 h-5" /> {t("common.print")}
+                    </Button>
+                  )}
                   {onEdit && (
                     <Button
                       variant="outline"
@@ -144,7 +157,7 @@ export function CrudTable<T extends { id: number }>({
                   {col.header}
                 </TableHead>
               ))}
-              {(onEdit || onDelete) && (
+              {(onEdit || onDelete || onPrint) && (
                 <TableHead className="text-end text-primary text-[15px] font-bold py-3">
                   {t("common.actions")}
                 </TableHead>
@@ -175,9 +188,20 @@ export function CrudTable<T extends { id: number }>({
                       {col.render ? col.render(item) : String(item[col.key as keyof T] || "")}
                     </TableCell>
                   ))}
-                  {(onEdit || onDelete) && (
+                  {(onEdit || onDelete || onPrint) && (
                     <TableCell className="text-end py-3">
-                      <div className="flex justify-end gap-3.5">
+                      <div className="flex justify-end gap-2.5">
+                        {onPrint && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-12 w-12 text-muted-foreground hover:text-primary touch-manipulation"
+                            title={t("common.print")}
+                            onClick={() => onPrint(item)}
+                          >
+                            <Printer className="w-5 h-5" />
+                          </Button>
+                        )}
                         {onEdit && (
                           <Button
                             variant="ghost"
