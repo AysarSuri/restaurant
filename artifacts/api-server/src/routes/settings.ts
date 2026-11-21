@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { appSettingsTable, devicePrintersTable, branchesTable } from "@workspace/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
+import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
 /** Keep a single printer row per deviceKey (delete older duplicates). */
 async function keepSinglePrinterForDevice(deviceKey: string, keepId?: number) {
@@ -229,7 +230,16 @@ function normalizeSalesPaymentAt(value: unknown) {
   return String(value ?? "").trim().toLowerCase() === "cashier" ? "cashier" : "pos";
 }
 
+function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
+  return {
+    ...row,
+    salesPaymentAt: normalizeSalesPaymentAt(row.salesPaymentAt),
+    salesSendToKitchen: row.salesSendToKitchen !== false,
+  };
+}
+
 router.get("/printers", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
   const rows = await db
     .select({
@@ -272,10 +282,11 @@ router.get("/printers", async (req, res) => {
       ? deduped.filter((r) => r.branchId === scope.branchId)
       : deduped;
 
-  res.json(filtered);
+  res.json(filtered.map((row) => withSalesDefaults(row)));
 });
 
 router.post("/printers", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
   const {
     deviceKey,
@@ -339,7 +350,7 @@ router.post("/printers", async (req, res) => {
         .where(eq(branchesTable.id, updated.branchId));
       branchName = b?.name ?? null;
     }
-    res.json({ ...updated, branchName });
+    res.json(withSalesDefaults({ ...updated, branchName }));
     return;
   }
 
@@ -368,7 +379,7 @@ router.post("/printers", async (req, res) => {
       branchName = b?.name ?? null;
     }
 
-    res.status(201).json({ ...created, branchName });
+    res.status(201).json(withSalesDefaults({ ...created, branchName }));
   } catch {
     // Race: another row was inserted for this device — update instead
     const fallbackId = await keepSinglePrinterForDevice(key);
@@ -402,11 +413,12 @@ router.post("/printers", async (req, res) => {
         .where(eq(branchesTable.id, updated.branchId));
       branchName = b?.name ?? null;
     }
-    res.json({ ...updated, branchName });
+    res.json(withSalesDefaults({ ...updated, branchName }));
   }
 });
 
 router.put("/printers/:id", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const id = parseInt(req.params.id, 10);
   const {
     deviceName,
@@ -470,7 +482,7 @@ router.put("/printers/:id", async (req, res) => {
     branchName = b?.name ?? null;
   }
 
-  res.json({ ...updated, branchName });
+  res.json(withSalesDefaults({ ...updated, branchName }));
 });
 
 router.delete("/printers/:id", async (req, res) => {

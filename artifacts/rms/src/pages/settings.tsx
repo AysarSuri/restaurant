@@ -401,26 +401,62 @@ export default function SettingsPage() {
     clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
+    const nextPaymentAt: DeviceSalesPaymentAt =
+      patch.salesPaymentAt ?? (row.salesPaymentAt === "cashier" ? "cashier" : "pos");
+    const nextKitchen =
+      patch.salesSendToKitchen ?? row.salesSendToKitchen !== false;
+
+    // Optimistic UI so "من شاشة الكاشير" sticks immediately
+    syncPrinters((list) =>
+      list.map((p) =>
+        p.id === row.id
+          ? { ...p, salesPaymentAt: nextPaymentAt, salesSendToKitchen: nextKitchen }
+          : p
+      )
+    );
+
     updatePrinter(
       {
         id: row.id,
         data: {
           deviceName: row.deviceName,
-          printerName: row.printerName,
+          printerName: row.printerName ?? "",
           branchId: row.branchId ?? null,
-          isActive: row.isActive,
-          salesPaymentAt: patch.salesPaymentAt ?? (row.salesPaymentAt === "cashier" ? "cashier" : "pos"),
-          salesSendToKitchen:
-            patch.salesSendToKitchen ?? row.salesSendToKitchen !== false,
+          isActive: row.isActive !== false,
+          salesPaymentAt: nextPaymentAt,
+          salesSendToKitchen: nextKitchen,
         },
       },
       {
         onSuccess: (updated) => {
-          syncPrinters((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+          syncPrinters((list) =>
+            list.map((p) =>
+              p.id === updated.id
+                ? {
+                    ...p,
+                    ...updated,
+                    // Keep requested value if API omits the field (old server / missing column)
+                    salesPaymentAt:
+                      updated.salesPaymentAt != null
+                        ? updated.salesPaymentAt === "cashier"
+                          ? "cashier"
+                          : "pos"
+                        : nextPaymentAt,
+                    salesSendToKitchen:
+                      updated.salesSendToKitchen != null
+                        ? updated.salesSendToKitchen !== false
+                        : nextKitchen,
+                  }
+                : p
+            )
+          );
           notifySaveOk(t("settings.savedSales"));
         },
-        onError: (err: any) =>
-          notifySaveErr(err?.data?.message || err?.message || t("settings.saveSalesFailed")),
+        onError: (err: any) => {
+          // Revert optimistic change
+          syncPrinters((list) => list.map((p) => (p.id === row.id ? row : p)));
+          notifySaveErr(err?.data?.message || err?.message || t("settings.saveSalesFailed"));
+        },
       }
     );
   };
