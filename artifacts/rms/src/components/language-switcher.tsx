@@ -31,7 +31,11 @@ export function LanguageSwitcher({ compact = false, className = "" }: Props) {
             type="button"
             onClick={() => setLocale(item.id as Locale)}
             title={item.nativeLabel}
-            className={`h-8 min-w-8 px-2 rounded-full text-[11px] font-extrabold transition-colors ${
+            className={`rounded-full font-extrabold transition-colors touch-manipulation ${
+              compact
+                ? "h-8 min-w-8 px-2 text-[11px]"
+                : "h-11 min-w-11 px-3 text-[13px]"
+            } ${
               active
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/70"

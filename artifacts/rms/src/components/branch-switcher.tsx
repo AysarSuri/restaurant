@@ -59,19 +59,19 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
   const selected = options.find((o) => o.id === selectedBranchId);
 
   const triggerClass = cn(
-    "group relative inline-flex items-center gap-2.5 overflow-hidden border text-start transition-all duration-200",
+    "group relative inline-flex items-center gap-2.5 overflow-hidden border text-start transition-all duration-200 touch-manipulation",
     "bg-gradient-to-l from-primary/15 via-card/80 to-card/90 backdrop-blur-md",
     "border-primary/25 shadow-[0_8px_24px_-12px_hsla(var(--primary),0.45)]",
     "hover:border-primary/45 hover:shadow-[0_12px_28px_-10px_hsla(var(--primary),0.55)]",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
     "data-[state=open]:border-primary/55 data-[state=open]:bg-primary/10",
-    compact ? "h-10 rounded-xl ps-2 pe-2.5" : "h-11 rounded-2xl ps-2.5 pe-3"
+    compact ? "h-10 rounded-xl ps-2 pe-2.5" : "h-12 rounded-2xl ps-3 pe-3.5"
   );
 
   const iconWrapClass = cn(
     "relative flex flex-shrink-0 items-center justify-center rounded-xl",
     "bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-md shadow-primary/25",
-    compact ? "h-7 w-7" : "h-8 w-8"
+    compact ? "h-7 w-7" : "h-9 w-9"
   );
 
   if (!canSwitchBranch && selectedBranchId !== "all") {
@@ -140,7 +140,7 @@ export function BranchSwitcher({ compact = false }: { compact?: boolean }) {
                 <DropdownMenuItem
                   onSelect={() => setSelectedBranchId(option.id)}
                   className={cn(
-                    "cursor-pointer items-start gap-3 rounded-xl border border-transparent px-2.5 py-2.5",
+                    "cursor-pointer items-start gap-3 rounded-xl border border-transparent px-2.5 py-3 min-h-12 touch-manipulation",
                     "focus:bg-primary/10 data-[highlighted]:bg-primary/10",
                     isSelected && "border-primary/25 bg-primary/10"
                   )}
