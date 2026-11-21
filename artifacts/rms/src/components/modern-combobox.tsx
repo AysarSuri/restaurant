@@ -129,8 +129,8 @@ export function ModernCombobox({
             disabled={disabled}
             data-enter-as-tab="true"
             className={cn(
-              "group relative flex w-full items-center overflow-hidden border text-start transition-all duration-200",
-              compact ? "h-10 gap-2 rounded-xl ps-2 pe-2.5" : "h-12 gap-2.5 rounded-xl ps-2.5 pe-3",
+              "group relative flex w-full items-center overflow-hidden border text-start transition-all duration-200 touch-manipulation",
+              compact ? "min-h-12 h-12 gap-2 rounded-xl ps-2 pe-2.5" : "min-h-14 h-14 gap-2.5 rounded-2xl ps-3 pe-3.5",
               "bg-gradient-to-l from-primary/12 via-card/85 to-card/95 backdrop-blur-md",
               "border-primary/25 shadow-[0_8px_22px_-14px_hsla(var(--primary),0.5)]",
               "hover:border-primary/45 hover:shadow-[0_12px_26px_-12px_hsla(var(--primary),0.55)]",
@@ -143,10 +143,10 @@ export function ModernCombobox({
               <span
                 className={cn(
                   "flex flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-md shadow-primary/25",
-                  compact ? "h-7 w-7" : "h-8 w-8"
+                  compact ? "h-8 w-8" : "h-9 w-9"
                 )}
               >
-                <TriggerIcon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+                <TriggerIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
               </span>
             ) : null}
             <span className="min-w-0 flex-1 leading-tight">
@@ -199,16 +199,16 @@ export function ModernCombobox({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={resolvedSearch}
-                  className="h-10 w-full rounded-xl border border-border/70 bg-background/70 pe-9 ps-3 text-sm outline-none focus:border-primary/50"
+                  className="h-12 w-full rounded-xl border border-border/70 bg-background/70 pe-9 ps-3 text-[15px] font-bold outline-none focus:border-primary/50 touch-manipulation"
                   onKeyDown={(e) => e.stopPropagation()}
                 />
               </div>
             </div>
           ) : null}
 
-          <div className="max-h-[min(16rem,45vh)] space-y-1 overflow-y-auto p-2">
+          <div className="max-h-[min(20rem,50vh)] space-y-1.5 overflow-y-auto p-2">
             {filtered.length === 0 ? (
-              <p className="px-2 py-6 text-center text-xs text-muted-foreground">{resolvedEmpty}</p>
+              <p className="px-2 py-6 text-center text-sm font-bold text-muted-foreground">{resolvedEmpty}</p>
             ) : (
               filtered.map((option) => {
                 const active = value === option.value;
@@ -221,7 +221,7 @@ export function ModernCombobox({
                       setQuery("");
                     }}
                     className={cn(
-                      "cursor-pointer items-start gap-3 rounded-xl border border-transparent px-2.5 py-2.5",
+                      "cursor-pointer items-center gap-3 rounded-xl border border-transparent min-h-14 px-3 py-3 touch-manipulation",
                       "focus:bg-primary/10 data-[highlighted]:bg-primary/10",
                       active && "border-primary/25 bg-primary/10"
                     )}

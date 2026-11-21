@@ -68,16 +68,16 @@ export function CrudTable<T extends { id: number }>({
           {onAdd && (
             <Button
               onClick={onAdd}
-              className="rounded-full h-12 px-5 text-[16px] font-bold flex-shrink-0 touch-manipulation"
+              className="rounded-full min-h-14 h-14 px-6 text-[17px] font-bold flex-shrink-0 touch-manipulation"
             >
-              <Plus className="w-5 h-5 me-1.5" /> {t("common.add")}
+              <Plus className="w-6 h-6 me-1.5" /> {t("common.add")}
             </Button>
           )}
         </div>
       </div>
 
       {toolbar ? (
-        <div className="px-4 md:px-6 py-3 border-b border-border/40 bg-secondary/20">
+        <div className="px-4 md:px-6 py-4 border-b border-border/40 bg-secondary/20">
           {toolbar}
         </div>
       ) : null}
@@ -96,7 +96,7 @@ export function CrudTable<T extends { id: number }>({
           filteredData.map((item) => (
             <div
               key={item.id}
-              className="p-4 flex flex-col gap-3 hover:bg-secondary/30 transition-colors touch-manipulation"
+              className="p-4 sm:p-5 flex flex-col gap-3.5 hover:bg-secondary/30 transition-colors touch-manipulation"
             >
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 {columns.map((col, idx) => (
@@ -113,7 +113,7 @@ export function CrudTable<T extends { id: number }>({
                   {onPrint && (
                     <Button
                       variant="outline"
-                      className="flex-1 h-12 text-[16px] font-bold gap-2 touch-manipulation"
+                      className="flex-1 min-h-14 h-14 text-[16px] font-bold gap-2 touch-manipulation"
                       onClick={() => onPrint(item)}
                     >
                       <Printer className="w-5 h-5" /> {t("common.print")}
@@ -122,7 +122,7 @@ export function CrudTable<T extends { id: number }>({
                   {onEdit && (
                     <Button
                       variant="outline"
-                      className="flex-1 h-12 text-[16px] font-bold gap-2 touch-manipulation"
+                      className="flex-1 min-h-14 h-14 text-[16px] font-bold gap-2 touch-manipulation"
                       onClick={() => onEdit(item)}
                     >
                       <Edit className="w-5 h-5" /> {t("common.edit")}
@@ -131,7 +131,7 @@ export function CrudTable<T extends { id: number }>({
                   {onDelete && (
                     <Button
                       variant="ghost"
-                      className="flex-1 h-12 text-[16px] font-bold gap-2 text-destructive hover:bg-destructive/10 touch-manipulation"
+                      className="flex-1 min-h-14 h-14 text-[16px] font-bold gap-2 text-destructive hover:bg-destructive/10 touch-manipulation"
                       onClick={() => onDelete(item)}
                     >
                       <Trash2 className="w-5 h-5" /> {t("common.delete")}
@@ -195,31 +195,31 @@ export function CrudTable<T extends { id: number }>({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-12 w-12 text-muted-foreground hover:text-primary touch-manipulation"
+                            className="min-h-14 min-w-14 h-14 w-14 text-muted-foreground hover:text-primary touch-manipulation"
                             title={t("common.print")}
                             onClick={() => onPrint(item)}
                           >
-                            <Printer className="w-5 h-5" />
+                            <Printer className="w-6 h-6" />
                           </Button>
                         )}
                         {onEdit && (
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-12 w-12 text-muted-foreground hover:text-primary touch-manipulation"
+                            className="min-h-14 min-w-14 h-14 w-14 text-muted-foreground hover:text-primary touch-manipulation"
                             onClick={() => onEdit(item)}
                           >
-                            <Edit className="w-5 h-5" />
+                            <Edit className="w-6 h-6" />
                           </Button>
                         )}
                         {onDelete && (
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-12 w-12 text-muted-foreground hover:text-destructive touch-manipulation"
+                            className="min-h-14 min-w-14 h-14 w-14 text-muted-foreground hover:text-destructive touch-manipulation"
                             onClick={() => onDelete(item)}
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-6 h-6" />
                           </Button>
                         )}
                       </div>

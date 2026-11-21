@@ -1309,10 +1309,21 @@ function buildSupplierStatementA4Html(data: SupplierStatementReceiptData) {
 </html>`;
 }
 
-function openPrintHtmlDocument(html: string, windowName: string) {
+function openPrintHtmlDocument(
+  html: string,
+  windowName: string,
+  opts?: { landscape?: boolean }
+) {
+  const landscape = Boolean(opts?.landscape);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const popup = window.open(url, windowName, "width=980,height=820,left=40,top=20");
+  const popup = window.open(
+    url,
+    windowName,
+    landscape
+      ? "width=1200,height=860,left=20,top=20"
+      : "width=980,height=820,left=40,top=20"
+  );
 
   if (popup) {
     let printed = false;
@@ -1335,10 +1346,11 @@ function openPrintHtmlDocument(html: string, windowName: string) {
 
   URL.revokeObjectURL(url);
   const iframe = document.createElement("iframe");
-  iframe.title = "تقرير A4";
+  iframe.title = landscape ? "تقرير A4 أفقي" : "تقرير A4";
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText =
-    "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;z-index:-1;";
+  iframe.style.cssText = landscape
+    ? "position:fixed;left:-10000px;top:0;width:297mm;height:210mm;border:0;opacity:0;pointer-events:none;z-index:-1;"
+    : "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;z-index:-1;";
   document.body.appendChild(iframe);
   const win = iframe.contentWindow;
   const doc = iframe.contentDocument || win?.document;
@@ -1596,7 +1608,24 @@ function buildExpenseReportA4LandscapeHtml(data: ExpenseReportA4Data) {
   <meta charset="utf-8" />
   <title>تقرير المصاريف — A4 أفقي</title>
   <style>
-    @page { size: A4 landscape; margin: 10mm 12mm 12mm; }
+    /* Force landscape for Chromium / Edge / Firefox print dialogs */
+    @page {
+      size: A4 landscape;
+      size: 297mm 210mm;
+      margin: 10mm 12mm 12mm;
+    }
+    @media print {
+      @page {
+        size: A4 landscape;
+        size: 297mm 210mm;
+        margin: 10mm 12mm 12mm;
+      }
+      html, body {
+        width: 297mm !important;
+        height: 210mm !important;
+      }
+      .sheet { width: 277mm !important; max-width: 277mm !important; }
+    }
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
@@ -1607,8 +1636,8 @@ function buildExpenseReportA4LandscapeHtml(data: ExpenseReportA4Data) {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    body { width: 297mm; margin: 0 auto; }
-    .sheet { width: 100%; padding: 0; }
+    body { width: 297mm; min-height: 210mm; margin: 0 auto; }
+    .sheet { width: 100%; max-width: 297mm; padding: 0; }
     .header {
       display: flex;
       align-items: center;
@@ -1815,6 +1844,7 @@ function buildExpenseReportA4LandscapeHtml(data: ExpenseReportA4Data) {
 export function printExpenseReportA4Landscape(data: ExpenseReportA4Data) {
   openPrintHtmlDocument(
     buildExpenseReportA4LandscapeHtml(data),
-    "rms-expense-report-a4-landscape"
+    "rms-expense-report-a4-landscape",
+    { landscape: true }
   );
 }

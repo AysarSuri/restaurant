@@ -1,4 +1,5 @@
 import React, { forwardRef } from "react";
+import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { motion, AnimatePresence } from "framer-motion";
@@ -136,7 +137,9 @@ export function Dialog({
   const backdropZ = layer === "overlay" ? "z-[70]" : "z-50";
   const panelZ = layer === "overlay" ? "z-[80]" : "z-[60]";
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -152,16 +155,16 @@ export function Dialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className={cn(
-              "fixed inset-0 flex items-center justify-center p-3 sm:p-4",
+              "fixed inset-0 flex items-center justify-center p-3 sm:p-4 pointer-events-none",
               panelZ
             )}
-            onClick={(e) => e.stopPropagation()}
           >
             <div
               className={cn(
-                "w-full glass-panel rounded-2xl p-4 sm:p-5 max-h-[min(92vh,880px)] overflow-y-auto overscroll-contain",
+                "w-full glass-panel rounded-2xl p-4 sm:p-5 max-h-[min(92vh,880px)] overflow-y-auto overscroll-contain pointer-events-auto shadow-2xl",
                 maxWidth
               )}
+              onClick={(e) => e.stopPropagation()}
             >
               {!hideHeader && (
                 <div className="flex justify-between items-center gap-3 mb-3 sm:mb-4">
@@ -180,7 +183,8 @@ export function Dialog({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

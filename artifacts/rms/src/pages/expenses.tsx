@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListExpenses,
@@ -12,6 +12,7 @@ import {
   useGetBranches,
   useGetSettings,
   getGetExpenseTypesQueryKey,
+  getListExpensesQueryKey,
   getGetSettingsQueryKey,
   type ExpenseRow,
   type ExpenseTypeRow,
@@ -24,9 +25,9 @@ import {
   printExpenseThermal,
   printExpenseReportA4Landscape,
 } from "@/lib/print-receipt";
-import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import {
+  AlertCircle,
   Building2,
   FileSpreadsheet,
   Hash,
@@ -81,7 +82,6 @@ const emptyExpenseForm = (): ExpenseFormState => ({
 export default function Expenses() {
   const { t, formatDate } = useI18n();
   const queryClient = useQueryClient();
-  const { selectedBranchId } = useBranch();
 
   const [filterInvoice, setFilterInvoice] = useState("");
   const [filterFrom, setFilterFrom] = useState(todayDate);
@@ -126,31 +126,26 @@ export default function Expenses() {
   const [editing, setEditing] = useState<ExpenseRow | null>(null);
   const [form, setForm] = useState<ExpenseFormState>(emptyExpenseForm);
   const [formError, setFormError] = useState("");
+  const [formErrorKind, setFormErrorKind] = useState<"branch" | "general" | "">("");
 
   const [typesOpen, setTypesOpen] = useState(false);
   const [typeFormOpen, setTypeFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<ExpenseTypeRow | null>(null);
   const [typeForm, setTypeForm] = useState<TypeFormState>({ name: "", notes: "" });
   const [typeError, setTypeError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ExpenseRow | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const restaurantName = appSettings?.restaurantName?.trim() || "المطعم";
   const restaurantLogoUrl = appSettings?.logoUrl?.trim() || "";
   const restaurantMobile = appSettings?.mobile?.trim() || "";
 
-  const defaultBranchId = useMemo(() => {
-    if (typeof selectedBranchId === "number" && selectedBranchId > 0) {
-      return String(selectedBranchId);
+  const clearFormError = () => {
+    if (formError || formErrorKind) {
+      setFormError("");
+      setFormErrorKind("");
     }
-    const first = branches?.[0]?.id;
-    return first ? String(first) : "";
-  }, [selectedBranchId, branches]);
-
-  useEffect(() => {
-    if (!formOpen || editing) return;
-    if (!form.branchId && defaultBranchId) {
-      setForm((f) => ({ ...f, branchId: defaultBranchId }));
-    }
-  }, [formOpen, editing, defaultBranchId, form.branchId]);
+  };
 
   const typeOptions: ComboboxOption[] = useMemo(
     () =>
@@ -180,19 +175,27 @@ export default function Expenses() {
     [branchOptions, t]
   );
 
+  const nextInvoicePreview = useMemo(() => {
+    const rows = expenses ?? [];
+    let max = 0;
+    for (const row of rows) {
+      const match = String(row.invoiceNo ?? "").trim().match(/(\d+)\s*$/);
+      if (match) max = Math.max(max, Number(match[1]));
+    }
+    return String(max + 1);
+  }, [expenses]);
+
   const invalidateExpenses = () =>
-    queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+    queryClient.invalidateQueries({ queryKey: getListExpensesQueryKey(listParams) });
 
   const invalidateTypes = () =>
     queryClient.invalidateQueries({ queryKey: getGetExpenseTypesQueryKey() });
 
   const openAdd = () => {
     setEditing(null);
-    setForm({
-      ...emptyExpenseForm(),
-      branchId: defaultBranchId,
-    });
+    setForm(emptyExpenseForm());
     setFormError("");
+    setFormErrorKind("");
     setFormOpen(true);
   };
 
@@ -202,11 +205,12 @@ export default function Expenses() {
       invoiceNo: item.invoiceNo || "",
       expenseDate: item.expenseDate || item.date || todayDate(),
       expenseTypeId: item.expenseTypeId ? String(item.expenseTypeId) : "",
-      branchId: item.branchId ? String(item.branchId) : defaultBranchId,
+      branchId: item.branchId ? String(item.branchId) : "",
       amount: item.amount,
       notes: item.notes || "",
     });
     setFormError("");
+    setFormErrorKind("");
     setFormOpen(true);
   };
 
@@ -215,20 +219,24 @@ export default function Expenses() {
     const amount = Number(form.amount);
     const branchId = Number(form.branchId) || null;
 
+    if (!branchId) {
+      setFormErrorKind("branch");
+      setFormError(t("expenses.branchRequiredHint"));
+      return;
+    }
     if (!Number.isFinite(expenseTypeId) || expenseTypeId <= 0) {
+      setFormErrorKind("general");
       setFormError(t("expenses.typeRequired"));
       return;
     }
     if (!(amount > 0)) {
+      setFormErrorKind("general");
       setFormError(t("expenses.amountRequired"));
       return;
     }
     if (!form.expenseDate) {
+      setFormErrorKind("general");
       setFormError(t("expenses.dateRequired"));
-      return;
-    }
-    if (!branchId) {
-      setFormError(t("expenses.branchRequired"));
       return;
     }
 
@@ -250,7 +258,10 @@ export default function Expenses() {
             setEditing(null);
             void invalidateExpenses();
           },
-          onError: (e) => setFormError(apiErrorMessage(e, t("common.saveFailed"))),
+          onError: (e) => {
+            setFormErrorKind("general");
+            setFormError(apiErrorMessage(e, t("common.saveFailed")));
+          },
         }
       );
     } else {
@@ -259,16 +270,28 @@ export default function Expenses() {
           setFormOpen(false);
           void invalidateExpenses();
         },
-        onError: (e) => setFormError(apiErrorMessage(e, t("common.saveFailed"))),
+        onError: (e) => {
+          setFormErrorKind("general");
+          setFormError(apiErrorMessage(e, t("common.saveFailed")));
+        },
       });
     }
   };
 
   const handleDelete = (item: ExpenseRow) => {
-    if (!confirm(t("expenses.deleteAsk"))) return;
-    deleteExpense.mutate(item.id, {
-      onSuccess: () => void invalidateExpenses(),
-      onError: (e) => alert(apiErrorMessage(e, t("common.saveFailed"))),
+    setDeleteError("");
+    setDeleteTarget(item);
+  };
+
+  const confirmDeleteExpense = () => {
+    if (!deleteTarget) return;
+    deleteExpense.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+        setDeleteError("");
+        void invalidateExpenses();
+      },
+      onError: (e) => setDeleteError(apiErrorMessage(e, t("common.saveFailed"))),
     });
   };
 
@@ -470,33 +493,33 @@ export default function Expenses() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-full h-12 px-4 text-[15px] font-bold gap-2 touch-manipulation"
+              className="rounded-full min-h-14 h-14 px-5 text-[16px] font-bold gap-2 touch-manipulation"
               onClick={() => setTypesOpen(true)}
             >
-              <Layers className="w-5 h-5" />
+              <Layers className="w-6 h-6" />
               {t("expenses.types")}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              className="rounded-full h-12 px-4 text-[15px] font-bold gap-2 touch-manipulation"
+              className="rounded-full min-h-14 h-14 px-5 text-[16px] font-bold gap-2 touch-manipulation"
               onClick={() => void printReport()}
             >
-              <FileSpreadsheet className="w-5 h-5" />
+              <FileSpreadsheet className="w-6 h-6" />
               {t("expenses.reportA4")}
             </Button>
           </>
         }
         toolbar={
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
             <div>
-              <label className="text-[13px] font-bold text-muted-foreground mb-1 block">
+              <label className="text-[14px] font-bold text-muted-foreground mb-1.5 block">
                 {t("expenses.invoiceNo")}
               </label>
               <div className="relative">
-                <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
-                  className="h-11 ps-9 text-[15px] font-bold"
+                  className="min-h-14 h-14 ps-10 text-[16px] font-bold touch-manipulation"
                   dir="ltr"
                   value={filterInvoice}
                   onChange={(e) => setFilterInvoice(e.target.value)}
@@ -505,21 +528,21 @@ export default function Expenses() {
               </div>
             </div>
             <div>
-              <label className="text-[13px] font-bold text-muted-foreground mb-1 block">
+              <label className="text-[14px] font-bold text-muted-foreground mb-1.5 block">
                 {t("expenses.fromDate")}
               </label>
               <YmdDateInput
-                className="h-11 text-[15px] font-bold tabular-nums"
+                className="min-h-14 h-14 text-[16px] font-bold tabular-nums"
                 value={filterFrom}
                 onChange={setFilterFrom}
               />
             </div>
             <div>
-              <label className="text-[13px] font-bold text-muted-foreground mb-1 block">
+              <label className="text-[14px] font-bold text-muted-foreground mb-1.5 block">
                 {t("expenses.toDate")}
               </label>
               <YmdDateInput
-                className="h-11 text-[15px] font-bold tabular-nums"
+                className="min-h-14 h-14 text-[16px] font-bold tabular-nums"
                 value={filterTo}
                 onChange={setFilterTo}
               />
@@ -532,9 +555,8 @@ export default function Expenses() {
               placeholder={t("expenses.allTypes")}
               icon={Tags}
               searchable
-              size="sm"
-              labelClassName="text-[13px] font-bold text-muted-foreground"
-              valueClassName="text-[15px] font-bold"
+              labelClassName="text-[14px] font-bold text-muted-foreground"
+              valueClassName="text-[16px] font-bold"
             />
             <ModernCombobox
               value={filterBranchId}
@@ -544,13 +566,12 @@ export default function Expenses() {
               placeholder={t("expenses.allBranches")}
               icon={Building2}
               searchable
-              size="sm"
-              labelClassName="text-[13px] font-bold text-muted-foreground"
-              valueClassName="text-[15px] font-bold"
+              labelClassName="text-[14px] font-bold text-muted-foreground"
+              valueClassName="text-[16px] font-bold"
             />
             <Button
               type="button"
-              className="h-11 rounded-xl text-[15px] font-bold touch-manipulation"
+              className="min-h-14 h-14 rounded-2xl text-[16px] font-bold touch-manipulation"
               onClick={applyFilters}
             >
               {t("common.searchAction")}
@@ -569,36 +590,36 @@ export default function Expenses() {
         title={editing ? t("expenses.editTitle") : t("expenses.addTitle")}
         maxWidth="max-w-2xl"
       >
-        <div className="space-y-3.5 touch-ui">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-4 touch-ui">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
+              <label className="text-[17px] font-bold text-foreground mb-2 block">
                 {t("expenses.invoiceNo")}
               </label>
               <div className="relative">
-                <Hash className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Hash className="absolute start-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
-                  className="h-12 ps-9 text-[16px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
-                  value={editing ? form.invoiceNo : t("expenses.invoiceAutoShort")}
+                  className="min-h-14 h-14 ps-11 text-[17px] font-bold bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                  value={editing ? form.invoiceNo : nextInvoicePreview}
                   readOnly
                   disabled
                   dir="ltr"
                 />
               </div>
-              <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
+              <p className="text-[13px] text-muted-foreground mt-1.5 font-semibold">
                 {editing ? t("expenses.invoiceLocked") : t("expenses.invoiceAuto")}
               </p>
             </div>
             <div>
-              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
+              <label className="text-[17px] font-bold text-foreground mb-2 block">
                 {t("common.date")} *
               </label>
               <YmdDateInput
-                className="h-12 text-[16px] font-bold tabular-nums tracking-wide"
+                className="min-h-14 h-14 text-[17px] font-bold tabular-nums tracking-wide"
                 value={form.expenseDate}
                 onChange={(expenseDate) => {
                   setForm((f) => ({ ...f, expenseDate }));
-                  if (formError) setFormError("");
+                  clearFormError();
                 }}
               />
             </div>
@@ -606,39 +627,48 @@ export default function Expenses() {
               value={form.expenseTypeId}
               onChange={(expenseTypeId) => {
                 setForm((f) => ({ ...f, expenseTypeId }));
-                if (formError) setFormError("");
+                clearFormError();
               }}
               options={typeOptions}
               label={`${t("expenses.type")} *`}
               placeholder={t("expenses.pickType")}
               icon={Tags}
-              labelClassName="text-[16px] font-bold text-foreground"
-              valueClassName="text-[16px] font-bold"
+              labelClassName="text-[17px] font-bold text-foreground mb-0.5"
+              valueClassName="text-[17px] font-bold"
             />
-            <ModernCombobox
-              value={form.branchId}
-              onChange={(branchId) => {
-                setForm((f) => ({ ...f, branchId }));
-                if (formError) setFormError("");
-              }}
-              options={branchOptions}
-              label={`${t("common.branch")} *`}
-              placeholder={t("expenses.pickBranch")}
-              icon={Building2}
-              labelClassName="text-[16px] font-bold text-foreground"
-              valueClassName="text-[16px] font-bold"
-            />
-            <div>
-              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
+            <div
+              className={
+                formErrorKind === "branch"
+                  ? "rounded-2xl ring-2 ring-amber-500/70 ring-offset-2 ring-offset-background"
+                  : undefined
+              }
+            >
+              <ModernCombobox
+                value={form.branchId}
+                onChange={(branchId) => {
+                  setForm((f) => ({ ...f, branchId }));
+                  clearFormError();
+                }}
+                options={branchOptions}
+                label={`${t("common.branch")} *`}
+                placeholder={t("expenses.pickBranch")}
+                icon={Building2}
+                labelClassName="text-[17px] font-bold text-foreground mb-0.5"
+                valueClassName="text-[17px] font-bold"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-[17px] font-bold text-foreground mb-2 block">
                 {t("common.amount")} *
               </label>
               <div className="relative">
-                <Wallet className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Wallet className="absolute start-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="number"
                   min={0}
                   step="0.01"
-                  className="h-12 ps-9 text-[16px] font-bold"
+                  inputMode="decimal"
+                  className="min-h-14 h-14 ps-11 text-[17px] font-bold touch-manipulation"
                   dir="ltr"
                   value={form.amount}
                   placeholder="0"
@@ -647,34 +677,66 @@ export default function Expenses() {
                       ...f,
                       amount: e.target.value === "" ? "" : Number(e.target.value),
                     }));
-                    if (formError) setFormError("");
+                    clearFormError();
                   }}
                 />
               </div>
             </div>
-            <div>
-              <label className="text-[16px] font-bold text-foreground mb-1.5 block">
-                {t("common.notes")}
-              </label>
-              <div className="relative">
-                <StickyNote className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  className="h-12 ps-9 text-[16px] font-bold"
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder={t("common.optional")}
-                />
-              </div>
+          </div>
+          <div>
+            <label className="text-[17px] font-bold text-foreground mb-2 block">
+              {t("common.notes")}
+            </label>
+            <div className="relative">
+              <StickyNote className="absolute start-3.5 top-4 w-5 h-5 text-muted-foreground pointer-events-none" />
+              <textarea
+                className="flex min-h-[8.5rem] w-full rounded-2xl border-2 border-border bg-background/50 ps-11 pe-4 py-3.5 text-[17px] font-bold ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 resize-y touch-manipulation"
+                rows={4}
+                value={form.notes}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder={t("common.optional")}
+              />
             </div>
           </div>
           {formError ? (
-            <p className="text-[15px] font-bold text-destructive">{formError}</p>
+            <div
+              role="alert"
+              className={
+                formErrorKind === "branch"
+                  ? "flex gap-3 rounded-2xl border border-amber-500/35 bg-gradient-to-l from-amber-500/15 via-amber-500/10 to-card px-4 py-3.5 shadow-sm"
+                  : "flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3.5"
+              }
+            >
+              <span
+                className={
+                  formErrorKind === "branch"
+                    ? "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                    : "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive"
+                }
+              >
+                {formErrorKind === "branch" ? (
+                  <Building2 className="h-5 w-5" />
+                ) : (
+                  <AlertCircle className="h-5 w-5" />
+                )}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <p className="text-[15px] font-extrabold text-foreground leading-snug">
+                  {formErrorKind === "branch"
+                    ? t("expenses.branchRequiredTitle")
+                    : t("common.saveFailed")}
+                </p>
+                <p className="text-[14px] font-semibold text-muted-foreground leading-relaxed">
+                  {formError}
+                </p>
+              </div>
+            </div>
           ) : null}
-          <div className="flex gap-2.5 pt-1">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 h-12 rounded-full text-[16px] font-bold"
+              className="flex-1 min-h-14 h-14 rounded-full text-[17px] font-bold touch-manipulation"
               onClick={() => {
                 setFormOpen(false);
                 setEditing(null);
@@ -684,7 +746,7 @@ export default function Expenses() {
             </Button>
             <Button
               type="button"
-              className="flex-1 h-12 rounded-full text-[16px] font-bold"
+              className="flex-1 min-h-14 h-14 rounded-full text-[17px] font-bold touch-manipulation"
               disabled={createExpense.isPending || updateExpense.isPending}
               isLoading={createExpense.isPending || updateExpense.isPending}
               onClick={saveExpense}
@@ -703,23 +765,23 @@ export default function Expenses() {
         maxWidth="max-w-2xl"
       >
         <div className="space-y-4 touch-ui">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[14px] font-semibold text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-[15px] font-semibold text-muted-foreground leading-relaxed">
               {t("expenses.typesHint")}
             </p>
             <Button
               type="button"
-              className="h-11 rounded-full px-4 text-[15px] font-bold gap-2 shrink-0"
+              className="min-h-14 h-14 rounded-full px-6 text-[16px] font-bold gap-2 shrink-0 touch-manipulation w-full sm:w-auto"
               onClick={openAddType}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-6 h-6" />
               {t("common.add")}
             </Button>
           </div>
 
           <div className="rounded-2xl border border-border/60 overflow-hidden">
             {(expenseTypes ?? []).length === 0 ? (
-              <div className="py-10 text-center text-[15px] font-bold text-muted-foreground">
+              <div className="py-12 text-center text-[16px] font-bold text-muted-foreground">
                 {t("common.noData")}
               </div>
             ) : (
@@ -727,40 +789,130 @@ export default function Expenses() {
                 {(expenseTypes ?? []).map((row) => (
                   <li
                     key={row.id}
-                    className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-secondary/30"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-4 hover:bg-secondary/30 touch-manipulation"
                   >
                     <div className="min-w-0">
-                      <p className="text-[16px] font-extrabold truncate">{row.name}</p>
+                      <p className="text-[17px] font-extrabold truncate">{row.name}</p>
                       {row.notes?.trim() ? (
-                        <p className="text-[13px] font-semibold text-muted-foreground truncate mt-0.5">
+                        <p className="text-[14px] font-semibold text-muted-foreground truncate mt-1">
                           {row.notes}
                         </p>
                       ) : null}
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-2.5 shrink-0 w-full sm:w-auto">
                       <Button
                         type="button"
                         variant="outline"
-                        size="icon"
-                        className="h-11 w-11"
+                        className="flex-1 sm:flex-none min-h-14 h-14 px-5 text-[15px] font-bold gap-2 touch-manipulation"
                         onClick={() => openEditType(row)}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-5 h-5" />
+                        {t("common.edit")}
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon"
-                        className="h-11 w-11 text-destructive hover:bg-destructive/10"
+                        className="flex-1 sm:flex-none min-h-14 h-14 px-5 text-[15px] font-bold gap-2 text-destructive hover:bg-destructive/10 touch-manipulation"
                         onClick={() => handleDeleteType(row)}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
+                        {t("common.delete")}
                       </Button>
                     </div>
                   </li>
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Delete expense confirmation */}
+      <Dialog
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (deleteExpense.isPending) return;
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        title={t("expenses.deleteTitle")}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-5 touch-ui">
+          <div className="text-center space-y-4">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/15">
+              <Trash2 className="h-8 w-8 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-lg font-extrabold text-foreground">
+                {t("expenses.deleteConfirm")}
+              </p>
+              <p className="text-[14px] font-semibold text-muted-foreground leading-relaxed">
+                {t("expenses.deleteHint", {
+                  invoiceNo: deleteTarget?.invoiceNo || String(deleteTarget?.id ?? ""),
+                })}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-start space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] font-bold text-muted-foreground">
+                  {t("expenses.invoiceNo")}
+                </span>
+                <span className="text-[16px] font-extrabold tabular-nums" dir="ltr">
+                  {deleteTarget?.invoiceNo || deleteTarget?.id}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] font-bold text-muted-foreground">
+                  {t("expenses.type")}
+                </span>
+                <span className="text-[15px] font-bold truncate max-w-[60%]">
+                  {deleteTarget?.expenseTypeName || deleteTarget?.category || "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] font-bold text-muted-foreground">
+                  {t("common.amount")}
+                </span>
+                <span className="text-[15px] font-extrabold text-destructive tabular-nums" dir="ltr">
+                  {fmtMoney(Number(deleteTarget?.amount || 0))} {t("common.iqd")}
+                </span>
+              </div>
+            </div>
+          </div>
+          {deleteError ? (
+            <div
+              role="alert"
+              className="flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3"
+            >
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <p className="text-[14px] font-bold text-destructive">{deleteError}</p>
+            </div>
+          ) : null}
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 min-h-14 h-14 rounded-full text-[16px] font-bold touch-manipulation"
+              disabled={deleteExpense.isPending}
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError("");
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="flex-1 min-h-14 h-14 rounded-full text-[16px] font-bold gap-2 touch-manipulation"
+              disabled={deleteExpense.isPending}
+              isLoading={deleteExpense.isPending}
+              onClick={confirmDeleteExpense}
+            >
+              <Trash2 className="h-5 w-5" />
+              {t("expenses.deleteConfirmBtn")}
+            </Button>
           </div>
         </div>
       </Dialog>
@@ -774,14 +926,15 @@ export default function Expenses() {
         }}
         title={editingType ? t("expenses.editType") : t("expenses.addType")}
         maxWidth="max-w-md"
+        layer="overlay"
       >
-        <div className="space-y-3.5">
+        <div className="space-y-4 touch-ui">
           <div>
-            <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+            <label className="text-[17px] font-bold text-foreground mb-2 block">
               {t("expenses.typeName")} *
             </label>
             <Input
-              className="h-12 text-[16px] font-bold"
+              className="min-h-14 h-14 text-[17px] font-bold touch-manipulation"
               value={typeForm.name}
               onChange={(e) => {
                 setTypeForm((f) => ({ ...f, name: e.target.value }));
@@ -790,11 +943,11 @@ export default function Expenses() {
             />
           </div>
           <div>
-            <label className="text-[15px] font-bold text-foreground mb-1.5 block">
+            <label className="text-[17px] font-bold text-foreground mb-2 block">
               {t("common.notes")}
             </label>
             <Input
-              className="h-12 text-[16px] font-bold"
+              className="min-h-14 h-14 text-[17px] font-bold touch-manipulation"
               value={typeForm.notes}
               onChange={(e) => setTypeForm((f) => ({ ...f, notes: e.target.value }))}
               placeholder={t("common.optional")}
@@ -803,11 +956,11 @@ export default function Expenses() {
           {typeError ? (
             <p className="text-[15px] font-bold text-destructive">{typeError}</p>
           ) : null}
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
             <Button
               type="button"
               variant="outline"
-              className="flex-1 h-12 rounded-full text-[15px] font-bold"
+              className="flex-1 min-h-14 h-14 rounded-full text-[16px] font-bold touch-manipulation"
               onClick={() => {
                 setTypeFormOpen(false);
                 setEditingType(null);
@@ -817,7 +970,7 @@ export default function Expenses() {
             </Button>
             <Button
               type="button"
-              className="flex-1 h-12 rounded-full text-[15px] font-bold"
+              className="flex-1 min-h-14 h-14 rounded-full text-[16px] font-bold touch-manipulation"
               disabled={createType.isPending || updateType.isPending}
               isLoading={createType.isPending || updateType.isPending}
               onClick={saveType}
