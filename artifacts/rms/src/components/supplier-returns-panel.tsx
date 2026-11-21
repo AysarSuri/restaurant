@@ -720,8 +720,8 @@ export function SupplierReturnsPanel({
             </div>
 
             <div className="space-y-2">
-              <div className="grid grid-cols-2 lg:grid-cols-[minmax(13.5rem,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] gap-2 items-end">
-                <div className="col-span-2 lg:col-span-1 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+                <div className="min-w-0">
                   <label className="text-[15px] font-bold text-foreground mb-1 block">
                     طريقة الدفع
                   </label>
@@ -754,6 +754,42 @@ export function SupplierReturnsPanel({
                     </button>
                   </div>
                 </div>
+                <div className="min-w-0">
+                  {form.paymentMethod === "card" ? (
+                    <ModernCombobox
+                      value={form.cardId}
+                      onChange={(cardId) => setForm((f) => ({ ...f, cardId }))}
+                      options={branchCardOptions}
+                      label="البطاقة *"
+                      placeholder={
+                        form.branchId ? "اختر البطاقة حسب الفرع" : "اختر الفرع أولاً"
+                      }
+                      icon={CreditCard}
+                      searchable
+                      searchPlaceholder="ابحث عن البطاقة..."
+                      emptyText={
+                        form.branchId
+                          ? "لا توجد بطاقة لهذا الفرع"
+                          : "اختر الفرع أولاً لعرض البطاقات"
+                      }
+                      size="sm"
+                      labelClassName="text-[15px] font-bold text-foreground !mb-1"
+                      valueClassName="text-[15px] font-bold"
+                      className="[&>div:first-child]:mb-0"
+                    />
+                  ) : (
+                    <>
+                      <label className="text-[15px] font-bold text-foreground mb-1 block">
+                        البطاقة
+                      </label>
+                      <div className="h-12 rounded-xl border border-border/50 bg-secondary/40 px-3 flex items-center text-[14px] font-bold text-muted-foreground">
+                        بدون بطاقة
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
                 <div className="min-w-0">
                   <label className="text-[15px] font-bold text-foreground mb-1 block">
                     مبلغ واصل
@@ -802,29 +838,6 @@ export function SupplierReturnsPanel({
                   </div>
                 </div>
               </div>
-              {form.paymentMethod === "card" ? (
-                <ModernCombobox
-                  value={form.cardId}
-                  onChange={(cardId) => setForm((f) => ({ ...f, cardId }))}
-                  options={branchCardOptions}
-                  label="البطاقة *"
-                  placeholder={
-                    form.branchId ? "اختر البطاقة حسب الفرع" : "اختر الفرع أولاً"
-                  }
-                  icon={CreditCard}
-                  searchable
-                  searchPlaceholder="ابحث عن البطاقة..."
-                  emptyText={
-                    form.branchId
-                      ? "لا توجد بطاقة لهذا الفرع"
-                      : "اختر الفرع أولاً لعرض البطاقات"
-                  }
-                  size="sm"
-                  labelClassName="text-[14px] font-bold text-foreground !mb-0"
-                  valueClassName="text-[14px] font-bold"
-                  className="[&>div:first-child]:mb-0.5"
-                />
-              ) : null}
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-0.5">
