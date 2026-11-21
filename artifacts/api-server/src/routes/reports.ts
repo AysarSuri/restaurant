@@ -8,11 +8,25 @@ import {
   customersTable,
   inventoryTable,
 } from "@workspace/db/schema";
-import { eq, sql, and, gte, lte, desc, lt } from "drizzle-orm";
+import { eq, sql, and, gte, lte, type SQL } from "drizzle-orm";
+import { parseBranchScope, branchEq } from "../lib/branch-scope";
 
 const router: IRouter = Router();
 
-router.get("/dashboard", async (_req, res) => {
+function combine(...conds: (SQL | undefined)[]) {
+  const list = conds.filter((c): c is SQL => Boolean(c));
+  if (list.length === 0) return undefined;
+  if (list.length === 1) return list[0];
+  return and(...list);
+}
+
+router.get("/dashboard", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const orderBranch = branchEq(ordersTable.branchId, scope);
+  const tableBranch = branchEq(restaurantTablesTable.branchId, scope);
+  const invBranch = branchEq(inventoryTable.branchId, scope);
+  const custBranch = branchEq(customersTable.branchId, scope);
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -23,55 +37,78 @@ router.get("/dashboard", async (_req, res) => {
   const [todayRevResult] = await db
     .select({ total: sql<number>`coalesce(sum(total::numeric), 0)` })
     .from(ordersTable)
-    .where(and(gte(ordersTable.createdAt, todayStart), lte(ordersTable.createdAt, todayEnd), eq(ordersTable.status, "paid")));
+    .where(
+      combine(
+        gte(ordersTable.createdAt, todayStart),
+        lte(ordersTable.createdAt, todayEnd),
+        eq(ordersTable.status, "paid"),
+        orderBranch
+      )
+    );
 
   const [todayOrdersResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(ordersTable)
-    .where(and(gte(ordersTable.createdAt, todayStart), lte(ordersTable.createdAt, todayEnd)));
+    .where(
+      combine(
+        gte(ordersTable.createdAt, todayStart),
+        lte(ordersTable.createdAt, todayEnd),
+        orderBranch
+      )
+    );
 
   const [activeOrdersResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(ordersTable)
-    .where(and(sql`status NOT IN ('paid', 'cancelled')`));
+    .where(combine(sql`status NOT IN ('paid', 'cancelled')`, orderBranch));
 
   const [availableTablesResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(restaurantTablesTable)
-    .where(eq(restaurantTablesTable.status, "available"));
+    .where(combine(eq(restaurantTablesTable.status, "available"), tableBranch));
 
   const [totalTablesResult] = await db
     .select({ count: sql<number>`count(*)` })
-    .from(restaurantTablesTable);
+    .from(restaurantTablesTable)
+    .where(tableBranch);
 
   const [lowStockResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(inventoryTable)
-    .where(sql`current_quantity::numeric <= minimum_quantity::numeric`);
+    .where(combine(sql`current_quantity::numeric <= minimum_quantity::numeric`, invBranch));
 
   const [totalCustomersResult] = await db
     .select({ count: sql<number>`count(*)` })
-    .from(customersTable);
+    .from(customersTable)
+    .where(custBranch);
 
   const [monthRevResult] = await db
     .select({ total: sql<number>`coalesce(sum(total::numeric), 0)` })
     .from(ordersTable)
-    .where(and(gte(ordersTable.createdAt, monthStart), eq(ordersTable.status, "paid")));
+    .where(combine(gte(ordersTable.createdAt, monthStart), eq(ordersTable.status, "paid"), orderBranch));
 
   const [monthOrdersResult] = await db
     .select({ count: sql<number>`count(*)` })
     .from(ordersTable)
-    .where(gte(ordersTable.createdAt, monthStart));
+    .where(combine(gte(ordersTable.createdAt, monthStart), orderBranch));
 
   const [prevMonthRevResult] = await db
     .select({ total: sql<number>`coalesce(sum(total::numeric), 0)` })
     .from(ordersTable)
-    .where(and(gte(ordersTable.createdAt, prevMonthStart), lte(ordersTable.createdAt, prevMonthEnd), eq(ordersTable.status, "paid")));
+    .where(
+      combine(
+        gte(ordersTable.createdAt, prevMonthStart),
+        lte(ordersTable.createdAt, prevMonthEnd),
+        eq(ordersTable.status, "paid"),
+        orderBranch
+      )
+    );
 
   const todayRevenue = Number(todayRevResult.total);
   const monthRevenue = Number(monthRevResult.total);
   const prevMonthRevenue = Number(prevMonthRevResult.total);
-  const revenueGrowth = prevMonthRevenue > 0 ? ((monthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
+  const revenueGrowth =
+    prevMonthRevenue > 0 ? ((monthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
 
   res.json({
     todayRevenue,
@@ -89,15 +126,15 @@ router.get("/dashboard", async (_req, res) => {
 });
 
 router.get("/sales", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const orderBranch = branchEq(ordersTable.branchId, scope);
   const { period = "daily", date } = req.query;
   const now = date ? new Date(date as string) : new Date();
   let data: { label: string; revenue: number; orders: number }[] = [];
-  let start: Date, end: Date;
 
   if (period === "daily") {
-    // Last 7 days
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-    end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const rows = await db
       .select({
         day: sql<string>`to_char(created_at, 'YYYY-MM-DD')`,
@@ -105,7 +142,14 @@ router.get("/sales", async (req, res) => {
         orders: sql<number>`count(*)`,
       })
       .from(ordersTable)
-      .where(and(gte(ordersTable.createdAt, start), lte(ordersTable.createdAt, end), eq(ordersTable.status, "paid")))
+      .where(
+        combine(
+          gte(ordersTable.createdAt, start),
+          lte(ordersTable.createdAt, end),
+          eq(ordersTable.status, "paid"),
+          orderBranch
+        )
+      )
       .groupBy(sql`to_char(created_at, 'YYYY-MM-DD')`)
       .orderBy(sql`to_char(created_at, 'YYYY-MM-DD')`);
 
@@ -118,8 +162,8 @@ router.get("/sales", async (req, res) => {
       data.push({ label: key, revenue: map[key]?.revenue ?? 0, orders: map[key]?.orders ?? 0 });
     }
   } else if (period === "monthly") {
-    start = new Date(now.getFullYear(), 0, 1);
-    end = new Date(now.getFullYear() + 1, 0, 1);
+    const start = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear() + 1, 0, 1);
     const rows = await db
       .select({
         month: sql<string>`to_char(created_at, 'YYYY-MM')`,
@@ -127,13 +171,20 @@ router.get("/sales", async (req, res) => {
         orders: sql<number>`count(*)`,
       })
       .from(ordersTable)
-      .where(and(gte(ordersTable.createdAt, start), lte(ordersTable.createdAt, end), eq(ordersTable.status, "paid")))
+      .where(
+        combine(
+          gte(ordersTable.createdAt, start),
+          lte(ordersTable.createdAt, end),
+          eq(ordersTable.status, "paid"),
+          orderBranch
+        )
+      )
       .groupBy(sql`to_char(created_at, 'YYYY-MM')`)
       .orderBy(sql`to_char(created_at, 'YYYY-MM')`);
-    data = rows.map(r => ({ label: r.month, revenue: Number(r.revenue), orders: Number(r.orders) }));
+    data = rows.map((r) => ({ label: r.month, revenue: Number(r.revenue), orders: Number(r.orders) }));
   } else if (period === "weekly") {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 27);
-    end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 27);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const rows = await db
       .select({
         week: sql<string>`to_char(date_trunc('week', created_at), 'YYYY-MM-DD')`,
@@ -141,12 +192,18 @@ router.get("/sales", async (req, res) => {
         orders: sql<number>`count(*)`,
       })
       .from(ordersTable)
-      .where(and(gte(ordersTable.createdAt, start), lte(ordersTable.createdAt, end), eq(ordersTable.status, "paid")))
+      .where(
+        combine(
+          gte(ordersTable.createdAt, start),
+          lte(ordersTable.createdAt, end),
+          eq(ordersTable.status, "paid"),
+          orderBranch
+        )
+      )
       .groupBy(sql`date_trunc('week', created_at)`)
       .orderBy(sql`date_trunc('week', created_at)`);
-    data = rows.map(r => ({ label: r.week, revenue: Number(r.revenue), orders: Number(r.orders) }));
+    data = rows.map((r) => ({ label: r.week, revenue: Number(r.revenue), orders: Number(r.orders) }));
   } else {
-    // yearly
     const rows = await db
       .select({
         year: sql<string>`to_char(created_at, 'YYYY')`,
@@ -154,36 +211,35 @@ router.get("/sales", async (req, res) => {
         orders: sql<number>`count(*)`,
       })
       .from(ordersTable)
-      .where(eq(ordersTable.status, "paid"))
+      .where(combine(eq(ordersTable.status, "paid"), orderBranch))
       .groupBy(sql`to_char(created_at, 'YYYY')`)
       .orderBy(sql`to_char(created_at, 'YYYY')`);
-    data = rows.map(r => ({ label: r.year, revenue: Number(r.revenue), orders: Number(r.orders) }));
+    data = rows.map((r) => ({ label: r.year, revenue: Number(r.revenue), orders: Number(r.orders) }));
   }
 
   const totalRevenue = data.reduce((s, d) => s + d.revenue, 0);
   const totalOrders = data.reduce((s, d) => s + d.orders, 0);
   const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // By payment method
   const pmRows = await db
     .select({
       method: ordersTable.paymentMethod,
       total: sql<number>`coalesce(sum(total::numeric), 0)`,
     })
     .from(ordersTable)
-    .where(eq(ordersTable.status, "paid"))
+    .where(combine(eq(ordersTable.status, "paid"), orderBranch))
     .groupBy(ordersTable.paymentMethod);
 
   const byPaymentMethod: Record<string, number> = {};
   for (const r of pmRows) if (r.method) byPaymentMethod[r.method] = Number(r.total);
 
-  // By order type
   const typeRows = await db
     .select({
       type: ordersTable.type,
       count: sql<number>`count(*)`,
     })
     .from(ordersTable)
+    .where(orderBranch)
     .groupBy(ordersTable.type);
 
   const byOrderType: Record<string, number> = {};
@@ -193,6 +249,8 @@ router.get("/sales", async (req, res) => {
 });
 
 router.get("/top-items", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const orderBranch = branchEq(ordersTable.branchId, scope);
   const { limit = "10", period = "monthly" } = req.query;
   const now = new Date();
   let start: Date;
@@ -212,19 +270,21 @@ router.get("/top-items", async (req, res) => {
     .from(orderItemsTable)
     .leftJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
     .leftJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
-    .where(and(gte(ordersTable.createdAt, start), eq(ordersTable.status, "paid")))
+    .where(combine(gte(ordersTable.createdAt, start), eq(ordersTable.status, "paid"), orderBranch))
     .groupBy(orderItemsTable.menuItemId, menuItemsTable.name, menuItemsTable.nameAr, menuItemsTable.imageUrl)
     .orderBy(sql`sum(${orderItemsTable.quantity}) desc`)
     .limit(parseInt(limit as string));
 
-  res.json(rows.map(r => ({
-    menuItemId: r.menuItemId,
-    name: r.name,
-    nameAr: r.nameAr,
-    imageUrl: r.imageUrl,
-    totalQuantity: Number(r.totalQuantity),
-    totalRevenue: Number(r.totalRevenue),
-  })));
+  res.json(
+    rows.map((r) => ({
+      menuItemId: r.menuItemId,
+      name: r.name,
+      nameAr: r.nameAr,
+      imageUrl: r.imageUrl,
+      totalQuantity: Number(r.totalQuantity),
+      totalRevenue: Number(r.totalRevenue),
+    }))
+  );
 });
 
 export default router;

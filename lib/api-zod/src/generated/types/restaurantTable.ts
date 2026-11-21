@@ -6,11 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RestaurantTableStatus } from "./restaurantTableStatus";
+import type { RestaurantTableType } from "./restaurantTableType";
 
 export interface RestaurantTable {
   id: number;
   number: string;
   capacity: number;
+  type: RestaurantTableType;
   status: RestaurantTableStatus;
   location?: string;
   createdAt?: Date;

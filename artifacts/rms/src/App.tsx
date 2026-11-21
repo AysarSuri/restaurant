@@ -15,12 +15,24 @@ import Orders from "@/pages/orders";
 import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Employees from "@/pages/employees";
+import Shifts from "@/pages/shifts";
+import Suppliers from "@/pages/suppliers";
 import Expenses from "@/pages/expenses";
+import CashMovements from "@/pages/cash-movements";
 import Branches from "@/pages/branches";
+import Cards from "@/pages/cards";
+import Settings from "@/pages/settings";
+import SystemReset from "@/pages/system-reset";
+import DeliveryContacts from "@/pages/delivery-contacts";
 import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import Cashier from "@/pages/cashier";
 import TableOrder from "@/pages/table-order";
+import { BranchProvider } from "@/lib/branch-context";
+import { applyBrandPrimary } from "@/lib/brand-theme";
+import { LocaleProvider } from "@/i18n";
+import { EnterAsTab } from "@/components/enter-as-tab";
+import { useGetSettings } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,14 +82,37 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BrandThemeSync() {
+  const { data } = useGetSettings({
+    query: {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  });
+
+  useEffect(() => {
+    if (data?.themePrimary) applyBrandPrimary(data.themePrimary);
+  }, [data?.themePrimary]);
+
+  return null;
+}
+
 // ─── Auth ─────────────────────────────────────────────────
 export type UserRole = "admin" | "manager" | "cashier" | "kitchen" | "table";
 
 export interface AuthUser {
   name: string;
   role: UserRole;
+  employeeId?: number;
   tableId?: number;
   tableNumber?: string;
+  /** employee belongs to every branch (admin/manager or flag) */
+  allBranches?: boolean;
+  /** assigned branch ids when not allBranches */
+  branchIds?: number[];
+  /** active working scope: one branch or all (admin/manager) */
+  selectedBranchId?: number | "all";
+  branchName?: string;
 }
 
 interface AuthContextType {
@@ -114,6 +149,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem("rms-user");
+    localStorage.removeItem("rms-branch");
   };
 
   return (
@@ -148,8 +184,15 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/inventory": ["admin", "manager"],
   "/customers": ["admin", "manager"],
   "/employees": ["admin", "manager"],
+  "/shifts": ["admin", "manager"],
+  "/suppliers": ["admin", "manager"],
   "/expenses": ["admin", "manager"],
+  "/cash-movements": ["admin", "manager"],
   "/branches": ["admin", "manager"],
+  "/cards": ["admin", "manager"],
+  "/settings": ["admin", "manager"],
+  "/system-reset": ["admin"],
+  "/delivery-contacts": ["admin", "manager", "cashier"],
   "/reports": ["admin", "manager"],
 };
 
@@ -199,8 +242,15 @@ function Router() {
       <Route path="/inventory" component={Inventory} />
       <Route path="/customers" component={Customers} />
       <Route path="/employees" component={Employees} />
+      <Route path="/shifts" component={Shifts} />
+      <Route path="/suppliers" component={Suppliers} />
       <Route path="/expenses" component={Expenses} />
+      <Route path="/cash-movements" component={CashMovements} />
       <Route path="/branches" component={Branches} />
+      <Route path="/cards" component={Cards} />
+      <Route path="/settings" component={Settings} />
+      <Route path="/system-reset" component={SystemReset} />
+      <Route path="/delivery-contacts" component={DeliveryContacts} />
       <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
@@ -213,18 +263,24 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
-        </QueryClientProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <LocaleProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            <BranchProvider>
+              <TooltipProvider>
+                <EnterAsTab />
+                <BrandThemeSync />
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <Router />
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </BranchProvider>
+          </QueryClientProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </LocaleProvider>
   );
 }
 

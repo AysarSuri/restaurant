@@ -1,10 +1,26 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { branchesTable } from "@workspace/db/schema";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc, count, sql, and, ne } from "drizzle-orm";
 
 const MAX_BRANCHES = 3;
 const router: IRouter = Router();
+
+async function isDuplicateName(name: string, excludeId?: number) {
+  const normalized = name.trim().toLowerCase();
+  const conditions = [
+    sql`lower(${branchesTable.name}) = ${normalized}`,
+  ];
+  if (excludeId != null) {
+    conditions.push(ne(branchesTable.id, excludeId));
+  }
+  const rows = await db
+    .select({ id: branchesTable.id })
+    .from(branchesTable)
+    .where(and(...conditions))
+    .limit(1);
+  return rows.length > 0;
+}
 
 router.get("/", async (_req, res) => {
   const branches = await db
@@ -30,10 +46,16 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  const trimmedName = String(name).trim();
+  if (await isDuplicateName(trimmedName)) {
+    res.status(400).json({ success: false, message: "اسم الفرع مستخدم مسبقاً" });
+    return;
+  }
+
   const [branch] = await db
     .insert(branchesTable)
     .values({
-      name: String(name).trim(),
+      name: trimmedName,
       mobile1: String(mobile1).trim(),
       mobile2: mobile2 ? String(mobile2).trim() : null,
       address: address ? String(address).trim() : null,
@@ -55,10 +77,16 @@ router.put("/:id", async (req, res) => {
     return;
   }
 
+  const trimmedName = String(name).trim();
+  if (await isDuplicateName(trimmedName, id)) {
+    res.status(400).json({ success: false, message: "اسم الفرع مستخدم مسبقاً" });
+    return;
+  }
+
   const [branch] = await db
     .update(branchesTable)
     .set({
-      name: String(name).trim(),
+      name: trimmedName,
       mobile1: String(mobile1).trim(),
       mobile2: mobile2 ? String(mobile2).trim() : null,
       address: address ? String(address).trim() : null,

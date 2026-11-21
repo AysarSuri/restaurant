@@ -8,6 +8,8 @@ export const menuCategoriesTable = pgTable("menu_categories", {
   nameAr: text("name_ar").notNull(),
   nameKu: text("name_ku"),
   icon: text("icon"),
+  /** Category image path or URL (PNG / JPG / WEBP / GIF) */
+  imageUrl: text("image_url"),
   sortOrder: integer("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -1,9 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: 'Tajawal', sans-serif;
-  --font-display: 'Tajawal', sans-serif;
+  /* Vazirmatn/Noto Arabic for RTL; Noto Sans for Badini Latin + English */
+  --font-sans: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
+  --font-display: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -143,8 +144,11 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary;
     direction: rtl;
-    font-family: 'Tajawal', sans-serif;
+    font-family: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
     font-weight: 700;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "liga" 1, "calt" 1, "kern" 1;
+    font-variant-ligatures: common-ligatures contextual;
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
@@ -153,6 +157,14 @@
       env(safe-area-inset-right, 0)
       env(safe-area-inset-bottom, 0)
       env(safe-area-inset-left, 0);
+  }
+
+  /*
+    Letter-spacing breaks Arabic/Kurdish cursive joining.
+    Keep tracking utilities for Latin-only labels (e.g. RMS 2026).
+  */
+  :where(h1, h2, h3, h4, h5, h6, p, span, button, a, label, li, td, th, input, textarea, select) {
+    font-family: inherit;
   }
 
   /* Custom Scrollbar for a premium feel */
@@ -178,6 +190,13 @@
 }
 
 @layer utilities {
+  /* Never stretch Arabic/Kurdish letters apart */
+  .text-ar,
+  .text-ckb {
+    letter-spacing: 0 !important;
+    word-spacing: normal;
+  }
+
   .h-app {
     height: 100vh;
     height: 100dvh;
@@ -217,11 +236,86 @@
 }
 
 /*
-  Compact / POS portrait shells:
-  - phones, small tablets
-  - portrait terminals up to ~1080px wide (e.g. Gasan POS)
+  POS layout is class-driven (not width-only media queries) so Windows
+  display scaling / portrait PC (e.g. 1080×1920 @125–150%) still get
+  dual-pane: menu RIGHT · current order LEFT.
 */
-@media (max-width: 1199px), ((orientation: portrait) and (max-width: 1400px)) {
+.pos-compact {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.pos-compact .pos-order-aside {
+  display: none !important;
+}
+
+.pos-compact .pos-cart-fab {
+  display: flex !important;
+  /* Sit above the POS menu footer action bar */
+  bottom: 5.75rem !important;
+}
+
+.pos-expansive {
+  display: grid !important;
+  /* RTL: first column = right (menu), second = left (cart) */
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 40%);
+  grid-template-rows: 1fr;
+  gap: 0;
+  width: 100%;
+  max-width: none;
+}
+
+.pos-expansive-xl {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 38%);
+}
+
+.pos-expansive .pos-cart-fab {
+  display: none !important;
+}
+
+.pos-expansive .pos-order-aside {
+  display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Portrait computer / kiosk: two balanced screens */
+.pos-expansive.pos-portrait {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.pos-expansive.pos-portrait > :first-child {
+  border-inline-end: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.pos-expansive.pos-portrait .pos-order-pane {
+  min-width: 0;
+  box-shadow: none;
+  border-inline-start: none;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--card) 92%, var(--primary) 8%) 0%,
+      var(--card) 28%,
+      var(--card) 100%
+    );
+}
+
+.pos-expansive.pos-portrait .pos-menu-pane {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 70% 0%,
+      color-mix(in oklab, var(--primary) 12%, transparent),
+      transparent 55%
+    ),
+    var(--background);
+}
+
+/* Legacy helpers for non-POS pages */
+@media (max-width: 899px) {
   .rms-stack-portrait {
     flex-direction: column !important;
   }
@@ -233,7 +327,7 @@
   }
 }
 
-@media (min-width: 1200px) and (orientation: landscape) {
+@media (min-width: 900px) {
   .rms-show-on-compact {
     display: none !important;
   }
@@ -245,4 +339,49 @@
     --rms-title: clamp(1.125rem, 0.9rem + 1.2vw, 1.75rem);
     --rms-body: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
   }
+}
+
+/* Touch-friendly admin UI (Layout pages only — not POS) */
+.touch-ui {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.touch-ui label,
+.touch-ui .touch-label {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
+}
+
+.touch-ui input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.touch-ui select,
+.touch-ui textarea {
+  min-height: 3rem;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.touch-ui button,
+.touch-ui [role="button"] {
+  touch-action: manipulation;
+  min-height: 2.75rem;
+}
+
+.touch-ui button.h-8,
+.touch-ui button.h-9 {
+  min-height: 2.75rem;
+  height: 2.75rem;
+}
+
+.touch-ui table th,
+.touch-ui table td {
+  font-size: 15px;
+  font-weight: 700;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.touch-ui .crud-touch-row {
+  min-height: 3.25rem;
 }

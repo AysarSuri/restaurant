@@ -7,8 +7,17 @@ import {
   restaurantTablesTable,
   customersTable,
   employeesTable,
+  appSettingsTable,
 } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
+
+async function getSalesRoutingSettings() {
+  const [settings] = await db.select().from(appSettingsTable).limit(1);
+  const posSaveTarget = settings?.posSaveTarget === "none" ? "none" : "kitchen";
+  const cashierSendToKitchen = settings?.cashierSendToKitchen !== false;
+  return { posSaveTarget, cashierSendToKitchen };
+}
 
 const router: IRouter = Router();
 
@@ -28,6 +37,7 @@ async function getOrderWithDetails(orderId: number) {
       orderNumber: ordersTable.orderNumber,
       type: ordersTable.type,
       status: ordersTable.status,
+      branchId: ordersTable.branchId,
       tableId: ordersTable.tableId,
       customerId: ordersTable.customerId,
       employeeId: ordersTable.employeeId,
@@ -81,10 +91,13 @@ async function getOrderWithDetails(orderId: number) {
 // GET /orders
 router.get("/", async (req, res) => {
   const { status, type, date, limit = "50" } = req.query;
+  const scope = parseBranchScope(req);
 
   const conditions = [];
   type OrderStatus = typeof ordersTable.status.enumValues[number];
   type OrderType = typeof ordersTable.type.enumValues[number];
+  const branchCond = branchEq(ordersTable.branchId, scope);
+  if (branchCond) conditions.push(branchCond);
   if (status) {
     const statusList = (status as string)
       .split(",")
@@ -111,6 +124,7 @@ router.get("/", async (req, res) => {
       orderNumber: ordersTable.orderNumber,
       type: ordersTable.type,
       status: ordersTable.status,
+      branchId: ordersTable.branchId,
       tableId: ordersTable.tableId,
       customerId: ordersTable.customerId,
       employeeId: ordersTable.employeeId,
@@ -180,7 +194,26 @@ router.get("/:id", async (req, res) => {
 
 // POST /orders
 router.post("/", async (req, res) => {
-  const { type, tableId, customerId, employeeId, items, discount, notes, deliveryAddress, deliveryPhone } = req.body;
+  const scope = parseBranchScope(req);
+  const {
+    type,
+    tableId,
+    customerId,
+    employeeId,
+    items,
+    discount,
+    notes,
+    deliveryAddress,
+    deliveryPhone,
+    branchId,
+    paymentMethod,
+  } = req.body;
+
+  const resolvedBranchId = resolveWriteBranchId(scope, branchId);
+  if (!resolvedBranchId) {
+    res.status(400).json({ error: "اختر فرعاً قبل إنشاء طلب" });
+    return;
+  }
 
   let subtotal = 0;
   const itemsWithPrice: { menuItemId: number; quantity: number; unitPrice: number; notes?: string }[] = [];
@@ -197,12 +230,20 @@ router.post("/", async (req, res) => {
   const tax = 0;
   const total = subtotal - discountAmt + tax;
 
+  const { posSaveTarget } = await getSalesRoutingSettings();
+  const initialStatus = posSaveTarget === "none" ? "paid" : "preparing";
+  const validPay =
+    paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer"
+      ? paymentMethod
+      : undefined;
+
   const [order] = await db
     .insert(ordersTable)
     .values({
       orderNumber: generateOrderNumber(),
       type,
-      status: "pending",
+      status: initialStatus,
+      branchId: resolvedBranchId,
       tableId: tableId ?? null,
       customerId: customerId ?? null,
       employeeId: employeeId ?? null,
@@ -213,6 +254,7 @@ router.post("/", async (req, res) => {
       notes,
       deliveryAddress,
       deliveryPhone,
+      paymentMethod: validPay,
     })
     .returning();
 
@@ -277,14 +319,19 @@ router.put("/:id", async (req, res) => {
 // PATCH /orders/:id/status
 router.patch("/:id/status", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { status } = req.body;
+  const { status, paymentMethod } = req.body;
 
-  await db.update(ordersTable).set({ status, updatedAt: new Date() }).where(eq(ordersTable.id, id));
+  const patch: Record<string, unknown> = { status, updatedAt: new Date() };
+  if (paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer") {
+    patch.paymentMethod = paymentMethod;
+  }
+
+  await db.update(ordersTable).set(patch).where(eq(ordersTable.id, id));
 
   // If served, free table
   if (status === "served" || status === "paid" || status === "cancelled") {
     const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
-    if (order.tableId) {
+    if (order?.tableId) {
       await db.update(restaurantTablesTable).set({ status: "available" }).where(eq(restaurantTablesTable.id, order.tableId));
     }
   }

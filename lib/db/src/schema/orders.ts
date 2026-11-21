@@ -4,12 +4,14 @@ import { z } from "zod/v4";
 import { restaurantTablesTable } from "./tables";
 import { customersTable } from "./customers";
 import { employeesTable } from "./employees";
+import { branchesTable } from "./branches";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),
   type: text("type", { enum: ["dine_in", "takeaway", "delivery"] }).notNull(),
   status: text("status", { enum: ["pending", "confirmed", "preparing", "ready", "served", "paid", "cancelled"] }).default("pending").notNull(),
+  branchId: integer("branch_id").references(() => branchesTable.id),
   tableId: integer("table_id").references(() => restaurantTablesTable.id),
   customerId: integer("customer_id").references(() => customersTable.id),
   employeeId: integer("employee_id").references(() => employeesTable.id),

@@ -7,8 +7,15 @@ import customersRouter from "./customers";
 import employeesRouter from "./employees";
 import inventoryRouter from "./inventory";
 import expensesRouter from "./expenses";
+import cashMovementsRouter from "./cash-movements";
 import branchesRouter from "./branches";
+import cardsRouter from "./cards";
+import settingsRouter from "./settings";
+import deliveryContactsRouter from "./delivery-contacts";
 import reportsRouter from "./reports";
+import shiftsRouter from "./shifts";
+import suppliersRouter from "./suppliers";
+import systemResetRouter from "./system-reset";
 
 const router: IRouter = Router();
 
@@ -20,7 +27,14 @@ router.use("/customers", customersRouter);
 router.use("/employees", employeesRouter);
 router.use("/inventory", inventoryRouter);
 router.use("/expenses", expensesRouter);
+router.use("/cash-movements", cashMovementsRouter);
 router.use("/branches", branchesRouter);
+router.use("/cards", cardsRouter);
+router.use("/settings", settingsRouter);
+router.use("/delivery-contacts", deliveryContactsRouter);
 router.use("/reports", reportsRouter);
+router.use("/shifts", shiftsRouter);
+router.use("/suppliers", suppliersRouter);
+router.use("/system-reset", systemResetRouter);
 
 export default router;

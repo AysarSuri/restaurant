@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateTableBodyStatus } from "./createTableBodyStatus";
+import type { RestaurantTableType } from "./restaurantTableType";
 
 export interface CreateTableBody {
   number: string;
   capacity: number;
+  type?: RestaurantTableType;
   location?: string;
   status?: CreateTableBodyStatus;
 }

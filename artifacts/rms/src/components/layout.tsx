@@ -11,37 +11,24 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Dialog, Button } from "./ui-elements";
+import { BranchSwitcher } from "./branch-switcher";
+import { LanguageSwitcher } from "./language-switcher";
 import { useTheme, useAuth } from "@/App";
-
-const PAGE_TITLES: Record<string, string> = {
-  "/": "الصفحة الرئيسية",
-  "/pos": "نقطة البيع",
-  "/kds": "شاشة المطبخ",
-  "/orders": "الطلبات",
-  "/tables": "الطاولات",
-  "/menu": "المنيو",
-  "/inventory": "المخزون",
-  "/customers": "العملاء",
-  "/employees": "الموظفين",
-  "/expenses": "المصاريف",
-  "/branches": "الفروع",
-  "/reports": "التقارير",
-  "/cashier": "شاشة الكاشير",
-  "/table-order": "طلب الطاولة",
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: "مدير النظام",
-  manager: "مدير",
-  cashier: "كاشير",
-  kitchen: "مطبخ",
-  table: "نادل",
-};
+import { useBranch } from "@/lib/branch-context";
+import { useI18n } from "@/i18n";
+import { pageTitleKeys, roleLabelKeys } from "@/i18n/messages";
+import { useGetSettings } from "@workspace/api-client-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { branchLabel } = useBranch();
+  const { t, dateLocale, formatDate, usesYmdSlash } = useI18n();
+  const { data: appSettings } = useGetSettings({
+    query: { staleTime: 60_000, refetchOnWindowFocus: false },
+  });
+  const restaurantName = appSettings?.restaurantName?.trim() || t("app.name");
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
@@ -51,7 +38,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const isFullscreen = location === "/pos" || location === "/kds";
   const isHome = location === "/";
-  const pageTitle = PAGE_TITLES[location] || "النظام";
+  const pageTitle = t(pageTitleKeys[location] || "app.system");
 
   if (isFullscreen) {
     return <div className="min-h-app bg-background page-shell">{children}</div>;
@@ -59,19 +46,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-app bg-background overflow-hidden page-shell">
-      <Dialog isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} title="تسجيل الخروج">
+      <Dialog isOpen={logoutOpen} onClose={() => setLogoutOpen(false)} title={t("auth.logout")}>
         <div className="text-center py-2 space-y-5">
           <div className="w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center mx-auto">
             <LogOut className="w-8 h-8 text-destructive" />
           </div>
           <div>
-            <p className="font-bold text-lg">هل تريد تسجيل الخروج؟</p>
-            <p className="text-muted-foreground text-sm mt-1">سيتم إغلاق جلستك الحالية.</p>
+            <p className="font-bold text-lg">{t("auth.logoutConfirm")}</p>
+            <p className="text-muted-foreground text-sm mt-1">{t("auth.logoutHint")}</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setLogoutOpen(false)}>إلغاء</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setLogoutOpen(false)}>
+              {t("common.cancel")}
+            </Button>
             <Button variant="destructive" className="flex-1 gap-2" onClick={handleLogout}>
-              <LogOut className="w-4 h-4" /> تسجيل الخروج
+              <LogOut className="w-4 h-4" /> {t("auth.logout")}
             </Button>
           </div>
         </div>
@@ -84,11 +73,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => navigate("/")}
-                className="inline-flex items-center gap-2 h-10 px-3 sm:px-4 rounded-full border-2 border-primary/40 bg-primary/10 text-primary text-sm font-bold hover:bg-primary/20 transition-colors flex-shrink-0"
+                className="inline-flex items-center gap-2 min-h-12 h-12 px-4 sm:px-5 rounded-full border-2 border-primary/40 bg-primary/10 text-primary text-[15px] font-bold hover:bg-primary/20 transition-colors flex-shrink-0 touch-manipulation"
               >
-                <Home className="w-4 h-4" />
-                <span className="hidden sm:inline">الصفحة الرئيسية</span>
-                <ArrowRight className="w-4 h-4" />
+                <Home className="w-5 h-5" />
+                <span className="hidden sm:inline">{t("nav.home")}</span>
+                <ArrowRight className="w-5 h-5" />
               </button>
             ) : (
               <button
@@ -100,7 +89,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <ChefHat className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
                 </div>
                 <div className="min-w-0 text-right">
-                  <h1 className="text-base sm:text-lg font-bold text-foreground leading-none truncate">المطعم الذكي</h1>
+                  <h1 className="text-base sm:text-lg font-bold text-foreground leading-none truncate">{restaurantName}</h1>
                   <p className="text-[10px] text-primary font-medium tracking-widest font-display uppercase">RMS 2026</p>
                 </div>
               </button>
@@ -114,23 +103,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            <LanguageSwitcher compact />
+            <BranchSwitcher compact />
             <div className="hidden sm:block text-right me-1 md:me-2">
               <div className="text-xs md:text-sm font-semibold text-foreground">
-                {new Date().toLocaleDateString("ar-IQ", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+                {(() => {
+                  const d = new Date();
+                  const weekday = d.toLocaleDateString(dateLocale, { weekday: "long" });
+                  const day = String(d.getDate()).padStart(2, "0");
+                  const month = String(d.getMonth() + 1).padStart(2, "0");
+                  const year = d.getFullYear();
+                  const numeric = usesYmdSlash
+                    ? formatDate(d)
+                    : `${day}/${month}/${year}`;
+                  return (
+                    <>
+                      {weekday}{" "}
+                      <span className="font-display tabular-nums" dir="ltr">
+                        {numeric}
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
               <div className="text-[10px] md:text-xs text-primary font-display">
-                {user?.name ?? ""} · {ROLE_LABELS[user?.role ?? ""] ?? ""}
+                {user?.name ?? ""} · {t(roleLabelKeys[user?.role ?? ""] ?? "app.system")} · {branchLabel}
               </div>
             </div>
 
             <button
               onClick={toggleTheme}
-              title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}
+              title={theme === "dark" ? t("theme.light") : t("theme.dark")}
               className="relative flex items-center gap-1 h-9 px-1 rounded-full bg-secondary border border-border hover:border-primary/40 transition-all duration-300 overflow-hidden"
               style={{ width: "5rem" }}
             >
@@ -162,17 +165,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setLogoutOpen(true)}
-              title="تسجيل الخروج"
+              title={t("auth.logout")}
               className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-amber-600 border-2 border-primary/30 flex items-center justify-center font-bold text-sm text-primary-foreground flex-shrink-0 hover:brightness-110 transition-all"
             >
-              {user?.name?.charAt(0) ?? "م"}
+              {user?.name?.charAt(0) ?? "?"}
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 xl:p-8 relative safe-pb">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 xl:p-8 relative safe-pb touch-ui">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 w-full max-w-[1920px] mx-auto">{children}</div>
+          <div className="relative z-10 w-full max-w-[1920px] mx-auto touch-ui">{children}</div>
         </div>
       </main>
     </div>

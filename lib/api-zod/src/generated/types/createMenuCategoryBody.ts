@@ -11,5 +11,6 @@ export interface CreateMenuCategoryBody {
   nameAr: string;
   nameKu?: string;
   icon?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
 }

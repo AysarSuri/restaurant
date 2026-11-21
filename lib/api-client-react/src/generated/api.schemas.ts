@@ -20,6 +20,7 @@ export interface MenuCategory {
   nameAr: string;
   nameKu?: string;
   icon?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
   createdAt?: string;
 }
@@ -29,6 +30,7 @@ export interface CreateMenuCategoryBody {
   nameAr: string;
   nameKu?: string;
   icon?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
 }
 
@@ -41,9 +43,22 @@ export interface MenuItem {
   description?: string;
   descriptionAr?: string;
   price: number;
-  cost?: number;
+  /** Cost per minor unit («عدد») */
+  cost?: number | null;
+  /** Major pack unit, e.g. كرتون */
+  majorUnit?: string | null;
+  /** Always «عدد» when cost is set */
+  minorUnit?: string | null;
+  /** Minor units count inside one major unit */
+  subunitQty?: number | null;
   imageUrl?: string;
   isAvailable: boolean;
+  /** Favorite — shown first in POS */
+  isFavorite?: boolean;
+  /** true = available in all branches */
+  allBranches?: boolean;
+  /** specific branch ids when allBranches is false */
+  branchIds?: number[];
   preparationTime?: number;
   calories?: number;
   sortOrder?: number;
@@ -59,13 +74,40 @@ export interface CreateMenuItemBody {
   description?: string;
   descriptionAr?: string;
   price: number;
-  cost?: number;
+  cost?: number | null;
+  majorUnit?: string | null;
+  subunitQty?: number | null;
   imageUrl?: string;
   isAvailable?: boolean;
+  isFavorite?: boolean;
+  allBranches?: boolean;
+  branchIds?: number[];
   preparationTime?: number;
   calories?: number;
   sortOrder?: number;
 }
+
+export interface ItemUnit {
+  id: number;
+  nameAr: string;
+  name?: string | null;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface CreateItemUnitBody {
+  nameAr: string;
+  name?: string;
+}
+
+export type RestaurantTableType =
+  (typeof RestaurantTableType)[keyof typeof RestaurantTableType];
+
+export const RestaurantTableType = {
+  table: "table",
+  room: "room",
+  person: "person",
+} as const;
 
 export type RestaurantTableStatus =
   (typeof RestaurantTableStatus)[keyof typeof RestaurantTableStatus];
@@ -81,10 +123,21 @@ export interface RestaurantTable {
   id: number;
   number: string;
   capacity: number;
+  type: RestaurantTableType;
   status: RestaurantTableStatus;
   location?: string;
+  branchId?: number | null;
   createdAt?: string;
 }
+
+export type CreateTableBodyType =
+  (typeof CreateTableBodyType)[keyof typeof CreateTableBodyType];
+
+export const CreateTableBodyType = {
+  table: "table",
+  room: "room",
+  person: "person",
+} as const;
 
 export type CreateTableBodyStatus =
   (typeof CreateTableBodyStatus)[keyof typeof CreateTableBodyStatus];
@@ -99,9 +152,19 @@ export const CreateTableBodyStatus = {
 export interface CreateTableBody {
   number: string;
   capacity: number;
+  type?: CreateTableBodyType;
   location?: string;
   status?: CreateTableBodyStatus;
 }
+
+export type UpdateTableBodyType =
+  (typeof UpdateTableBodyType)[keyof typeof UpdateTableBodyType];
+
+export const UpdateTableBodyType = {
+  table: "table",
+  room: "room",
+  person: "person",
+} as const;
 
 export type UpdateTableBodyStatus =
   (typeof UpdateTableBodyStatus)[keyof typeof UpdateTableBodyStatus];
@@ -116,6 +179,7 @@ export const UpdateTableBodyStatus = {
 export interface UpdateTableBody {
   number?: string;
   capacity?: number;
+  type?: UpdateTableBodyType;
   location?: string;
   status?: UpdateTableBodyStatus;
 }
@@ -181,6 +245,7 @@ export interface Customer {
   totalOrders?: number;
   totalSpent?: number;
   notes?: string;
+  branchId?: number | null;
   createdAt?: string;
 }
 
@@ -189,6 +254,7 @@ export interface Order {
   orderNumber: string;
   type: OrderType;
   status: OrderStatus;
+  branchId?: number | null;
   tableId?: number;
   table?: RestaurantTable;
   customerId?: number;
@@ -284,6 +350,7 @@ export interface InventoryItem {
   costPerUnit?: number;
   category?: string;
   supplier?: string;
+  branchId?: number | null;
   lastRestockedAt?: string;
   createdAt?: string;
 }
@@ -329,8 +396,14 @@ export interface Employee {
   role: EmployeeRole;
   phone?: string;
   email?: string;
+  /** Login PIN for this employee (falls back to demo PIN if empty) */
+  pin?: string | null;
   salary?: number;
   isActive: boolean;
+  /** admin/manager always true — belongs to all branches */
+  allBranches?: boolean;
+  /** specific branches when allBranches is false */
+  branchIds?: number[];
   hireDate?: string;
   createdAt?: string;
 }
@@ -352,9 +425,12 @@ export interface CreateEmployeeBody {
   role: CreateEmployeeBodyRole;
   phone?: string;
   email?: string;
+  pin?: string | null;
   salary?: number;
   isActive?: boolean;
   hireDate?: string;
+  allBranches?: boolean;
+  branchIds?: number[];
 }
 
 export interface Expense {
@@ -365,6 +441,7 @@ export interface Expense {
   category: string;
   date: string;
   employeeId?: number;
+  branchId?: number | null;
   createdAt?: string;
 }
 

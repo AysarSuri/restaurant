@@ -26,9 +26,20 @@ function getSnapshot() {
 
   const width = window.innerWidth;
   const height = window.innerHeight;
-  const isPortrait = height >= width;
-  // Phones/tablets + portrait POS up to ~1080×1920
-  const isCompactPos = width < 1200 || (isPortrait && width <= 1400);
+  const isPortrait =
+    height > width ||
+    (typeof window.matchMedia === "function" &&
+      window.matchMedia("(orientation: portrait)").matches);
+
+  const shortSide = Math.min(width, height);
+  const longSide = Math.max(width, height);
+  // CSS px shrink under Windows display scaling (e.g. 1080×1920 @150% ≈ 720×1280).
+  // Treat tall/wide computer & kiosk viewports as expansive dual-pane POS.
+  const isExpansivePos =
+    width >= 900 ||
+    (isPortrait && shortSide >= 640 && longSide >= 1100) ||
+    (!isPortrait && width >= 1000 && height >= 560);
+  const isCompactPos = !isExpansivePos;
 
   return {
     width,
@@ -37,7 +48,7 @@ function getSnapshot() {
     isCompactPos,
     isMobile: width < 768,
     isTablet: width >= 768 && width < 1200,
-    isDesktop: width >= 1200 && !isPortrait,
+    isDesktop: !isCompactPos,
   };
 }
 

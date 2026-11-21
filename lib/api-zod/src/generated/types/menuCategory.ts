@@ -12,6 +12,7 @@ export interface MenuCategory {
   nameAr: string;
   nameKu?: string;
   icon?: string;
+  imageUrl?: string | null;
   sortOrder?: number;
   createdAt?: Date;
 }

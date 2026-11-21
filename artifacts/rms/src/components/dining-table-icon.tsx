@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import { useI18n } from "@/i18n";
 
 type DiningTableIconProps = {
   className?: string;
@@ -8,6 +9,7 @@ type DiningTableIconProps = {
 
 /** Side-view dining set: wood table, gold runner, mid-century chairs */
 export function DiningTableIcon({ className = "", number }: DiningTableIconProps) {
+  const { t } = useI18n();
   const uid = useId().replace(/:/g, "");
   const cloth = `cloth-${uid}`;
   const chair = `chair-${uid}`;
@@ -24,7 +26,7 @@ export function DiningTableIcon({ className = "", number }: DiningTableIconProps
       aria-hidden={!number}
       role={number ? "img" : "presentation"}
     >
-      {number != null && <title>{`طاولة ${number}`}</title>}
+      {number != null && <title>{t("tables.tableN", { n: number })}</title>}
 
       {/* Left chair — molded gold seat + angled wood legs */}
       <path
@@ -96,7 +98,7 @@ export function DiningTableIcon({ className = "", number }: DiningTableIconProps
           fill="#5C3A10"
           fontSize="16"
           fontWeight="800"
-          fontFamily="Tajawal, sans-serif"
+          fontFamily="Vazirmatn, 'Noto Sans Arabic', sans-serif"
         >
           {number}
         </text>

@@ -1,6 +1,7 @@
-import { pgTable, serial, text, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { branchesTable } from "./branches";
 
 export const inventoryTable = pgTable("inventory", {
   id: serial("id").primaryKey(),
@@ -12,6 +13,7 @@ export const inventoryTable = pgTable("inventory", {
   costPerUnit: numeric("cost_per_unit", { precision: 12, scale: 2 }),
   category: text("category"),
   supplier: text("supplier"),
+  branchId: integer("branch_id").references(() => branchesTable.id),
   lastRestockedAt: timestamp("last_restocked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
