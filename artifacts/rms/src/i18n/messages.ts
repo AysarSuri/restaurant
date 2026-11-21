@@ -30,6 +30,7 @@ const ar: Messages = {
   "nav.branches": "الفروع",
   "nav.cards": "البطاقات",
   "nav.settings": "الإعدادات",
+  "nav.systemReset": "تصفير البرنامج",
   "nav.deliveryContacts": "أرقام التوصيل",
   "nav.reports": "التقارير",
 
@@ -873,6 +874,35 @@ const ar: Messages = {
   "tableOrder.noMatch": "لا توجد أصناف مطابقة",
   "notFound.title": "الصفحة غير موجودة",
   "notFound.body": "عذراً، هذه الصفحة غير متوفرة.",
+
+  "reset.title": "تصفير البرنامج",
+  "reset.subtitle":
+    "امسح بيانات جدول محدد أو صفّر النظام بالكامل. العملية لا يمكن التراجع عنها — استخدمها بحذر.",
+  "reset.dangerZone": "منطقة خطرة",
+  "reset.groupsCount": "{n} مجموعة بيانات",
+  "reset.rowsCount": "{n} سجل",
+  "reset.adminSeedHint": "المدير الافتراضي: {name}",
+  "reset.refresh": "تحديث العدادات",
+  "reset.resetAll": "تصفير جميع الجداول",
+  "reset.resetTable": "تصفير هذا الجدول",
+  "reset.confirmTitle": "تأكيد تصفير الجدول",
+  "reset.confirmAllTitle": "تأكيد تصفير البرنامج بالكامل",
+  "reset.confirmAllWarn": "سيتم مسح كل البيانات فوراً",
+  "reset.confirmAllBody":
+    "تشمل الطلبات والمخزون والموردين والموظفين والفروع والإعدادات. بعدها يُنشأ مدير النظام Aisar تلقائياً.",
+  "reset.typeConfirm": "اكتب «{word}» للتأكيد",
+  "reset.confirmAction": "تصفير الآن",
+  "reset.confirmAllAction": "تصفير الكل الآن",
+  "reset.employeesSeedNote":
+    "بعد التصفير يُنشأ تلقائياً مدير النظام Aisar بكامل الصلاحيات.",
+  "reset.adminOnlyTitle": "للمدير فقط",
+  "reset.adminOnlyBody": "تصفير البرنامج متاح لمدير النظام فقط.",
+  "reset.confirmOneWarn": "هذه العملية نهائية ولا يمكن التراجع عنها.",
+  "reset.employeesSeedNoteShort": "إعادة إنشاء المدير Aisar",
+  "reset.resultOkTitle": "تم التصفير بنجاح",
+  "reset.resultErrTitle": "تعذر التصفير",
+  "reset.failOne": "تعذر تصفير الجدول",
+  "reset.failAll": "تعذر تصفير البرنامج",
 };
 
 const en: Messages = {
@@ -904,6 +934,7 @@ const en: Messages = {
   "nav.branches": "Branches",
   "nav.cards": "Cards",
   "nav.settings": "Settings",
+  "nav.systemReset": "Factory reset",
   "nav.deliveryContacts": "Delivery Contacts",
   "nav.reports": "Reports",
 
@@ -1747,6 +1778,35 @@ const en: Messages = {
   "tableOrder.noMatch": "No matching items",
   "notFound.title": "Page not found",
   "notFound.body": "Sorry, this page is not available.",
+
+  "reset.title": "Factory reset",
+  "reset.subtitle":
+    "Clear one data group or wipe the whole system. This cannot be undone — use carefully.",
+  "reset.dangerZone": "Danger zone",
+  "reset.groupsCount": "{n} data groups",
+  "reset.rowsCount": "{n} records",
+  "reset.adminSeedHint": "Default admin: {name}",
+  "reset.refresh": "Refresh counts",
+  "reset.resetAll": "Reset all tables",
+  "reset.resetTable": "Reset this table",
+  "reset.confirmTitle": "Confirm table reset",
+  "reset.confirmAllTitle": "Confirm full system reset",
+  "reset.confirmAllWarn": "All data will be erased immediately",
+  "reset.confirmAllBody":
+    "Orders, inventory, suppliers, employees, branches, and settings will be cleared. System admin Aisar is then created automatically.",
+  "reset.typeConfirm": "Type «{word}» to confirm",
+  "reset.confirmAction": "Reset now",
+  "reset.confirmAllAction": "Reset everything now",
+  "reset.employeesSeedNote":
+    "After reset, system admin Aisar is created automatically with full access.",
+  "reset.adminOnlyTitle": "Admins only",
+  "reset.adminOnlyBody": "Factory reset is available to system admins only.",
+  "reset.confirmOneWarn": "This action is permanent and cannot be undone.",
+  "reset.employeesSeedNoteShort": "Recreate admin Aisar",
+  "reset.resultOkTitle": "Reset completed",
+  "reset.resultErrTitle": "Reset failed",
+  "reset.failOne": "Could not reset this table",
+  "reset.failAll": "Could not reset the system",
 };
 
 const ku: Messages = {
@@ -1778,6 +1838,7 @@ const ku: Messages = {
   "nav.branches": "Şax",
   "nav.cards": "Kart",
   "nav.settings": "Mîheng",
+  "nav.systemReset": "Paqijkirina pergalê",
   "nav.deliveryContacts": "Jimareyên şandinê",
   "nav.reports": "Raport",
 
@@ -2621,6 +2682,35 @@ const ku: Messages = {
   "tableOrder.noMatch": "Tiştên li hev nayên",
   "notFound.title": "Rûpel nehat dîtin",
   "notFound.body": "Bibore, ev rûpel berdest nîne.",
+
+  "reset.title": "Paqijkirina pergalê",
+  "reset.subtitle":
+    "Daneyên komekê an hemû pergalê paqij bike. Ev kar nayê vegerandin — bi hişyarî bikar bîne.",
+  "reset.dangerZone": "Devera xeternak",
+  "reset.groupsCount": "{n} komên daneyan",
+  "reset.rowsCount": "{n} tomar",
+  "reset.adminSeedHint": "Rêveberê standard: {name}",
+  "reset.refresh": "Jimaran nû bike",
+  "reset.resetAll": "Hemû tabloyan paqij bike",
+  "reset.resetTable": "Vê tabloyê paqij bike",
+  "reset.confirmTitle": "Pejirandina paqijkirina tabloyê",
+  "reset.confirmAllTitle": "Pejirandina paqijkirina tevahî",
+  "reset.confirmAllWarn": "Hemû daneyan dê tavilê werin jêbirin",
+  "reset.confirmAllBody":
+    "Ferman, envanter, dabindekar, karmend, şax û mîheng dê werin paqijkirin. Paşê rêveberê pergalê Aisar bixweber tê afirandin.",
+  "reset.typeConfirm": "Ji bo pejirandinê «{word}» binivîse",
+  "reset.confirmAction": "Niha paqij bike",
+  "reset.confirmAllAction": "Niha hemûyan paqij bike",
+  "reset.employeesSeedNote":
+    "Piştî paqijkirinê, rêveberê pergalê Aisar bi hemû destûran tê afirandin.",
+  "reset.adminOnlyTitle": "Tenê rêveber",
+  "reset.adminOnlyBody": "Paqijkirina pergalê tenê ji bo rêveberê pergalê ye.",
+  "reset.confirmOneWarn": "Ev kar yekcarî ye û nayê vegerandin.",
+  "reset.employeesSeedNoteShort": "Afarîna rêveber Aisar",
+  "reset.resultOkTitle": "Paqijkirin serkeftî bû",
+  "reset.resultErrTitle": "Paqijkirin têk çû",
+  "reset.failOne": "Ev tablo nehat paqijkirin",
+  "reset.failAll": "Pergal nehat paqijkirin",
 };
 
 export const messages: Record<Locale, Messages> = { ar, en, ku };
@@ -2642,6 +2732,7 @@ export const pageTitleKeys: Record<string, string> = {
   "/branches": "nav.branches",
   "/cards": "nav.cards",
   "/settings": "nav.settings",
+  "/system-reset": "nav.systemReset",
   "/delivery-contacts": "nav.deliveryContacts",
   "/reports": "nav.reports",
   "/cashier": "nav.cashier",

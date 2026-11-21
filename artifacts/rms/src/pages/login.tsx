@@ -418,7 +418,10 @@ export default function Login() {
     if (!selection.trim()) { setError(isTableRole ? t("auth.selectTable") : t("auth.selectEmployee")); return; }
     if (!isTableRole && selectedBranchId == null) { setError(t("auth.selectBranch")); return; }
     if (!pin)              { setError(t("auth.enterPin")); return; }
-    if (pin !== DEMO_PIN)  { setError(t("auth.pinIncorrect")); return; }
+    const expectedPin = isTableRole
+      ? DEMO_PIN
+      : (selectedEmployee?.pin?.trim() || DEMO_PIN);
+    if (pin !== expectedPin)  { setError(t("auth.pinIncorrect")); return; }
 
     const branchName =
       selectedBranchId === "all"

@@ -719,84 +719,88 @@ export function SupplierReturnsPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <label className="text-[15px] font-bold text-foreground mb-1 block">
-                  مبلغ واصل
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="h-12 text-[15px] font-bold"
-                  dir="ltr"
-                  value={form.paidAmount}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      paidAmount: Math.max(0, Number(e.target.value) || 0),
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-[15px] font-bold text-foreground mb-1 block">خصم</label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="h-12 text-[15px] font-bold"
-                  dir="ltr"
-                  value={form.discountAmount}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      discountAmount: Math.max(0, Number(e.target.value) || 0),
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-[15px] font-bold text-foreground mb-1 block">
-                  باقي قائمة
-                </label>
-                <div
-                  className="h-12 rounded-xl border border-destructive/40 bg-destructive/10 px-3 flex items-center text-[15px] font-bold text-destructive"
-                  dir="ltr"
-                >
-                  {fmtMoney(totals.remainingAmount)}
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl border border-border/60 bg-secondary/40">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm((f) => ({ ...f, paymentMethod: "cash", cardId: "" }))
-                  }
-                  className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
-                    form.paymentMethod === "cash"
-                      ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
-                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
-                  }`}
-                >
-                  <Wallet className="w-4 h-4" />
-                  بدون بطاقة
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, paymentMethod: "card" }))}
-                  className={`h-12 rounded-xl flex items-center justify-center gap-2 font-extrabold text-[14px] touch-manipulation transition-all ${
-                    form.paymentMethod === "card"
-                      ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
-                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
-                  }`}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  بطاقة
-                </button>
+              <div className="grid grid-cols-2 lg:grid-cols-[minmax(13.5rem,1.15fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)] gap-2 items-end">
+                <div className="col-span-2 lg:col-span-1 min-w-0">
+                  <label className="text-[15px] font-bold text-foreground mb-1 block">
+                    طريقة الدفع
+                  </label>
+                  <div className="grid grid-cols-2 gap-1 p-1 h-12 rounded-xl border border-border/60 bg-secondary/40">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((f) => ({ ...f, paymentMethod: "cash", cardId: "" }))
+                      }
+                      className={`rounded-lg flex items-center justify-center gap-1.5 font-extrabold text-[12px] sm:text-[13px] touch-manipulation transition-all ${
+                        form.paymentMethod === "cash"
+                          ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                      }`}
+                    >
+                      <Wallet className="w-3.5 h-3.5 shrink-0" />
+                      بدون بطاقة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, paymentMethod: "card" }))}
+                      className={`rounded-lg flex items-center justify-center gap-1.5 font-extrabold text-[12px] sm:text-[13px] touch-manipulation transition-all ${
+                        form.paymentMethod === "card"
+                          ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/20"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                      }`}
+                    >
+                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                      بطاقة
+                    </button>
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <label className="text-[15px] font-bold text-foreground mb-1 block">
+                    مبلغ واصل
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="h-12 text-[15px] font-bold"
+                    dir="ltr"
+                    value={form.paidAmount}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        paidAmount: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label className="text-[15px] font-bold text-foreground mb-1 block">خصم</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="h-12 text-[15px] font-bold"
+                    dir="ltr"
+                    value={form.discountAmount}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        discountAmount: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label className="text-[15px] font-bold text-foreground mb-1 block">
+                    باقي قائمة
+                  </label>
+                  <div
+                    className="h-12 rounded-xl border border-destructive/40 bg-destructive/10 px-3 flex items-center text-[15px] font-bold text-destructive"
+                    dir="ltr"
+                  >
+                    {fmtMoney(totals.remainingAmount)}
+                  </div>
+                </div>
               </div>
               {form.paymentMethod === "card" ? (
                 <ModernCombobox

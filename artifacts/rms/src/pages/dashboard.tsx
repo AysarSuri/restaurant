@@ -23,6 +23,7 @@ import {
   Clock3,
   Truck,
   ArrowLeftRight,
+  Eraser,
   type LucideIcon,
 } from "lucide-react";
 import { getGetBranchesQueryOptions } from "@workspace/api-client-react";
@@ -55,6 +56,7 @@ const HOME_ITEMS: HomeItem[] = [
   { href: "/branches", labelKey: "nav.branches", icon: Building2, roles: ["admin", "manager"] },
   { href: "/cards", labelKey: "nav.cards", icon: CreditCard, roles: ["admin", "manager"] },
   { href: "/settings", labelKey: "nav.settings", icon: Settings, roles: ["admin", "manager"] },
+  { href: "/system-reset", labelKey: "nav.systemReset", icon: Eraser, roles: ["admin"] },
   { href: "/delivery-contacts", labelKey: "nav.deliveryContacts", icon: Phone, roles: ["admin", "manager", "cashier"] },
   { href: "/reports", labelKey: "nav.reports", icon: LineChart, roles: ["admin", "manager"] },
 ];

@@ -75,8 +75,18 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, role, phone, email, salary, isActive, hireDate, allBranches, branchIds } =
-    req.body;
+  const {
+    name,
+    role,
+    phone,
+    email,
+    pin,
+    salary,
+    isActive,
+    hireDate,
+    allBranches,
+    branchIds,
+  } = req.body;
 
   if (!name?.trim() || !role) {
     res.status(400).json({ success: false, message: "الاسم والمنصب مطلوبان" });
@@ -92,6 +102,9 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  const pinValue =
+    pin != null && String(pin).trim() !== "" ? String(pin).trim() : null;
+
   const [emp] = await db
     .insert(employeesTable)
     .values({
@@ -99,6 +112,7 @@ router.post("/", async (req, res) => {
       role,
       phone,
       email,
+      pin: pinValue,
       salary: salary?.toString(),
       isActive: isActive ?? true,
       allBranches: usesAll,
@@ -113,8 +127,18 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, role, phone, email, salary, isActive, hireDate, allBranches, branchIds } =
-    req.body;
+  const {
+    name,
+    role,
+    phone,
+    email,
+    pin,
+    salary,
+    isActive,
+    hireDate,
+    allBranches,
+    branchIds,
+  } = req.body;
 
   if (!name?.trim() || !role) {
     res.status(400).json({ success: false, message: "الاسم والمنصب مطلوبان" });
@@ -130,6 +154,13 @@ router.put("/:id", async (req, res) => {
     return;
   }
 
+  const pinValue =
+    pin === undefined
+      ? undefined
+      : pin != null && String(pin).trim() !== ""
+        ? String(pin).trim()
+        : null;
+
   const [emp] = await db
     .update(employeesTable)
     .set({
@@ -137,6 +168,7 @@ router.put("/:id", async (req, res) => {
       role,
       phone,
       email,
+      ...(pinValue !== undefined ? { pin: pinValue } : {}),
       salary: salary?.toString(),
       isActive,
       allBranches: usesAll,

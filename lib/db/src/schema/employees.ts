@@ -20,6 +20,8 @@ export const employeesTable = pgTable("employees", {
   }).notNull(),
   phone: text("phone"),
   email: text("email"),
+  /** Login PIN / password for this employee */
+  pin: text("pin"),
   salary: numeric("salary", { precision: 12, scale: 2 }),
   isActive: boolean("is_active").default(true).notNull(),
   /** admin/manager always all branches; others may be scoped */

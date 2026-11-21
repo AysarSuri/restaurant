@@ -396,6 +396,8 @@ export interface Employee {
   role: EmployeeRole;
   phone?: string;
   email?: string;
+  /** Login PIN for this employee (falls back to demo PIN if empty) */
+  pin?: string | null;
   salary?: number;
   isActive: boolean;
   /** admin/manager always true — belongs to all branches */
@@ -423,6 +425,7 @@ export interface CreateEmployeeBody {
   role: CreateEmployeeBodyRole;
   phone?: string;
   email?: string;
+  pin?: string | null;
   salary?: number;
   isActive?: boolean;
   hireDate?: string;

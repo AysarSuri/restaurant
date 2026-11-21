@@ -15,6 +15,7 @@ import deliveryContactsRouter from "./delivery-contacts";
 import reportsRouter from "./reports";
 import shiftsRouter from "./shifts";
 import suppliersRouter from "./suppliers";
+import systemResetRouter from "./system-reset";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use("/delivery-contacts", deliveryContactsRouter);
 router.use("/reports", reportsRouter);
 router.use("/shifts", shiftsRouter);
 router.use("/suppliers", suppliersRouter);
+router.use("/system-reset", systemResetRouter);
 
 export default router;
