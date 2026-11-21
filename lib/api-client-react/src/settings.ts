@@ -48,6 +48,8 @@ export interface UpdateAppSettingsBody {
   cashierSendToKitchen?: boolean;
 }
 
+export type DeviceSalesPaymentAt = "pos" | "cashier";
+
 export interface DevicePrinter {
   id: number;
   branchId?: number | null;
@@ -58,6 +60,10 @@ export interface DevicePrinter {
   paperSize: string;
   isActive: boolean;
   note?: string | null;
+  /** Collect payment on POS or save invoice for cashier */
+  salesPaymentAt?: DeviceSalesPaymentAt;
+  /** Independent kitchen send for this device */
+  salesSendToKitchen?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -69,6 +75,8 @@ export interface UpsertDevicePrinterBody {
   branchId?: number | null;
   note?: string;
   isActive?: boolean;
+  salesPaymentAt?: DeviceSalesPaymentAt;
+  salesSendToKitchen?: boolean;
 }
 
 export interface UpdateDevicePrinterBody {
@@ -77,6 +85,8 @@ export interface UpdateDevicePrinterBody {
   branchId?: number | null;
   note?: string;
   isActive?: boolean;
+  salesPaymentAt?: DeviceSalesPaymentAt;
+  salesSendToKitchen?: boolean;
 }
 
 export const getGetSettingsUrl = () => `/api/settings`;

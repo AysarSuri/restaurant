@@ -225,6 +225,10 @@ router.put("/", async (req, res) => {
   res.json(serializeSettings(updated));
 });
 
+function normalizeSalesPaymentAt(value: unknown) {
+  return String(value ?? "").trim().toLowerCase() === "cashier" ? "cashier" : "pos";
+}
+
 router.get("/printers", async (req, res) => {
   const scope = parseBranchScope(req);
   const rows = await db
@@ -237,6 +241,8 @@ router.get("/printers", async (req, res) => {
       paperSize: devicePrintersTable.paperSize,
       isActive: devicePrintersTable.isActive,
       note: devicePrintersTable.note,
+      salesPaymentAt: devicePrintersTable.salesPaymentAt,
+      salesSendToKitchen: devicePrintersTable.salesSendToKitchen,
       createdAt: devicePrintersTable.createdAt,
       updatedAt: devicePrintersTable.updatedAt,
       branchName: branchesTable.name,
@@ -271,7 +277,16 @@ router.get("/printers", async (req, res) => {
 
 router.post("/printers", async (req, res) => {
   const scope = parseBranchScope(req);
-  const { deviceKey, deviceName, printerName, branchId, note, isActive } = req.body ?? {};
+  const {
+    deviceKey,
+    deviceName,
+    printerName,
+    branchId,
+    note,
+    isActive,
+    salesPaymentAt,
+    salesSendToKitchen,
+  } = req.body ?? {};
 
   const key = String(deviceKey ?? "").trim();
   const name = String(deviceName ?? "").trim();
@@ -303,6 +318,14 @@ router.post("/printers", async (req, res) => {
         paperSize: "80x80",
         note: note != null ? String(note).trim() || null : existing.note,
         isActive: isActive ?? existing.isActive,
+        salesPaymentAt:
+          salesPaymentAt != null
+            ? normalizeSalesPaymentAt(salesPaymentAt)
+            : existing.salesPaymentAt || "pos",
+        salesSendToKitchen:
+          salesSendToKitchen != null
+            ? Boolean(salesSendToKitchen)
+            : existing.salesSendToKitchen !== false,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, existing.id))
@@ -331,6 +354,8 @@ router.post("/printers", async (req, res) => {
         paperSize: "80x80",
         note: note ? String(note).trim() : null,
         isActive: isActive ?? true,
+        salesPaymentAt: normalizeSalesPaymentAt(salesPaymentAt),
+        salesSendToKitchen: salesSendToKitchen != null ? Boolean(salesSendToKitchen) : true,
       })
       .returning();
 
@@ -363,6 +388,8 @@ router.post("/printers", async (req, res) => {
         paperSize: "80x80",
         note: note != null ? String(note).trim() || null : null,
         isActive: isActive ?? true,
+        salesPaymentAt: normalizeSalesPaymentAt(salesPaymentAt),
+        salesSendToKitchen: salesSendToKitchen != null ? Boolean(salesSendToKitchen) : true,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, fallbackId))
@@ -381,7 +408,15 @@ router.post("/printers", async (req, res) => {
 
 router.put("/printers/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  const { deviceName, printerName, branchId, note, isActive } = req.body ?? {};
+  const {
+    deviceName,
+    printerName,
+    branchId,
+    note,
+    isActive,
+    salesPaymentAt,
+    salesSendToKitchen,
+  } = req.body ?? {};
 
   const [existing] = await db
     .select()
@@ -413,6 +448,14 @@ router.put("/printers/:id", async (req, res) => {
       paperSize: "80x80",
       note: note != null ? String(note).trim() || null : existing.note,
       isActive: isActive ?? existing.isActive,
+      salesPaymentAt:
+        salesPaymentAt != null
+          ? normalizeSalesPaymentAt(salesPaymentAt)
+          : existing.salesPaymentAt || "pos",
+      salesSendToKitchen:
+        salesSendToKitchen != null
+          ? Boolean(salesSendToKitchen)
+          : existing.salesSendToKitchen !== false,
       updatedAt: new Date(),
     })
     .where(eq(devicePrintersTable.id, id))

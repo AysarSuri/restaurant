@@ -8,15 +8,38 @@ import {
   customersTable,
   employeesTable,
   appSettingsTable,
+  devicePrintersTable,
 } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 
-async function getSalesRoutingSettings() {
+type SalesPaymentAt = "pos" | "cashier";
+
+async function resolveDeviceSalesRouting(deviceKey?: string | null) {
+  const key = String(deviceKey ?? "").trim();
+  if (key) {
+    const [device] = await db
+      .select({
+        salesPaymentAt: devicePrintersTable.salesPaymentAt,
+        salesSendToKitchen: devicePrintersTable.salesSendToKitchen,
+      })
+      .from(devicePrintersTable)
+      .where(eq(devicePrintersTable.deviceKey, key))
+      .limit(1);
+    if (device) {
+      return {
+        paymentAt: (device.salesPaymentAt === "cashier" ? "cashier" : "pos") as SalesPaymentAt,
+        sendToKitchen: device.salesSendToKitchen !== false,
+      };
+    }
+  }
+
   const [settings] = await db.select().from(appSettingsTable).limit(1);
   const posSaveTarget = settings?.posSaveTarget === "none" ? "none" : "kitchen";
-  const cashierSendToKitchen = settings?.cashierSendToKitchen !== false;
-  return { posSaveTarget, cashierSendToKitchen };
+  return {
+    paymentAt: "pos" as SalesPaymentAt,
+    sendToKitchen: posSaveTarget !== "none",
+  };
 }
 
 const router: IRouter = Router();
@@ -46,6 +69,7 @@ async function getOrderWithDetails(orderId: number) {
       discount: ordersTable.discount,
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
+      collectAtCashier: ordersTable.collectAtCashier,
       notes: ordersTable.notes,
       deliveryAddress: ordersTable.deliveryAddress,
       deliveryPhone: ordersTable.deliveryPhone,
@@ -133,6 +157,7 @@ router.get("/", async (req, res) => {
       discount: ordersTable.discount,
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
+      collectAtCashier: ordersTable.collectAtCashier,
       notes: ordersTable.notes,
       deliveryAddress: ordersTable.deliveryAddress,
       deliveryPhone: ordersTable.deliveryPhone,
@@ -207,6 +232,7 @@ router.post("/", async (req, res) => {
     deliveryPhone,
     branchId,
     paymentMethod,
+    deviceKey,
   } = req.body;
 
   const resolvedBranchId = resolveWriteBranchId(scope, branchId);
@@ -230,12 +256,21 @@ router.post("/", async (req, res) => {
   const tax = 0;
   const total = subtotal - discountAmt + tax;
 
-  const { posSaveTarget } = await getSalesRoutingSettings();
-  const initialStatus = posSaveTarget === "none" ? "paid" : "preparing";
+  const routing = await resolveDeviceSalesRouting(deviceKey);
   const validPay =
     paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer"
       ? paymentMethod
       : undefined;
+
+  const collectAtCashier = routing.paymentAt === "cashier" && !validPay;
+  let initialStatus: "pending" | "preparing" | "paid" = "pending";
+  if (collectAtCashier) {
+    initialStatus = routing.sendToKitchen ? "preparing" : "pending";
+  } else if (routing.sendToKitchen) {
+    initialStatus = "preparing";
+  } else {
+    initialStatus = validPay ? "paid" : "pending";
+  }
 
   const [order] = await db
     .insert(ordersTable)
@@ -254,7 +289,8 @@ router.post("/", async (req, res) => {
       notes,
       deliveryAddress,
       deliveryPhone,
-      paymentMethod: validPay,
+      paymentMethod: collectAtCashier ? null : validPay,
+      collectAtCashier,
     })
     .returning();
 
@@ -324,6 +360,7 @@ router.patch("/:id/status", async (req, res) => {
   const patch: Record<string, unknown> = { status, updatedAt: new Date() };
   if (paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer") {
     patch.paymentMethod = paymentMethod;
+    patch.collectAtCashier = false;
   }
 
   await db.update(ordersTable).set(patch).where(eq(ordersTable.id, id));

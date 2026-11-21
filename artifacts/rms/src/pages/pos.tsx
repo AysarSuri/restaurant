@@ -187,9 +187,6 @@ export default function POS() {
   const { mutate: updateOrder, isPending: isUpdatingOrder } = useUpdateOrder();
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
   const isSavingOrder = isCreating || isUpdatingOrder;
-  const posSaveTarget =
-    appSettings?.posSaveTarget === "none" ? "none" : "kitchen";
-  const isDirectSave = posSaveTarget === "none";
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
 
   const currentBranch = useMemo(() => {
@@ -205,6 +202,17 @@ export default function POS() {
       null
     );
   }, [devicePrinters, deviceKey]);
+
+  const salesPaymentAt =
+    devicePrinter?.salesPaymentAt === "cashier" ? "cashier" : "pos";
+  const salesSendToKitchen =
+    devicePrinter != null
+      ? devicePrinter.salesSendToKitchen !== false
+      : appSettings?.posSaveTarget !== "none";
+  /** Classic pay-at-POS without kitchen */
+  const isDirectSave = salesPaymentAt === "pos" && !salesSendToKitchen;
+  /** Save invoice for cashier collection — no payment dialog */
+  const saveForCashier = salesPaymentAt === "cashier";
 
   const branchTables = useMemo(() => {
     const list = tables ?? [];
@@ -570,6 +578,46 @@ export default function POS() {
     setCheckoutReceived(total);
     setCheckoutCardId(null);
     setOrderSuccess(false);
+    if (saveForCashier) {
+      const lineItems = cart.map((i) => ({
+        menuItemId: i.id,
+        quantity: cartLineSignedQty(i),
+      }));
+      const afterCashierSave = () => {
+        invalidateOrdersQueries();
+        setOrderSuccess(true);
+        setIsCheckoutOpen(true);
+      };
+      // Save invoice without payment — appears unpaid on cashier
+      if (editingOrderId != null) {
+        updateOrder(
+          {
+            id: editingOrderId,
+            data: {
+              discount: discount || undefined,
+              items: lineItems,
+            },
+          },
+          { onSuccess: afterCashierSave }
+        );
+        return;
+      }
+      createOrder(
+        {
+          data: {
+            type: orderType,
+            tableId: orderType === "dine_in" ? selectedTableId ?? undefined : undefined,
+            items: lineItems,
+            discount: discount || undefined,
+            deliveryAddress: orderType === "delivery" ? deliveryAddress : undefined,
+            deliveryPhone: orderType === "delivery" ? deliveryPhone : undefined,
+            deviceKey,
+          } as any,
+        },
+        { onSuccess: afterCashierSave }
+      );
+      return;
+    }
     setIsCheckoutOpen(true);
   };
 
@@ -743,6 +791,7 @@ export default function POS() {
           deliveryPhone: orderType === "delivery" ? deliveryPhone : undefined,
           paymentMethod,
           notes: cardNote,
+          deviceKey,
         } as any,
       },
       { onSuccess: afterSaveSuccess }
@@ -1083,15 +1132,19 @@ export default function POS() {
 
           <Button
             className="w-full h-12 sm:h-14 text-base sm:text-lg touch-target"
+            isLoading={saveForCashier && isSavingOrder}
             disabled={
               cart.length === 0 ||
-              (orderType === "dine_in" && !selectedTableId)
+              (orderType === "dine_in" && !selectedTableId) ||
+              isSavingOrder
             }
             onClick={openCheckout}
           >
             {orderType === "dine_in" && !selectedTableId
               ? t("pos.chooseSeatFirst")
-              : t("pos.payAndInvoice")}
+              : saveForCashier
+                ? t("pos.saveInvoice")
+                : t("pos.payAndInvoice")}
           </Button>
         </div>
       </div>
@@ -1905,7 +1958,11 @@ export default function POS() {
           <div className="text-center py-4 space-y-4">
             <div className="text-6xl">🎉</div>
             <p className="text-lg font-bold">
-              {posSaveTarget === "kitchen" ? t("pos.sentToKitchen") : t("pos.orderSaved")}
+              {saveForCashier
+                ? t("pos.sentToCashier")
+                : salesSendToKitchen
+                  ? t("pos.sentToKitchen")
+                  : t("pos.orderSaved")}
             </p>
             <p className="text-sm text-muted-foreground font-display" dir="ltr">
               {invoiceNumber}

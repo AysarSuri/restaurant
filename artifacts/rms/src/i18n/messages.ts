@@ -580,6 +580,19 @@ const ar: Messages = {
   "settings.deviceDeleted": "تم حذف الجهاز بنجاح",
   "settings.deleteDeviceFailed": "تعذر حذف الجهاز",
   "settings.posSaveHint": "اختر: إلى شاشة المطبخ، أو حفظ تلقائي فقط — بعد الحفظ من شاشة البيع أو طلب الطاولة.",
+  "settings.deviceSalesTitle": "خيارات البيع لكل جهاز",
+  "settings.deviceSalesHint":
+    "كل جهاز حسب فرعه: المطبخ خيار مستقل، والحفظ التلقائي إما من نقطة البيع (مع اختيار الدفع) أو من شاشة الكاشير (غير واصل).",
+  "settings.kitchenIndependent": "شاشة المطبخ (مستقل)",
+  "settings.kitchenOnIndependent": "مفعّل — الطلب يذهب للمطبخ عند الحفظ",
+  "settings.kitchenOffIndependent": "معطّل — لا يُرسل للمطبخ تلقائياً",
+  "settings.saveOnlyWhere": "حفظ تلقائي فقط — من أين؟",
+  "settings.saveFromPos": "من فورم نقطة البيع",
+  "settings.saveFromPosBody":
+    "زر دفع إصدار الفاتورة يظهر اختيار طريقة الدفع مباشرة في نقطة البيع.",
+  "settings.saveFromCashier": "من شاشة الكاشير",
+  "settings.saveFromCashierBody":
+    "زر حفظ فاتورة بدون دفع — تظهر غير واصل في الكاشير بلون مميز، والدفع من الكاشير.",
   "settings.toCashier": "إلى شاشة الكاشير",
   "settings.statusAwaitingPay": "الحالة: بانتظار الدفع",
   "settings.toCashierBody": "يظهر الطلب في شاشة الكاشير أولاً لاستلام الدفع، ثم يمكن إرساله للمطبخ حسب الخيار أدناه.",
@@ -1506,6 +1519,19 @@ const en: Messages = {
   "settings.deviceDeleted": "Device deleted",
   "settings.deleteDeviceFailed": "Could not delete device",
   "settings.posSaveHint": "Choose kitchen screen or save only — after save on the sales screen or table order.",
+  "settings.deviceSalesTitle": "Sales options per device",
+  "settings.deviceSalesHint":
+    "Each device by branch: kitchen is independent; save-only is either from POS (with payment) or cashier (unpaid).",
+  "settings.kitchenIndependent": "Kitchen screen (independent)",
+  "settings.kitchenOnIndependent": "On — order goes to kitchen on save",
+  "settings.kitchenOffIndependent": "Off — not sent to kitchen automatically",
+  "settings.saveOnlyWhere": "Save only — from where?",
+  "settings.saveFromPos": "From POS form",
+  "settings.saveFromPosBody":
+    "Pay & issue invoice shows payment method selection on POS.",
+  "settings.saveFromCashier": "From cashier screen",
+  "settings.saveFromCashierBody":
+    "Save invoice without payment — shows unpaid on cashier in a distinct color; pay at cashier.",
   "settings.toCashier": "To cashier screen",
   "settings.statusAwaitingPay": "Status: awaiting payment",
   "settings.toCashierBody": "The order appears on the cashier screen first to take payment, then can be sent to the kitchen using the option below.",
@@ -2432,6 +2458,19 @@ const ku: Messages = {
   "settings.deviceDeleted": "Cîhaz bi serkeftî hate jêbirin",
   "settings.deleteDeviceFailed": "Cîhaz nehat jêbirin",
   "settings.posSaveHint": "Hilbijêre: dîmendera metbexê an tenê tomarkirin — piştî tomarkirinê ji dîmendera firotinê an fermana masê.",
+  "settings.deviceSalesTitle": "Vebijêrkên firotinê ji her cîhazê",
+  "settings.deviceSalesHint":
+    "Her cîhaz li gor şaxê: metbex serbixwe ye; tenê-tomarkirin ji POS an ji qaseyê.",
+  "settings.kitchenIndependent": "Dîmendera metbexê (serbixwe)",
+  "settings.kitchenOnIndependent": "Vekirî — ferman diçe metbexê dema tomarkirinê",
+  "settings.kitchenOffIndependent": "Girtî — bi xweber nayê şandin bo metbexê",
+  "settings.saveOnlyWhere": "Tenê tomarkirin — ji ku?",
+  "settings.saveFromPos": "Ji forma xala firotinê",
+  "settings.saveFromPosBody":
+    "Bişkoja dravdanê hilbijartina rêbaza dravdanê li POS nîşan dide.",
+  "settings.saveFromCashier": "Ji dîmendera qaseyê",
+  "settings.saveFromCashierBody":
+    "Tomarkirina faturê bê dravdan — wekî nehatiye li qaseyê bi rengê cuda; dravdan li qaseyê.",
   "settings.toCashier": "Ber bi dîmendera qaseyê",
   "settings.statusAwaitingPay": "Rewş: li benda dravdanê",
   "settings.toCashierBody": "Ferman pêşî li dîmendera qaseyê xuya dike da drav were standin, paşê li gor vebijêrka jêr dikare biçe metbexê.",

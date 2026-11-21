@@ -51,6 +51,14 @@ export const devicePrintersTable = pgTable("device_printers", {
   paperSize: text("paper_size").default("80x80").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   note: text("note"),
+  /**
+   * Where payment is collected for this device:
+   * - pos → pay on POS (choose payment method)
+   * - cashier → save invoice only; collect payment on cashier screen
+   */
+  salesPaymentAt: text("sales_payment_at").default("pos").notNull(),
+  /** Independent kitchen routing for this device */
+  salesSendToKitchen: boolean("sales_send_to_kitchen").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

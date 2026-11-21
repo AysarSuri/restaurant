@@ -51,7 +51,7 @@ import {
   Coins,
   ShoppingBag,
   ChefHat,
-  ArrowLeftRight,
+  Wallet,
   ImageIcon,
   Upload,
   X,
@@ -60,11 +60,7 @@ import {
 import { useI18n } from "@/i18n";
 
 type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
-type PosSaveTargetOption = "kitchen" | "none";
-
-function normalizePosSaveTarget(value: string | null | undefined): PosSaveTargetOption {
-  return value === "none" ? "none" : "kitchen";
-}
+type DeviceSalesPaymentAt = "pos" | "cashier";
 
 const MAX_LOGO_BYTES = 2.5 * 1024 * 1024;
 
@@ -151,7 +147,6 @@ export default function SettingsPage() {
   const [currencySymbol, setCurrencySymbol] = useState(DEFAULT_CURRENCY.currencySymbol);
   const [currencyName, setCurrencyName] = useState(DEFAULT_CURRENCY.currencyName);
   const [decimalPlaces, setDecimalPlaces] = useState(DEFAULT_CURRENCY.decimalPlaces);
-  const [posSaveTarget, setPosSaveTarget] = useState<PosSaveTargetOption>("kitchen");
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
   const saveBannerRef = useRef<HTMLDivElement>(null);
@@ -216,7 +211,6 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol || DEFAULT_CURRENCY.currencySymbol);
     setCurrencyName(settings.currencyName || DEFAULT_CURRENCY.currencyName);
     setDecimalPlaces(clampDecimalPlaces(settings.decimalPlaces, DEFAULT_CURRENCY.decimalPlaces));
-    setPosSaveTarget(normalizePosSaveTarget(settings.posSaveTarget));
   }, [settings]);
 
   const myDevicePrinter = useMemo(
@@ -400,20 +394,29 @@ export default function SettingsPage() {
     );
   };
 
-  const handleSaveSales = () => {
+  const handleSaveDeviceSales = (
+    row: DevicePrinter,
+    patch: { salesPaymentAt?: DeviceSalesPaymentAt; salesSendToKitchen?: boolean }
+  ) => {
     clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
-    saveSettings(
+    updatePrinter(
       {
+        id: row.id,
         data: {
-          posSaveTarget,
+          deviceName: row.deviceName,
+          printerName: row.printerName,
+          branchId: row.branchId ?? null,
+          isActive: row.isActive,
+          salesPaymentAt: patch.salesPaymentAt ?? (row.salesPaymentAt === "cashier" ? "cashier" : "pos"),
+          salesSendToKitchen:
+            patch.salesSendToKitchen ?? row.salesSendToKitchen !== false,
         },
       },
       {
-        onSuccess: (res) => {
-          syncSettings(res);
-          setPosSaveTarget(normalizePosSaveTarget(res.posSaveTarget));
+        onSuccess: (updated) => {
+          syncPrinters((list) => list.map((p) => (p.id === updated.id ? updated : p)));
           notifySaveOk(t("settings.savedSales"));
         },
         onError: (err: any) =>
@@ -597,127 +600,182 @@ export default function SettingsPage() {
       )}
 
       {tab === "sales" && (
-        <div className="space-y-5 max-w-3xl">
-          <Card className="p-5 sm:p-6 border border-border/60 space-y-5">
+        <div className="space-y-5 max-w-4xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
             <div className="flex items-start gap-3">
               <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
                 <ShoppingBag className="w-5 h-5" />
               </span>
               <div>
-                <h3 className="font-extrabold text-lg">{t("settings.onSaveFromPos")}</h3>
+                <h3 className="font-extrabold text-lg">{t("settings.deviceSalesTitle")}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {t("settings.posSaveHint")}
+                  {t("settings.deviceSalesHint")}
                 </p>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setPosSaveTarget("kitchen")}
-                className={`text-start rounded-2xl border-2 p-4 transition-all ${
-                  posSaveTarget === "kitchen"
-                    ? "border-orange-500/70 bg-orange-500/10 shadow-lg shadow-orange-500/10"
-                    : "border-border/70 bg-card/50 hover:border-orange-500/35"
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <span
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      posSaveTarget === "kitchen"
-                        ? "bg-orange-500 text-white"
-                        : "bg-secondary text-foreground"
-                    }`}
-                  >
-                    <ChefHat className="w-5 h-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-extrabold">{t("settings.toKitchen")}</p>
-                    <p className="text-[11px] text-muted-foreground">{t("settings.statusPreparing")}</p>
-                  </div>
-                  {posSaveTarget === "kitchen" && (
-                    <Check className="w-4 h-4 text-orange-500 flex-shrink-0" />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t("settings.toKitchenBody")}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPosSaveTarget("none")}
-                className={`text-start rounded-2xl border-2 p-4 transition-all ${
-                  posSaveTarget === "none"
-                    ? "border-emerald-500/70 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
-                    : "border-border/70 bg-card/50 hover:border-emerald-500/35"
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <span
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      posSaveTarget === "none"
-                        ? "bg-emerald-500 text-white"
-                        : "bg-secondary text-foreground"
-                    }`}
-                  >
-                    <Save className="w-5 h-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-extrabold">{t("settings.saveOnly")}</p>
-                    <p className="text-[11px] text-muted-foreground">{t("settings.statusPaid")}</p>
-                  </div>
-                  {posSaveTarget === "none" && (
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t("settings.saveOnlyBody")}
-                </p>
-              </button>
-            </div>
           </Card>
 
-          <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
-            <div className="flex items-center gap-2">
-              <ArrowLeftRight className="w-4 h-4 text-primary" />
-              <h3 className="font-extrabold">{t("settings.pathPreview")}</h3>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="inline-flex items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/40 px-3 py-1.5 font-bold">
-                <ShoppingBag className="w-3.5 h-3.5" />
-                {t("pos.title")}
-              </span>
-              <span className="text-muted-foreground">←</span>
-              {posSaveTarget === "kitchen" ? (
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
-                  <ChefHat className="w-3.5 h-3.5" />
-                  {t("settings.kitchenShort")}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-bold text-emerald-600 dark:text-emerald-400">
-                  <Save className="w-3.5 h-3.5" />
-                  {t("settings.saveOnlyShort")}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {posSaveTarget === "kitchen"
-                ? t("settings.directKitchenHint")
-                : t("settings.directSaveHint")}
-            </p>
-          </Card>
+          {(printers ?? []).length === 0 ? (
+            <Card className="p-8 border border-dashed border-border/60 text-center space-y-2">
+              <Monitor className="w-10 h-10 mx-auto text-muted-foreground" />
+              <p className="font-extrabold">{t("settings.noDevices")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.registerAbove")}</p>
+              <Button variant="outline" className="mt-2" onClick={() => setTab("printers")}>
+                {t("settings.printers")}
+              </Button>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {(printers ?? []).map((row) => {
+                const paymentAt: DeviceSalesPaymentAt =
+                  row.salesPaymentAt === "cashier" ? "cashier" : "pos";
+                const kitchenOn = row.salesSendToKitchen !== false;
+                const isMine = row.deviceKey === deviceKey;
+                return (
+                  <Card
+                    key={row.id}
+                    className={`p-4 sm:p-5 border space-y-4 ${
+                      isMine ? "border-primary/40 bg-primary/5" : "border-border/60"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-extrabold text-base truncate">{row.deviceName}</p>
+                          {isMine ? (
+                            <Badge variant="default">{t("settings.thisDevice")}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground font-semibold mt-1">
+                          {row.branchName?.trim() || t("branch.noneSpecified")}
+                          {row.printerName?.trim() ? ` · ${row.printerName}` : ""}
+                        </p>
+                      </div>
+                    </div>
 
-          <div className="flex justify-end">
-            <Button
-              className="gap-2 min-w-[10rem]"
-              isLoading={savingSettings}
-              onClick={handleSaveSales}
-            >
-              <Save className="w-4 h-4" />
-              {t("settings.saveSales")}
-            </Button>
-          </div>
+                    <div>
+                      <p className="text-sm font-extrabold mb-2">{t("settings.kitchenIndependent")}</p>
+                      <button
+                        type="button"
+                        disabled={updatingPrinter}
+                        onClick={() =>
+                          handleSaveDeviceSales(row, { salesSendToKitchen: !kitchenOn })
+                        }
+                        className={`w-full text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
+                          kitchenOn
+                            ? "border-orange-500/60 bg-orange-500/10"
+                            : "border-border/70 bg-card/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                              kitchenOn ? "bg-orange-500 text-white" : "bg-secondary"
+                            }`}
+                          >
+                            <ChefHat className="w-5 h-5" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-extrabold">{t("settings.toKitchen")}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {kitchenOn
+                                ? t("settings.kitchenOnIndependent")
+                                : t("settings.kitchenOffIndependent")}
+                            </p>
+                          </div>
+                          <span
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full ${
+                              kitchenOn ? "bg-orange-500" : "bg-secondary"
+                            }`}
+                            aria-hidden
+                          >
+                            <span
+                              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                                kitchenOn ? "start-1" : "end-1"
+                              }`}
+                            />
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-extrabold mb-2">{t("settings.saveOnlyWhere")}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          disabled={updatingPrinter}
+                          onClick={() =>
+                            handleSaveDeviceSales(row, { salesPaymentAt: "pos" })
+                          }
+                          className={`text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
+                            paymentAt === "pos"
+                              ? "border-emerald-500/70 bg-emerald-500/10"
+                              : "border-border/70 bg-card/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 mb-2">
+                            <span
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                paymentAt === "pos"
+                                  ? "bg-emerald-500 text-white"
+                                  : "bg-secondary"
+                              }`}
+                            >
+                              <ShoppingBag className="w-5 h-5" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-extrabold">{t("settings.saveFromPos")}</p>
+                            </div>
+                            {paymentAt === "pos" ? (
+                              <Check className="w-4 h-4 text-emerald-500" />
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {t("settings.saveFromPosBody")}
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={updatingPrinter}
+                          onClick={() =>
+                            handleSaveDeviceSales(row, { salesPaymentAt: "cashier" })
+                          }
+                          className={`text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
+                            paymentAt === "cashier"
+                              ? "border-sky-500/70 bg-sky-500/10"
+                              : "border-border/70 bg-card/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 mb-2">
+                            <span
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                paymentAt === "cashier"
+                                  ? "bg-sky-500 text-white"
+                                  : "bg-secondary"
+                              }`}
+                            >
+                              <Wallet className="w-5 h-5" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-extrabold">{t("settings.saveFromCashier")}</p>
+                            </div>
+                            {paymentAt === "cashier" ? (
+                              <Check className="w-4 h-4 text-sky-500" />
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {t("settings.saveFromCashierBody")}
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

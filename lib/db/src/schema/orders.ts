@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantTablesTable } from "./tables";
@@ -20,6 +20,8 @@ export const ordersTable = pgTable("orders", {
   discount: numeric("discount", { precision: 12, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 12, scale: 2 }).notNull().default("0"),
   paymentMethod: text("payment_method", { enum: ["cash", "card", "transfer"] }),
+  /** Saved from POS without payment — awaiting cashier collection */
+  collectAtCashier: boolean("collect_at_cashier").default(false).notNull(),
   notes: text("notes"),
   deliveryAddress: text("delivery_address"),
   deliveryPhone: text("delivery_phone"),

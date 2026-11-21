@@ -146,6 +146,10 @@ function isOrderReceived(order: Order) {
   return order.status === "paid" || order.status === "served";
 }
 
+function isCashierCollect(order: Order) {
+  return Boolean((order as Order & { collectAtCashier?: boolean }).collectAtCashier);
+}
+
 function urgencyRing(createdAt: string) {
   const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
   if (mins > 15) return "ring-2 ring-rose-500/40";
@@ -172,6 +176,8 @@ function OrderTicket({
   const tone = seatTone(card.seatKind);
   const createdAt = String(card.order.createdAt || "");
 
+  const fromPosCashier = page === "unpaid" && isCashierCollect(card.order);
+
   return (
     <motion.article
       layout
@@ -179,7 +185,11 @@ function OrderTicket({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.18 }}
-      className={`group rounded-[1.35rem] border border-border/55 bg-gradient-to-b from-card via-card to-secondary/25 overflow-hidden shadow-[0_8px_24px_-18px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_28px_-16px_rgba(0,0,0,0.4)] hover:border-border transition-shadow cursor-pointer ${urgencyRing(createdAt)}`}
+      className={`group rounded-[1.35rem] overflow-hidden shadow-[0_8px_24px_-18px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_28px_-16px_rgba(0,0,0,0.4)] transition-shadow cursor-pointer ${urgencyRing(createdAt)} ${
+        fromPosCashier
+          ? "border-2 border-sky-500/55 bg-gradient-to-b from-sky-500/15 via-card to-sky-500/5 hover:border-sky-500/70"
+          : "border border-border/55 bg-gradient-to-b from-card via-card to-secondary/25 hover:border-border"
+      }`}
       onClick={onOpen}
     >
       <div className="p-3.5 flex items-start gap-3">
@@ -229,7 +239,11 @@ function OrderTicket({
             e.stopPropagation();
             onPrimary();
           }}
-          className="w-full h-11 bg-gradient-to-l from-amber-500 to-orange-500 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all"
+          className={`w-full h-11 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all ${
+            fromPosCashier
+              ? "bg-gradient-to-l from-sky-500 to-blue-600"
+              : "bg-gradient-to-l from-amber-500 to-orange-500"
+          }`}
         >
           <Wallet className="w-4 h-4" />
           {primaryLabel}

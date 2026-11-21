@@ -4,10 +4,12 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { ensureCategoryUploadsDir, UPLOADS_ROOT } from "./lib/category-image";
+import { ensureSalesDeviceColumns } from "./lib/ensure-sales-columns";
 
 const app: Express = express();
 
 ensureCategoryUploadsDir();
+void ensureSalesDeviceColumns();
 app.use("/uploads", express.static(UPLOADS_ROOT));
 
 app.use(

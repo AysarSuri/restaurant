@@ -266,6 +266,8 @@ export interface Order {
   discount?: number;
   total: number;
   paymentMethod?: OrderPaymentMethod;
+  /** Saved from POS without payment — awaiting cashier */
+  collectAtCashier?: boolean;
   notes?: string;
   deliveryAddress?: string;
   deliveryPhone?: string;
