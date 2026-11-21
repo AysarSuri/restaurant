@@ -18,7 +18,7 @@ import {
   RefreshCw,
   ShoppingBag,
   Table2,
-  LogOut,
+  ArrowRight,
   Bell,
   X,
   DoorOpen,
@@ -248,9 +248,75 @@ function OrderTicket({
   );
 }
 
+function PaidListRow({
+  card,
+  onOpen,
+  t,
+}: {
+  card: OrderCardModel;
+  onOpen: () => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  const Icon = seatIcon(card.seatKind);
+  const tone = seatTone(card.seatKind);
+  const createdAt = String(card.order.createdAt || "");
+  const pay =
+    card.order.paymentMethod === "cash"
+      ? t("pos.cash")
+      : card.order.paymentMethod === "card"
+        ? t("common.card")
+        : card.order.paymentMethod === "transfer"
+          ? t("common.transfer")
+          : t("cashier.received");
+
+  return (
+    <motion.button
+      type="button"
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      onClick={onOpen}
+      className="w-full text-start rounded-2xl border border-border/50 bg-card/80 hover:bg-card hover:border-emerald-500/35 px-3 sm:px-4 py-3 flex items-center gap-3 transition-colors touch-manipulation"
+    >
+      <div
+        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
+      >
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-[14px] sm:text-[15px] font-black truncate">{card.seatLabel}</p>
+          <span className="text-[11px] font-bold text-muted-foreground tabular-nums shrink-0">
+            #{card.shortNo}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 mt-0.5 text-[11px] font-semibold text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {elapsed(createdAt, t)}
+          </span>
+          <span className="text-border">·</span>
+          <span>{pay}</span>
+        </div>
+      </div>
+      <div className="shrink-0 text-end flex flex-col items-end gap-1">
+        <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
+          {formatIQD(card.amount)}
+        </p>
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="w-3 h-3" />
+          {t("cashier.received")}
+        </span>
+      </div>
+    </motion.button>
+  );
+}
+
 export default function Cashier() {
   const { t } = useI18n();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -453,14 +519,11 @@ export default function Cashier() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive px-3 py-2 rounded-xl hover:bg-destructive/10 transition-colors touch-manipulation"
+            onClick={() => navigate("/")}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground px-3 py-2 rounded-xl hover:bg-secondary transition-colors touch-manipulation"
           >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("common.exit")}</span>
+            <ArrowRight className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("common.back")}</span>
           </button>
         </div>
       </header>
@@ -605,6 +668,30 @@ export default function Cashier() {
                     : t("cashier.emptyPaidHint")}
                 </p>
               </div>
+            ) : page === "paid" ? (
+              <div className="max-w-4xl mx-auto rounded-[1.5rem] border border-border/50 bg-card/40 overflow-hidden shadow-sm">
+                <div className="px-4 py-3 border-b border-border/40 bg-emerald-500/8 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
+                    <p className="text-sm font-extrabold truncate">{t("cashier.colPaid")}</p>
+                  </div>
+                  <span className="text-[11px] font-bold text-muted-foreground tabular-nums">
+                    {t("cashier.ordersCount", { n: paid.length })}
+                  </span>
+                </div>
+                <div className="p-2 sm:p-2.5 space-y-1.5">
+                  <AnimatePresence initial={false}>
+                    {visible.map((card) => (
+                      <PaidListRow
+                        key={card.order.id}
+                        card={card}
+                        t={t}
+                        onOpen={() => setSelectedOrder(card.order)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
                 <AnimatePresence initial={false}>
@@ -612,14 +699,10 @@ export default function Cashier() {
                     <OrderTicket
                       key={card.order.id}
                       card={card}
-                      page={page}
+                      page="unpaid"
                       t={t}
                       onOpen={() => setSelectedOrder(card.order)}
-                      onPrimary={
-                        page === "unpaid"
-                          ? () => setPaymentDialog(card.order)
-                          : undefined
-                      }
+                      onPrimary={() => setPaymentDialog(card.order)}
                       primaryLabel={primaryPayLabel}
                     />
                   ))}
