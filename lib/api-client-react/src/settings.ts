@@ -17,7 +17,7 @@ import {
 
 type RequestOpts = CustomFetchOptions;
 
-export type PosSaveTarget = "cashier" | "kitchen" | "none";
+export type PosSaveTarget = "kitchen" | "none";
 
 export interface AppSettings {
   restaurantName: string;
@@ -28,7 +28,7 @@ export interface AppSettings {
   currencySymbol: string;
   currencyName: string;
   decimalPlaces: number;
-  /** POS/table save destination: cashier | kitchen | none (save only) */
+  /** POS/table save destination: kitchen | none (save only) */
   posSaveTarget: PosSaveTarget;
   /** Cashier payment confirmation sends order to kitchen */
   cashierSendToKitchen: boolean;

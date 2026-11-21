@@ -29,11 +29,11 @@ const DEFAULT_SETTINGS = {
   currencySymbol: "د.ع",
   currencyName: "دينار عراقي",
   decimalPlaces: 0,
-  posSaveTarget: "cashier" as const,
+  posSaveTarget: "kitchen" as const,
   cashierSendToKitchen: true,
 };
 
-const POS_SAVE_TARGETS = new Set(["cashier", "kitchen", "none"]);
+const POS_SAVE_TARGETS = new Set(["kitchen", "none"]);
 
 const CURRENCY_PRESETS: Record<
   string,
@@ -75,9 +75,7 @@ function clampDecimals(value: unknown, fallback = 0) {
 }
 
 function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
-  const target = POS_SAVE_TARGETS.has(settings.posSaveTarget)
-    ? settings.posSaveTarget
-    : DEFAULT_SETTINGS.posSaveTarget;
+  const target = settings.posSaveTarget === "none" ? "none" : "kitchen";
   return {
     restaurantName: settings.restaurantName,
     logoUrl: settings.logoUrl ?? null,
@@ -87,7 +85,7 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     currencySymbol: settings.currencySymbol,
     currencyName: settings.currencyName,
     decimalPlaces: settings.decimalPlaces,
-    posSaveTarget: target as "cashier" | "kitchen" | "none",
+    posSaveTarget: target as "kitchen" | "none",
     cashierSendToKitchen: settings.cashierSendToKitchen !== false,
     updatedAt: settings.updatedAt,
   };
@@ -186,13 +184,14 @@ router.put("/", async (req, res) => {
     nextDecimals = clampDecimals(decimalPlaces, settings.decimalPlaces);
   }
 
-  let nextPosSaveTarget = settings.posSaveTarget || DEFAULT_SETTINGS.posSaveTarget;
+  let nextPosSaveTarget =
+    settings.posSaveTarget === "none" ? "none" : DEFAULT_SETTINGS.posSaveTarget;
   if (posSaveTarget != null) {
     const t = String(posSaveTarget).trim().toLowerCase();
     if (!POS_SAVE_TARGETS.has(t)) {
       res.status(400).json({
         success: false,
-        message: "وجهة الحفظ غير صالحة (cashier أو kitchen أو none)",
+        message: "وجهة الحفظ غير صالحة (kitchen أو none)",
       });
       return;
     }

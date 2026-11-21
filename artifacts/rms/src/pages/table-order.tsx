@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetMenuItems, useGetMenuCategories,
   useGetTables, useCreateOrder,
@@ -24,6 +25,7 @@ export default function TableOrder() {
   const { t } = useI18n();
   const { user, logout } = useAuth();
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
 
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
@@ -77,6 +79,12 @@ export default function TableOrder() {
       },
       {
         onSuccess: (order: any) => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+          try {
+            localStorage.setItem("rms-orders-bump", String(Date.now()));
+          } catch {
+            /* ignore */
+          }
           setOrderNum(order.orderNumber || "");
           setCartOpen(false);
           setStep("success");

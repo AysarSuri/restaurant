@@ -50,7 +50,6 @@ import {
   RefreshCw,
   Coins,
   ShoppingBag,
-  Wallet,
   ChefHat,
   ArrowLeftRight,
   ImageIcon,
@@ -58,10 +57,14 @@ import {
   X,
   Phone,
 } from "lucide-react";
-import type { PosSaveTarget } from "@workspace/api-client-react";
 import { useI18n } from "@/i18n";
 
 type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
+type PosSaveTargetOption = "kitchen" | "none";
+
+function normalizePosSaveTarget(value: string | null | undefined): PosSaveTargetOption {
+  return value === "none" ? "none" : "kitchen";
+}
 
 const MAX_LOGO_BYTES = 2.5 * 1024 * 1024;
 
@@ -148,8 +151,7 @@ export default function SettingsPage() {
   const [currencySymbol, setCurrencySymbol] = useState(DEFAULT_CURRENCY.currencySymbol);
   const [currencyName, setCurrencyName] = useState(DEFAULT_CURRENCY.currencyName);
   const [decimalPlaces, setDecimalPlaces] = useState(DEFAULT_CURRENCY.decimalPlaces);
-  const [posSaveTarget, setPosSaveTarget] = useState<PosSaveTarget>("cashier");
-  const [cashierSendToKitchen, setCashierSendToKitchen] = useState(true);
+  const [posSaveTarget, setPosSaveTarget] = useState<PosSaveTargetOption>("kitchen");
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
   const saveBannerRef = useRef<HTMLDivElement>(null);
@@ -214,12 +216,7 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol || DEFAULT_CURRENCY.currencySymbol);
     setCurrencyName(settings.currencyName || DEFAULT_CURRENCY.currencyName);
     setDecimalPlaces(clampDecimalPlaces(settings.decimalPlaces, DEFAULT_CURRENCY.decimalPlaces));
-    setPosSaveTarget(
-      settings.posSaveTarget === "kitchen" || settings.posSaveTarget === "none"
-        ? settings.posSaveTarget
-        : "cashier"
-    );
-    setCashierSendToKitchen(settings.cashierSendToKitchen !== false);
+    setPosSaveTarget(normalizePosSaveTarget(settings.posSaveTarget));
   }, [settings]);
 
   const myDevicePrinter = useMemo(
@@ -411,18 +408,12 @@ export default function SettingsPage() {
       {
         data: {
           posSaveTarget,
-          cashierSendToKitchen,
         },
       },
       {
         onSuccess: (res) => {
           syncSettings(res);
-          setPosSaveTarget(
-            res.posSaveTarget === "kitchen" || res.posSaveTarget === "none"
-              ? res.posSaveTarget
-              : "cashier"
-          );
-          setCashierSendToKitchen(res.cashierSendToKitchen !== false);
+          setPosSaveTarget(normalizePosSaveTarget(res.posSaveTarget));
           notifySaveOk(t("settings.savedSales"));
         },
         onError: (err: any) =>
@@ -620,39 +611,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setPosSaveTarget("cashier")}
-                className={`text-start rounded-2xl border-2 p-4 transition-all ${
-                  posSaveTarget === "cashier"
-                    ? "border-amber-500/70 bg-amber-500/10 shadow-lg shadow-amber-500/10"
-                    : "border-border/70 bg-card/50 hover:border-amber-500/35"
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <span
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                      posSaveTarget === "cashier"
-                        ? "bg-amber-500 text-white"
-                        : "bg-secondary text-foreground"
-                    }`}
-                  >
-                    <Wallet className="w-5 h-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-extrabold">{t("settings.toCashier")}</p>
-                    <p className="text-[11px] text-muted-foreground">{t("settings.statusAwaitingPay")}</p>
-                  </div>
-                  {posSaveTarget === "cashier" && (
-                    <Check className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t("settings.toCashierBody")}
-                </p>
-              </button>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setPosSaveTarget("kitchen")}
@@ -688,7 +647,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setPosSaveTarget("none")}
-                className={`text-start rounded-2xl border-2 p-4 transition-all sm:col-span-2 xl:col-span-1 ${
+                className={`text-start rounded-2xl border-2 p-4 transition-all ${
                   posSaveTarget === "none"
                     ? "border-emerald-500/70 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
                     : "border-border/70 bg-card/50 hover:border-emerald-500/35"
@@ -719,62 +678,6 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-5 sm:p-6 border border-border/60 space-y-5">
-            <div className="flex items-start gap-3">
-              <span className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center flex-shrink-0">
-                <Wallet className="w-5 h-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-extrabold text-lg">{t("settings.onCashierSave")}</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {t("settings.cashierKitchenQuestion")}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setCashierSendToKitchen((v) => !v)}
-              className={`w-full text-start rounded-2xl border-2 p-4 transition-all ${
-                cashierSendToKitchen
-                  ? "border-primary/60 bg-primary/10"
-                  : "border-border/70 bg-card/50 hover:border-primary/30"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    cashierSendToKitchen
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-foreground"
-                  }`}
-                >
-                  <ChefHat className="w-5 h-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-extrabold">{t("settings.sendKitchenOnCashier")}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {cashierSendToKitchen
-                      ? t("settings.kitchenOn")
-                      : t("settings.kitchenOff")}
-                  </p>
-                </div>
-                <span
-                  className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors ${
-                    cashierSendToKitchen ? "bg-primary" : "bg-secondary"
-                  }`}
-                  aria-hidden
-                >
-                  <span
-                    className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
-                      cashierSendToKitchen ? "start-1" : "end-1"
-                    }`}
-                  />
-                </span>
-              </div>
-            </button>
-          </Card>
-
           <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
             <div className="flex items-center gap-2">
               <ArrowLeftRight className="w-4 h-4 text-primary" />
@@ -786,23 +689,7 @@ export default function SettingsPage() {
                 {t("pos.title")}
               </span>
               <span className="text-muted-foreground">←</span>
-              {posSaveTarget === "cashier" ? (
-                <>
-                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-bold text-amber-600 dark:text-amber-400">
-                    <Wallet className="w-3.5 h-3.5" />
-                    {t("settings.cashierShort")}
-                  </span>
-                  {cashierSendToKitchen && (
-                    <>
-                      <span className="text-muted-foreground">←</span>
-                      <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
-                        <ChefHat className="w-3.5 h-3.5" />
-                        {t("settings.kitchenShort")}
-                      </span>
-                    </>
-                  )}
-                </>
-              ) : posSaveTarget === "kitchen" ? (
+              {posSaveTarget === "kitchen" ? (
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 font-bold text-orange-600 dark:text-orange-400">
                   <ChefHat className="w-3.5 h-3.5" />
                   {t("settings.kitchenShort")}
@@ -817,11 +704,7 @@ export default function SettingsPage() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               {posSaveTarget === "kitchen"
                 ? t("settings.directKitchenHint")
-                : posSaveTarget === "none"
-                  ? t("settings.directSaveHint")
-                  : cashierSendToKitchen
-                    ? t("settings.cashierThenKitchenHint")
-                    : t("settings.cashierOnlyHint")}
+                : t("settings.directSaveHint")}
             </p>
           </Card>
 

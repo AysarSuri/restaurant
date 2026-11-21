@@ -28,11 +28,10 @@ export const appSettingsTable = pgTable("app_settings", {
   decimalPlaces: integer("decimal_places").default(0).notNull(),
   /**
    * Where new sales (POS / table) go on save:
-   * - cashier → status pending (شاشة الكاشير)
    * - kitchen → status preparing (شاشة المطبخ)
-   * - none → status paid (حفظ مباشر بدون كاشير/مطبخ)
+   * - none → status paid (حفظ مباشر بدون مطبخ)
    */
-  posSaveTarget: text("pos_save_target").default("cashier").notNull(),
+  posSaveTarget: text("pos_save_target").default("kitchen").notNull(),
   /** When cashier confirms payment, forward order to kitchen (preparing). */
   cashierSendToKitchen: boolean("cashier_send_to_kitchen").default(true).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

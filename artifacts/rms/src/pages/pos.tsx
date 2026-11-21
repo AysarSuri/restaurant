@@ -188,9 +188,7 @@ export default function POS() {
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
   const isSavingOrder = isCreating || isUpdatingOrder;
   const posSaveTarget =
-    appSettings?.posSaveTarget === "kitchen" || appSettings?.posSaveTarget === "none"
-      ? appSettings.posSaveTarget
-      : "cashier";
+    appSettings?.posSaveTarget === "none" ? "none" : "kitchen";
   const isDirectSave = posSaveTarget === "none";
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
 
@@ -595,6 +593,11 @@ export default function POS() {
   const invalidateOrdersQueries = () => {
     void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
     void refetchTodayOrders();
+    try {
+      localStorage.setItem("rms-orders-bump", String(Date.now()));
+    } catch {
+      /* ignore quota / private mode */
+    }
   };
 
   useEffect(() => {
@@ -1902,11 +1905,7 @@ export default function POS() {
           <div className="text-center py-4 space-y-4">
             <div className="text-6xl">🎉</div>
             <p className="text-lg font-bold">
-              {posSaveTarget === "kitchen"
-                ? t("pos.sentToKitchen")
-                : posSaveTarget === "none"
-                  ? t("pos.orderSaved")
-                  : t("pos.sentToCashier")}
+              {posSaveTarget === "kitchen" ? t("pos.sentToKitchen") : t("pos.orderSaved")}
             </p>
             <p className="text-sm text-muted-foreground font-display" dir="ltr">
               {invoiceNumber}
