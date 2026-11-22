@@ -13,7 +13,7 @@ import Menu from "@/pages/menu";
 import Tables from "@/pages/tables";
 import Orders from "@/pages/orders";
 import Inventory from "@/pages/inventory";
-import Customers from "@/pages/customers";
+import Drivers from "@/pages/drivers";
 import Employees from "@/pages/employees";
 import Shifts from "@/pages/shifts";
 import Suppliers from "@/pages/suppliers";
@@ -182,6 +182,7 @@ const ROLE_ALLOWED: Record<string, UserRole[]> = {
   "/tables": ["admin", "manager"],
   "/orders": ["admin", "manager", "cashier"],
   "/inventory": ["admin", "manager"],
+  "/drivers": ["admin", "manager"],
   "/customers": ["admin", "manager"],
   "/employees": ["admin", "manager"],
   "/shifts": ["admin", "manager"],
@@ -240,7 +241,8 @@ function Router() {
       <Route path="/tables" component={Tables} />
       <Route path="/orders" component={Orders} />
       <Route path="/inventory" component={Inventory} />
-      <Route path="/customers" component={Customers} />
+      <Route path="/drivers" component={Drivers} />
+      <Route path="/customers" component={Drivers} />
       <Route path="/employees" component={Employees} />
       <Route path="/shifts" component={Shifts} />
       <Route path="/suppliers" component={Suppliers} />

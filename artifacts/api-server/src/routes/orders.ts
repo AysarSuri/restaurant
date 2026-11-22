@@ -12,6 +12,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
+import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
 type SalesPaymentAt = "pos" | "cashier";
 
@@ -64,9 +65,11 @@ async function getOrderWithDetails(orderId: number) {
       tableId: ordersTable.tableId,
       customerId: ordersTable.customerId,
       employeeId: ordersTable.employeeId,
+      driverId: ordersTable.driverId,
       subtotal: ordersTable.subtotal,
       tax: ordersTable.tax,
       discount: ordersTable.discount,
+      deliveryFee: ordersTable.deliveryFee,
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
       collectAtCashier: ordersTable.collectAtCashier,
@@ -152,9 +155,11 @@ router.get("/", async (req, res) => {
       tableId: ordersTable.tableId,
       customerId: ordersTable.customerId,
       employeeId: ordersTable.employeeId,
+      driverId: ordersTable.driverId,
       subtotal: ordersTable.subtotal,
       tax: ordersTable.tax,
       discount: ordersTable.discount,
+      deliveryFee: ordersTable.deliveryFee,
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
       collectAtCashier: ordersTable.collectAtCashier,
@@ -219,6 +224,7 @@ router.get("/:id", async (req, res) => {
 
 // POST /orders
 router.post("/", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
   const {
     type,
@@ -230,6 +236,8 @@ router.post("/", async (req, res) => {
     notes,
     deliveryAddress,
     deliveryPhone,
+    deliveryFee,
+    driverId,
     branchId,
     paymentMethod,
     deviceKey,
@@ -252,9 +260,18 @@ router.post("/", async (req, res) => {
     itemsWithPrice.push({ menuItemId: item.menuItemId, quantity: item.quantity, unitPrice, notes: item.notes });
   }
 
-  const discountAmt = parseFloat(discount ?? 0);
+  const discountAmt = parseFloat(discount ?? 0) || 0;
   const tax = 0;
-  const total = subtotal - discountAmt + tax;
+  let deliveryFeeAmt = 0;
+  if (type === "delivery") {
+    if (deliveryFee != null && Number.isFinite(Number(deliveryFee))) {
+      deliveryFeeAmt = Math.max(0, Number(deliveryFee));
+    } else {
+      const [settings] = await db.select().from(appSettingsTable).limit(1);
+      deliveryFeeAmt = Math.max(0, parseFloat(String(settings?.deliveryFee ?? "0")) || 0);
+    }
+  }
+  const total = subtotal - discountAmt + tax + deliveryFeeAmt;
 
   const routing = await resolveDeviceSalesRouting(deviceKey);
   const validPay =
@@ -285,10 +302,15 @@ router.post("/", async (req, res) => {
       subtotal: subtotal.toString(),
       tax: tax.toString(),
       discount: discountAmt.toString(),
+      deliveryFee: deliveryFeeAmt.toString(),
       total: total.toString(),
       notes,
       deliveryAddress,
       deliveryPhone,
+      driverId:
+        type === "delivery" && driverId != null && Number.isFinite(Number(driverId))
+          ? Number(driverId)
+          : null,
       paymentMethod: collectAtCashier ? null : validPay,
       collectAtCashier,
     })
@@ -318,8 +340,15 @@ router.post("/", async (req, res) => {
 
 // PUT /orders/:id
 router.put("/:id", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const id = parseInt(req.params.id);
-  const { discount, notes, items } = req.body;
+  const { discount, notes, items, deliveryFee } = req.body;
+
+  const [existing] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   if (items) {
     await db.delete(orderItemsTable).where(eq(orderItemsTable.orderId, id));
@@ -339,13 +368,46 @@ router.put("/:id", async (req, res) => {
         status: "pending",
       });
     }
-    const discountAmt = parseFloat(discount ?? 0);
-    const total = subtotal - discountAmt;
+    const discountAmt =
+      discount !== undefined ? parseFloat(discount) || 0 : parseFloat(existing.discount ?? "0") || 0;
+    let deliveryFeeAmt = parseFloat(existing.deliveryFee ?? "0") || 0;
+    if (existing.type === "delivery") {
+      if (deliveryFee != null && Number.isFinite(Number(deliveryFee))) {
+        deliveryFeeAmt = Math.max(0, Number(deliveryFee));
+      }
+    } else {
+      deliveryFeeAmt = 0;
+    }
+    const total = subtotal - discountAmt + deliveryFeeAmt;
     await db.update(ordersTable)
-      .set({ subtotal: subtotal.toString(), discount: discountAmt.toString(), total: total.toString(), notes, updatedAt: new Date() })
+      .set({
+        subtotal: subtotal.toString(),
+        discount: discountAmt.toString(),
+        deliveryFee: deliveryFeeAmt.toString(),
+        total: total.toString(),
+        notes,
+        updatedAt: new Date(),
+      })
       .where(eq(ordersTable.id, id));
-  } else if (discount !== undefined || notes !== undefined) {
-    await db.update(ordersTable).set({ discount: discount?.toString(), notes, updatedAt: new Date() }).where(eq(ordersTable.id, id));
+  } else if (discount !== undefined || notes !== undefined || deliveryFee !== undefined) {
+    const discountAmt =
+      discount !== undefined ? parseFloat(discount) || 0 : parseFloat(existing.discount ?? "0") || 0;
+    let deliveryFeeAmt = parseFloat(existing.deliveryFee ?? "0") || 0;
+    if (existing.type === "delivery" && deliveryFee != null && Number.isFinite(Number(deliveryFee))) {
+      deliveryFeeAmt = Math.max(0, Number(deliveryFee));
+    }
+    const subtotal = parseFloat(existing.subtotal) || 0;
+    const total = subtotal - discountAmt + deliveryFeeAmt;
+    await db
+      .update(ordersTable)
+      .set({
+        discount: discountAmt.toString(),
+        deliveryFee: deliveryFeeAmt.toString(),
+        total: total.toString(),
+        notes: notes !== undefined ? notes : existing.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(ordersTable.id, id));
   }
 
   const full = await getOrderWithDetails(id);
@@ -390,7 +452,8 @@ router.post("/:id/pay", async (req, res) => {
 
   const discountAmt = discount !== undefined ? parseFloat(discount) : parseFloat(order.discount ?? "0");
   const subtotal = parseFloat(order.subtotal);
-  const total = subtotal - discountAmt;
+  const deliveryFeeAmt = parseFloat(order.deliveryFee ?? "0") || 0;
+  const total = subtotal - discountAmt + deliveryFeeAmt;
 
   await db.update(ordersTable)
     .set({ status: "paid", paymentMethod, discount: discountAmt.toString(), total: total.toString(), updatedAt: new Date() })

@@ -4,6 +4,7 @@ export * from "./branches";
 export * from "./cards";
 export * from "./settings";
 export * from "./delivery-contacts";
+export * from "./drivers";
 export * from "./shifts";
 export * from "./item-units";
 export * from "./suppliers";

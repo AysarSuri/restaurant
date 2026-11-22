@@ -32,6 +32,8 @@ export interface AppSettings {
   posSaveTarget: PosSaveTarget;
   /** Cashier payment confirmation sends order to kitchen */
   cashierSendToKitchen: boolean;
+  /** Flat delivery fee for delivery orders */
+  deliveryFee?: number;
   updatedAt?: string;
 }
 
@@ -46,6 +48,7 @@ export interface UpdateAppSettingsBody {
   decimalPlaces?: number;
   posSaveTarget?: PosSaveTarget;
   cashierSendToKitchen?: boolean;
+  deliveryFee?: number;
 }
 
 export type DeviceSalesPaymentAt = "pos" | "cashier";

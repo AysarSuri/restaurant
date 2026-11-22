@@ -5,6 +5,7 @@ import { restaurantTablesTable } from "./tables";
 import { customersTable } from "./customers";
 import { employeesTable } from "./employees";
 import { branchesTable } from "./branches";
+import { driversTable } from "./drivers";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -15,9 +16,15 @@ export const ordersTable = pgTable("orders", {
   tableId: integer("table_id").references(() => restaurantTablesTable.id),
   customerId: integer("customer_id").references(() => customersTable.id),
   employeeId: integer("employee_id").references(() => employeesTable.id),
+  /** Assigned delivery driver */
+  driverId: integer("driver_id").references(() => driversTable.id, {
+    onDelete: "set null",
+  }),
   subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
   tax: numeric("tax", { precision: 12, scale: 2 }).notNull().default("0"),
   discount: numeric("discount", { precision: 12, scale: 2 }).notNull().default("0"),
+  /** Delivery fee snapshot (from settings at order time). */
+  deliveryFee: numeric("delivery_fee", { precision: 12, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 12, scale: 2 }).notNull().default("0"),
   paymentMethod: text("payment_method", { enum: ["cash", "card", "transfer"] }),
   /** Saved from POS without payment — awaiting cashier collection */

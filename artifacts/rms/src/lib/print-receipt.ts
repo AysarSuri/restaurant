@@ -22,6 +22,7 @@ export type ThermalReceiptData = {
   items: ReceiptLineItem[];
   subtotal: number;
   discount: number;
+  deliveryFee?: number;
   total: number;
   paymentLabel: string;
   received?: number;
@@ -229,6 +230,11 @@ function buildReceiptHtml(data: ThermalReceiptData) {
       ${
         data.discount > 0
           ? `<div class="row"><span>الخصم</span><span>- ${esc(data.formatMoney(data.discount))}</span></div>`
+          : ""
+      }
+      ${
+        (data.deliveryFee ?? 0) > 0
+          ? `<div class="row"><span>التوصيل</span><span>${esc(data.formatMoney(data.deliveryFee ?? 0))}</span></div>`
           : ""
       }
       <div class="grand"><span>الإجمالي</span><strong>${esc(data.formatMoney(data.total))}</strong></div>

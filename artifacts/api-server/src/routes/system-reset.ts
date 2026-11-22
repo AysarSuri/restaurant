@@ -40,6 +40,12 @@ export const RESET_GROUPS: ResetGroup[] = [
     tables: ["customers"],
   },
   {
+    key: "drivers",
+    labelAr: "السواق",
+    descriptionAr: "سائقو التوصيل وربطهم بالطلبات",
+    tables: ["drivers"],
+  },
+  {
     key: "menu",
     labelAr: "القائمة",
     descriptionAr: "التصنيفات والأصناف وربطها بالفروع",

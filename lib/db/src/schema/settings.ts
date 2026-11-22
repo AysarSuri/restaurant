@@ -4,6 +4,7 @@ import {
   text,
   integer,
   boolean,
+  numeric,
   timestamp,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -34,6 +35,8 @@ export const appSettingsTable = pgTable("app_settings", {
   posSaveTarget: text("pos_save_target").default("kitchen").notNull(),
   /** When cashier confirms payment, forward order to kitchen (preparing). */
   cashierSendToKitchen: boolean("cashier_send_to_kitchen").default(true).notNull(),
+  /** Flat delivery fee applied to delivery orders (currency units). */
+  deliveryFee: numeric("delivery_fee", { precision: 12, scale: 2 }).default("0").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

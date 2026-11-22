@@ -56,6 +56,7 @@ import {
   Upload,
   X,
   Phone,
+  Bike,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 
@@ -208,6 +209,7 @@ export default function SettingsPage() {
   const [printerName, setPrinterName] = useState("");
   const [deviceBranchId, setDeviceBranchId] = useState<number | "">("");
   const [deleteTarget, setDeleteTarget] = useState<DevicePrinter | null>(null);
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState("0");
 
   useEffect(() => {
     if (!settings) return;
@@ -220,6 +222,7 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol || DEFAULT_CURRENCY.currencySymbol);
     setCurrencyName(settings.currencyName || DEFAULT_CURRENCY.currencyName);
     setDecimalPlaces(clampDecimalPlaces(settings.decimalPlaces, DEFAULT_CURRENCY.decimalPlaces));
+    setDeliveryFeeInput(String(Number(settings.deliveryFee) || 0));
   }, [settings]);
 
   const myDevicePrinter = useMemo(
@@ -401,6 +404,29 @@ export default function SettingsPage() {
         },
         onError: (err: any) =>
           notifySaveErr(err?.data?.message || err?.message || t("settings.saveRestaurantFailed")),
+      }
+    );
+  };
+
+  const handleSaveDeliveryFee = () => {
+    clearSaveFlash();
+    setSaveMsg("");
+    setSaveErr("");
+    const n = Number(String(deliveryFeeInput).replace(/,/g, "").trim());
+    if (!Number.isFinite(n) || n < 0) {
+      notifySaveErr(t("settings.deliveryFeeInvalid"));
+      return;
+    }
+    saveSettings(
+      { data: { deliveryFee: n } },
+      {
+        onSuccess: (res) => {
+          syncSettings(res);
+          setDeliveryFeeInput(String(Number(res.deliveryFee) || 0));
+          notifySaveOk(t("settings.savedDeliveryFee"));
+        },
+        onError: (err: any) =>
+          notifySaveErr(err?.data?.message || err?.message || t("settings.saveDeliveryFeeFailed")),
       }
     );
   };
@@ -648,6 +674,51 @@ export default function SettingsPage() {
 
       {tab === "sales" && (
         <div className="space-y-5 max-w-4xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center flex-shrink-0">
+                <Bike className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">{t("settings.deliveryFeeTitle")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("settings.deliveryFeeHint")}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="flex-1 min-w-0">
+                <label className="block text-sm font-semibold mb-1.5">
+                  {t("settings.deliveryFeeAmount")}
+                </label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    inputMode="decimal"
+                    dir="ltr"
+                    value={deliveryFeeInput}
+                    onChange={(e) => setDeliveryFeeInput(e.target.value)}
+                    placeholder="0"
+                    className="pe-14 font-display font-bold tabular-nums"
+                  />
+                  <span className="absolute end-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                    {currencySymbol || settings?.currencySymbol || "د.ع"}
+                  </span>
+                </div>
+              </div>
+              <Button
+                className="gap-2 sm:w-auto w-full"
+                isLoading={savingSettings}
+                onClick={handleSaveDeliveryFee}
+              >
+                <Save className="w-4 h-4" />
+                {t("settings.saveDeliveryFee")}
+              </Button>
+            </div>
+          </Card>
+
           <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
             <div className="flex items-start gap-3">
               <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">

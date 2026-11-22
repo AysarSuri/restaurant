@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
   decimalPlaces: 0,
   posSaveTarget: "kitchen" as const,
   cashierSendToKitchen: true,
+  deliveryFee: "0",
 };
 
 const POS_SAVE_TARGETS = new Set(["kitchen", "none"]);
@@ -77,6 +78,7 @@ function clampDecimals(value: unknown, fallback = 0) {
 
 function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
   const target = settings.posSaveTarget === "none" ? "none" : "kitchen";
+  const deliveryFee = Math.max(0, parseFloat(String(settings.deliveryFee ?? "0")) || 0);
   return {
     restaurantName: settings.restaurantName,
     logoUrl: settings.logoUrl ?? null,
@@ -88,16 +90,19 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     decimalPlaces: settings.decimalPlaces,
     posSaveTarget: target as "kitchen" | "none",
     cashierSendToKitchen: settings.cashierSendToKitchen !== false,
+    deliveryFee,
     updatedAt: settings.updatedAt,
   };
 }
 
 router.get("/", async (_req, res) => {
+  await ensureSalesDeviceColumns();
   const settings = await getOrCreateSettings();
   res.json(serializeSettings(settings));
 });
 
 router.put("/", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const settings = await getOrCreateSettings();
   const {
     restaurantName,
@@ -110,6 +115,7 @@ router.put("/", async (req, res) => {
     decimalPlaces,
     posSaveTarget,
     cashierSendToKitchen,
+    deliveryFee,
   } = req.body ?? {};
 
   const nextName =
@@ -205,6 +211,16 @@ router.put("/", async (req, res) => {
     nextCashierSend = Boolean(cashierSendToKitchen);
   }
 
+  let nextDeliveryFee = Math.max(0, parseFloat(String(settings.deliveryFee ?? "0")) || 0);
+  if (deliveryFee != null) {
+    const n = Number(deliveryFee);
+    if (!Number.isFinite(n) || n < 0) {
+      res.status(400).json({ success: false, message: "مبلغ التوصيل غير صالح" });
+      return;
+    }
+    nextDeliveryFee = n;
+  }
+
   const [updated] = await db
     .update(appSettingsTable)
     .set({
@@ -218,6 +234,7 @@ router.put("/", async (req, res) => {
       decimalPlaces: nextDecimals,
       posSaveTarget: nextPosSaveTarget,
       cashierSendToKitchen: nextCashierSend,
+      deliveryFee: nextDeliveryFee.toString(),
       updatedAt: new Date(),
     })
     .where(eq(appSettingsTable.id, settings.id))

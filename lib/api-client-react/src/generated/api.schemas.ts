@@ -260,10 +260,12 @@ export interface Order {
   customerId?: number;
   customer?: Customer;
   employeeId?: number;
+  driverId?: number | null;
   items?: OrderItem[];
   subtotal: number;
   tax?: number;
   discount?: number;
+  deliveryFee?: number;
   total: number;
   paymentMethod?: OrderPaymentMethod;
   /** Saved from POS without payment — awaiting cashier */
@@ -297,6 +299,8 @@ export interface CreateOrderBody {
   employeeId?: number;
   items: CreateOrderItemBody[];
   discount?: number;
+  deliveryFee?: number;
+  driverId?: number | null;
   notes?: string;
   deliveryAddress?: string;
   deliveryPhone?: string;
@@ -307,6 +311,8 @@ export interface UpdateOrderBody {
   tableId?: number;
   customerId?: number;
   discount?: number;
+  deliveryFee?: number;
+  driverId?: number | null;
   notes?: string;
   items?: CreateOrderItemBody[];
 }
