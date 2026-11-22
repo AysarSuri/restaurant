@@ -115,7 +115,7 @@ router.put("/", async (req, res) => {
   const nextName =
     restaurantName != null ? String(restaurantName).trim() : settings.restaurantName;
   if (!nextName) {
-    res.status(400).json({ success: false, message: "اسم المطعم مطلوب" });
+    res.status(400).json({ success: false, message: "اسم المطعم أو الكافتيريا مطلوب" });
     return;
   }
 

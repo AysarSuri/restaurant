@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState } from "react";
 
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
@@ -90,7 +90,7 @@ function BrandThemeSync() {
     },
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (data?.themePrimary) applyBrandPrimary(data.themePrimary);
   }, [data?.themePrimary]);
 

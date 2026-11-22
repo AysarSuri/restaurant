@@ -30,6 +30,8 @@ import {
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
 import { useI18n } from "@/i18n";
+import { useBranch } from "@/lib/branch-context";
+import { BranchSwitcher } from "@/components/branch-switcher";
 
 type SeatKind = "table" | "room" | "person" | "takeaway" | "delivery";
 type CashierPage = "unpaid" | "paid";
@@ -331,6 +333,7 @@ function PaidListRow({
 export default function Cashier() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { selectedBranchId, branchLabel } = useBranch();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -355,7 +358,7 @@ export default function Cashier() {
     isFetching: fetchingToday,
   } = useGetOrders(todayParams, {
     query: {
-      queryKey: ["/api/orders", todayParams],
+      queryKey: ["/api/orders", todayParams, selectedBranchId],
       ...silentQueryOpts,
     },
   });
@@ -366,7 +369,7 @@ export default function Cashier() {
     isFetching: fetchingOpen,
   } = useGetOrders(openParams, {
     query: {
-      queryKey: ["/api/orders", openParams],
+      queryKey: ["/api/orders", openParams, selectedBranchId],
       ...silentQueryOpts,
     },
   });
@@ -389,6 +392,12 @@ export default function Cashier() {
       if (manualTimer.current != null) window.clearTimeout(manualTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    setSelectedOrder(null);
+    setPaymentDialog(null);
+    setDismissedTableNotifs(new Set());
+  }, [selectedBranchId]);
 
   useEffect(() => {
     const bump = () => {
@@ -415,10 +424,14 @@ export default function Cashier() {
     for (const o of openOrders ?? []) {
       if (!map.has(o.id)) map.set(o.id, o);
     }
-    return [...map.values()].sort(
+    const merged = [...map.values()].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [todayOrders, openOrders]);
+    if (selectedBranchId === "all") return merged;
+    return merged.filter(
+      (o) => o.branchId == null || o.branchId === selectedBranchId
+    );
+  }, [todayOrders, openOrders, selectedBranchId]);
 
   const unpaid = useMemo(
     () =>
@@ -515,11 +528,12 @@ export default function Cashier() {
               {t("cashier.title")}
             </h1>
             <p className="text-[10px] sm:text-xs text-muted-foreground font-bold truncate">
-              {user?.name} · {t("cashier.boardHint")}
+              {user?.name} · {branchLabel} · {t("cashier.boardHint")}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <BranchSwitcher compact />
           <button
             type="button"
             onClick={() => void refreshAll(true)}

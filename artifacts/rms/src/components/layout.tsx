@@ -29,6 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     query: { staleTime: 60_000, refetchOnWindowFocus: false },
   });
   const restaurantName = appSettings?.restaurantName?.trim() || t("app.name");
+  const logoUrl = appSettings?.logoUrl?.trim() || "";
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
@@ -82,16 +83,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => navigate("/")}
               className="flex items-center gap-3 min-w-0 min-h-12 touch-manipulation rounded-2xl pe-2"
             >
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center shadow-lg shadow-primary/20 flex-shrink-0">
-                <ChefHat className="w-6 h-6 text-primary-foreground" />
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center shadow-lg shadow-primary/20 flex-shrink-0 overflow-hidden border border-primary/20">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={restaurantName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ChefHat className="w-6 h-6 text-primary-foreground" />
+                )}
               </div>
               <div className="min-w-0 text-right">
                 <h1 className="text-base sm:text-lg md:text-xl font-bold text-foreground leading-none truncate">
                   {restaurantName}
                 </h1>
-                <p className="text-[11px] text-primary font-medium tracking-widest font-display uppercase mt-1">
-                  RMS 2026
-                </p>
               </div>
             </button>
 

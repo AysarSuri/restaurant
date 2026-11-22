@@ -1,12 +1,35 @@
+export const BRAND_PRIMARY_STORAGE_KEY = "rms-theme-primary";
+
+const BRAND_PRIMARY_RE = /^\d{1,3}\s+\d{1,3}%\s+\d{1,3}%$/;
+
 /** Apply brand primary HSL (e.g. "38 92% 50%") to CSS variables. */
-export function applyBrandPrimary(themePrimary: string) {
+export function applyBrandPrimary(themePrimary: string, opts?: { persist?: boolean }) {
   const value = themePrimary.trim();
-  if (!/^\d{1,3}\s+\d{1,3}%\s+\d{1,3}%$/.test(value)) return;
+  if (!BRAND_PRIMARY_RE.test(value)) return;
   const root = document.documentElement;
   root.style.setProperty("--primary", value);
   root.style.setProperty("--accent", value);
   root.style.setProperty("--ring", value);
   root.style.setProperty("--warning", value);
+  if (opts?.persist !== false) {
+    try {
+      localStorage.setItem(BRAND_PRIMARY_STORAGE_KEY, value);
+    } catch {
+      /* private mode / quota */
+    }
+  }
+}
+
+/** Apply last saved brand color before React paints (avoids amber flash). */
+export function applyCachedBrandPrimary() {
+  try {
+    const cached = localStorage.getItem(BRAND_PRIMARY_STORAGE_KEY)?.trim();
+    if (cached && BRAND_PRIMARY_RE.test(cached)) {
+      applyBrandPrimary(cached, { persist: false });
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function hexToHslComponents(hex: string): string | null {

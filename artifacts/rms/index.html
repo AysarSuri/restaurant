@@ -8,6 +8,21 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>نظام إدارة المطاعم الذكي 2026</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      /* Apply cached brand primary before CSS/React to avoid amber flash on reload */
+      (function () {
+        try {
+          var v = localStorage.getItem("rms-theme-primary");
+          if (v && /^\d{1,3}\s+\d{1,3}%\s+\d{1,3}%$/.test(v.trim())) {
+            var r = document.documentElement;
+            r.style.setProperty("--primary", v.trim());
+            r.style.setProperty("--accent", v.trim());
+            r.style.setProperty("--ring", v.trim());
+            r.style.setProperty("--warning", v.trim());
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Vazirmatn + Noto Arabic + Noto Sans: Arabic/Sorani joining + Badini Latin (ê î û ş ç) -->
