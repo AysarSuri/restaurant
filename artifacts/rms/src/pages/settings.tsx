@@ -128,7 +128,16 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
   const { data: settings } = useGetSettings();
-  const { data: printers, isLoading: printersLoading } = useGetDevicePrinters();
+  // Always load the full device list (ignore branch header) so a saved printer
+  // does not vanish when the header branch differs from the device branch.
+  const { data: printers, isLoading: printersLoading } = useGetDevicePrinters({
+    query: {
+      queryKey: [...getGetDevicePrintersQueryKey(), "all-devices"],
+    },
+    request: {
+      headers: { "x-branch-id": "all" },
+    },
+  });
   const { data: branches } = useGetBranches();
   const { mutate: saveSettings, isPending: savingSettings } = useUpdateSettings();
   const { mutate: upsertPrinter, isPending: upserting } = useUpsertDevicePrinter();
@@ -344,8 +353,10 @@ export default function SettingsPage() {
     );
   };
 
+  const printersQueryKey = [...getGetDevicePrintersQueryKey(), "all-devices"] as const;
+
   const syncPrinters = (updater: (list: DevicePrinter[]) => DevicePrinter[]) => {
-    queryClient.setQueryData<DevicePrinter[]>(getGetDevicePrintersQueryKey(), (prev) =>
+    queryClient.setQueryData<DevicePrinter[]>(printersQueryKey, (prev) =>
       updater(prev ?? [])
     );
   };
@@ -1045,7 +1056,9 @@ export default function SettingsPage() {
               <button
                 type="button"
                 className="text-xs font-bold text-primary inline-flex items-center gap-1"
-                onClick={() => queryClient.invalidateQueries({ queryKey: getGetDevicePrintersQueryKey() })}
+                onClick={() =>
+                  queryClient.invalidateQueries({ queryKey: getGetDevicePrintersQueryKey() })
+                }
               >
                 <RefreshCw className="w-3.5 h-3.5" /> {t("common.update")}
               </button>

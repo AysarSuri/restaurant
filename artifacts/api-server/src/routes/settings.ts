@@ -238,9 +238,11 @@ function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
   };
 }
 
-router.get("/printers", async (req, res) => {
+router.get("/printers", async (_req, res) => {
   await ensureSalesDeviceColumns();
-  const scope = parseBranchScope(req);
+  // Devices are keyed by deviceKey (physical machine). Always return the full
+  // list — filtering by X-Branch-Id hid printers right after save when the
+  // active header branch differed from the device's branchId.
   const rows = await db
     .select({
       id: devicePrintersTable.id,
@@ -277,12 +279,7 @@ router.get("/printers", async (req, res) => {
     await db.delete(devicePrintersTable).where(inArray(devicePrintersTable.id, orphanIds));
   }
 
-  const filtered =
-    scope.mode === "one"
-      ? deduped.filter((r) => r.branchId === scope.branchId)
-      : deduped;
-
-  res.json(filtered.map((row) => withSalesDefaults(row)));
+  res.json(deduped.map((row) => withSalesDefaults(row)));
 });
 
 router.post("/printers", async (req, res) => {
