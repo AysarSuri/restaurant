@@ -163,7 +163,33 @@ router.post("/", async (req, res) => {
   const meta = KIND_META[normalizedKind];
   const { start: dayStart, end: dayEnd } = dayBounds(openedAt);
 
-  // One open (or same-day) shift of this kind per branch per calendar day
+  // Only one open shift per branch (morning or evening)
+  const [openOnBranch] = await db
+    .select({
+      id: shiftsTable.id,
+      kind: shiftsTable.kind,
+      name: shiftsTable.name,
+    })
+    .from(shiftsTable)
+    .where(
+      and(
+        eq(shiftsTable.branchId, resolvedBranchId),
+        eq(shiftsTable.isActive, true),
+        isNull(shiftsTable.closedAt)
+      )
+    )
+    .limit(1);
+  if (openOnBranch) {
+    const openMeta =
+      KIND_META[normalizeKind(openOnBranch.kind) ?? "morning"] ?? meta;
+    res.status(400).json({
+      success: false,
+      message: `لا يمكن فتح وردية جديدة — يوجد وردية ${openMeta.name} مفتوحة لهذا الفرع. أغلقها أولاً ثم افتح وردية أخرى.`,
+    });
+    return;
+  }
+
+  // One shift of this kind per branch per calendar day
   const [sameDay] = await db
     .select({ id: shiftsTable.id })
     .from(shiftsTable)
@@ -180,26 +206,6 @@ router.post("/", async (req, res) => {
     res.status(400).json({
       success: false,
       message: `وردية ${meta.name} موجودة مسبقاً لهذا الفرع في نفس اليوم`,
-    });
-    return;
-  }
-
-  const [openSameKind] = await db
-    .select({ id: shiftsTable.id })
-    .from(shiftsTable)
-    .where(
-      and(
-        eq(shiftsTable.branchId, resolvedBranchId),
-        eq(shiftsTable.kind, normalizedKind),
-        eq(shiftsTable.isActive, true),
-        isNull(shiftsTable.closedAt)
-      )
-    )
-    .limit(1);
-  if (openSameKind) {
-    res.status(400).json({
-      success: false,
-      message: `يوجد وردية ${meta.name} مفتوحة لهذا الفرع — أغلقها أولاً`,
     });
     return;
   }

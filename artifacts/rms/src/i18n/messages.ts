@@ -351,6 +351,8 @@ const ar: Messages = {
   "shifts.notesOptional": "ملاحظات اختيارية",
   "shifts.errKind": "اختر صباحية أو مسائية",
   "shifts.errOpenDate": "اختر تاريخ الافتتاح",
+  "shifts.errBranchAlreadyOpen":
+    "لا يمكن فتح وردية جديدة — وردية «{name}» مفتوحة لهذا الفرع. أغلقها أولاً.",
   "shifts.deleteAskSimple": "حذف وردية «{name}»؟",
   "shifts.create": "إنشاء الوردية",
   "shifts.editNamed": "تعديل وردية — {name}",
@@ -1358,6 +1360,8 @@ const en: Messages = {
   "shifts.notesOptional": "Optional notes",
   "shifts.errKind": "Choose morning or evening",
   "shifts.errOpenDate": "Choose the open date",
+  "shifts.errBranchAlreadyOpen":
+    "Cannot open a new shift — “{name}” is still open for this branch. Close it first.",
   "shifts.deleteAskSimple": "Delete “{name}” shift?",
   "shifts.create": "Create shift",
   "shifts.editNamed": "Edit shift — {name}",
@@ -2365,6 +2369,8 @@ const ku: Messages = {
   "shifts.notesOptional": "Têbînîyên vebijêrkî",
   "shifts.errKind": "Sibê an êvarê hilbijêre",
   "shifts.errOpenDate": "Dîroka vekirinê hilbijêre",
+  "shifts.errBranchAlreadyOpen":
+    "Nikare nobeteke nû veke — «{name}» ji bo vî şaxî hê vekirî ye. Pêşî wê bigire.",
   "shifts.deleteAskSimple": "Nobeta «{name}» jê bibe?",
   "shifts.create": "Nobetê çêke",
   "shifts.editNamed": "Sererastkirina nobetê — {name}",

@@ -61,21 +61,24 @@ function todayYmd() {
   ).padStart(2, "0")}`;
 }
 
-function formatDateTime(iso: string | null | undefined, locale: string) {
+function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "ar-IQ", {
+  // Always Latin (English) digits for shift open/close timestamps
+  return new Intl.DateTimeFormat("en-GB", {
+    numberingSystem: "latn",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   }).format(d);
 }
 
 export default function ShiftsPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
   const { data: shifts, isLoading } = useGetShifts();
@@ -158,6 +161,13 @@ export default function ShiftsPage() {
     setFormOpen(true);
   };
 
+  const openShiftForBranch = useMemo(() => {
+    if (branchId === "" || !Number(branchId)) return null;
+    return (shifts ?? []).find(
+      (s) => s.branchId === Number(branchId) && s.isOpen
+    ) ?? null;
+  }, [shifts, branchId]);
+
   const handleOpenShift = () => {
     setSubmitError("");
     if (!kind) {
@@ -170,6 +180,14 @@ export default function ShiftsPage() {
     }
     if (!openDate) {
       setSubmitError(t("shifts.errOpenDate"));
+      return;
+    }
+    if (openShiftForBranch) {
+      setSubmitError(
+        t("shifts.errBranchAlreadyOpen", {
+          name: t(KIND_META[openShiftForBranch.kind].labelKey),
+        })
+      );
       return;
     }
     createShift(
@@ -342,24 +360,25 @@ export default function ShiftsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-3 sm:gap-3.5 flex-shrink-0">
                     {shift.isOpen ? (
                       <button
                         type="button"
                         onClick={() => setCloseTarget(shift)}
-                        className="h-10 px-3 rounded-xl border border-amber-500/35 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 flex items-center gap-1.5 text-xs font-extrabold"
+                        className="h-11 min-w-[5.75rem] sm:min-w-[6.5rem] px-4 rounded-xl border border-amber-500/35 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 flex items-center justify-center gap-2 text-sm font-extrabold touch-manipulation"
                       >
-                        <Lock className="w-3.5 h-3.5" />
+                        <Lock className="w-4 h-4" />
                         {t("shifts.close")}
                       </button>
                     ) : null}
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(shift)}
-                      className="h-10 w-10 rounded-xl border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 flex items-center justify-center"
+                      className="h-11 min-w-[5.75rem] sm:min-w-[6.5rem] px-4 rounded-xl border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 flex items-center justify-center gap-2 text-sm font-extrabold touch-manipulation"
                       aria-label={t("common.delete")}
                     >
                       <Trash2 className="w-4 h-4" />
+                      {t("common.delete")}
                     </button>
                   </div>
                 </div>
@@ -370,7 +389,7 @@ export default function ShiftsPage() {
                       {t("shifts.openedAt")}
                     </p>
                     <p className="font-display font-extrabold tabular-nums text-sm mt-0.5" dir="ltr">
-                      {formatDateTime(shift.openedAt, locale)}
+                      {formatDateTime(shift.openedAt)}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-secondary/45 px-3 py-2.5">
@@ -379,7 +398,7 @@ export default function ShiftsPage() {
                     </p>
                     <p className="font-display font-extrabold tabular-nums text-sm mt-0.5" dir="ltr">
                       {shift.closedAt
-                        ? formatDateTime(shift.closedAt, locale)
+                        ? formatDateTime(shift.closedAt)
                         : t("shifts.stillOpen")}
                     </p>
                   </div>
@@ -511,6 +530,13 @@ export default function ShiftsPage() {
                 searchPlaceholder={t("branch.search")}
               />
             )}
+            {openShiftForBranch ? (
+              <div className="mt-2.5 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-3.5 py-3 text-sm font-bold text-amber-800 dark:text-amber-200">
+                {t("shifts.errBranchAlreadyOpen", {
+                  name: t(KIND_META[openShiftForBranch.kind].labelKey),
+                })}
+              </div>
+            ) : null}
           </div>
 
           <div>
@@ -545,6 +571,7 @@ export default function ShiftsPage() {
             </Button>
             <Button
               isLoading={isCreating}
+              disabled={Boolean(openShiftForBranch)}
               onClick={handleOpenShift}
               className="h-14 rounded-2xl text-base font-extrabold gap-2 touch-manipulation shadow-lg shadow-primary/20"
             >
