@@ -46,6 +46,18 @@ export async function ensureSalesDeviceColumns() {
           ALTER TABLE orders
           ADD COLUMN IF NOT EXISTS driver_id integer REFERENCES drivers(id) ON DELETE SET NULL
         `);
+        await db.execute(sql`
+          ALTER TABLE shifts
+          ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'morning'
+        `);
+        await db.execute(sql`
+          ALTER TABLE shifts
+          ADD COLUMN IF NOT EXISTS opened_at timestamp NOT NULL DEFAULT now()
+        `);
+        await db.execute(sql`
+          ALTER TABLE shifts
+          ADD COLUMN IF NOT EXISTS closed_at timestamp
+        `);
       } catch (err) {
         ensurePromise = null;
         logger.error({ err }, "Failed ensuring sales device columns");

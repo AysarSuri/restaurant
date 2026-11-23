@@ -17,36 +17,24 @@ function num(v: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function parseHmToMinutes(hm: string) {
-  const [h, m] = String(hm ?? "0:0")
-    .split(":")
-    .map((x) => Number(x));
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
-  return h * 60 + m;
-}
-
-function parseDaysOfWeek(raw: string | null | undefined): number[] {
-  try {
-    const parsed = JSON.parse(String(raw ?? "[0,1,2,3,4,5,6]"));
-    if (!Array.isArray(parsed)) return [0, 1, 2, 3, 4, 5, 6];
-    return parsed.map((d) => Number(d)).filter((d) => Number.isFinite(d));
-  } catch {
-    return [0, 1, 2, 3, 4, 5, 6];
-  }
-}
-
 function orderInShift(
   createdAt: Date,
-  shift: { startTime: string; endTime: string; daysOfWeek: string }
+  shift: {
+    openedAt?: Date | string | null;
+    closedAt?: Date | string | null;
+    createdAt?: Date | string | null;
+  }
 ) {
-  const days = parseDaysOfWeek(shift.daysOfWeek);
-  if (!days.includes(createdAt.getDay())) return false;
-  const t = createdAt.getHours() * 60 + createdAt.getMinutes();
-  const start = parseHmToMinutes(shift.startTime);
-  const end = parseHmToMinutes(shift.endTime);
-  if (start === end) return true;
-  if (start < end) return t >= start && t < end;
-  return t >= start || t < end;
+  const opened = new Date(shift.openedAt ?? shift.createdAt ?? 0);
+  if (Number.isNaN(opened.getTime())) return false;
+  if (createdAt.getTime() < opened.getTime()) return false;
+  if (shift.closedAt) {
+    const closed = new Date(shift.closedAt);
+    if (!Number.isNaN(closed.getTime()) && createdAt.getTime() > closed.getTime()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function emptyStats() {

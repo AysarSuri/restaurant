@@ -913,6 +913,20 @@ export default function POS() {
                     <span className="truncate">{seatLabel(selectedTable, t)}</span>
                   </button>
                 )}
+                {orderType === "delivery" && (
+                  <div className="min-w-[11rem] max-w-[15rem] w-[min(100%,15rem)] flex-shrink-0">
+                    <ModernCombobox
+                      size="sm"
+                      icon={Bike}
+                      value={selectedDriverId == null ? "" : String(selectedDriverId)}
+                      onChange={(v) => setSelectedDriverId(v ? Number(v) : null)}
+                      options={driverOptions}
+                      placeholder={t("pos.selectDriver")}
+                      searchPlaceholder={t("drivers.search")}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             {compact && (
@@ -933,6 +947,7 @@ export default function POS() {
                 onClick={() => {
                   setOrderType(type);
                   setSelectedTableId(null);
+                  if (type !== "delivery") setSelectedDriverId(null);
                 }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
                   orderType === type
@@ -953,76 +968,65 @@ export default function POS() {
                 exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden"
               >
-                <div className="space-y-2">
-                  <div className="flex items-stretch gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsPhonePadOpen(true)}
-                      className={`min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start ${
+                <div className="flex items-stretch gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPhonePadOpen(true)}
+                    className={`min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start ${
+                      phoneKnown === true
+                        ? "border-success/60"
+                        : phoneKnown === false
+                          ? "border-destructive/60"
+                          : "border-border/60 hover:border-primary/40"
+                    }`}
+                  >
+                    <span
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         phoneKnown === true
-                          ? "border-success/60"
+                          ? "bg-success/15 text-success"
                           : phoneKnown === false
-                            ? "border-destructive/60"
-                            : "border-border/60 hover:border-primary/40"
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-primary/15 text-primary"
                       }`}
                     >
-                      <span
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          phoneKnown === true
-                            ? "bg-success/15 text-success"
-                            : phoneKnown === false
-                              ? "bg-destructive/15 text-destructive"
-                              : "bg-primary/15 text-primary"
+                      <Phone className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground">{t("common.phoneNumber")}</p>
+                      <p
+                        className={`text-sm font-extrabold tabular-nums truncate ${
+                          deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
+                        }`}
+                        dir="ltr"
+                      >
+                        {deliveryPhone || t("keyboard.tapToEnter")}
+                      </p>
+                    </div>
+                    {phoneKnown === true ? (
+                      <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
+                    ) : phoneKnown === false ? (
+                      <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddressPadOpen(true)}
+                    className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground">{t("pos.deliveryAddress")}</p>
+                      <p
+                        className={`text-sm font-extrabold truncate ${
+                          deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
                         }`}
                       >
-                        <Phone className="w-4 h-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground">{t("common.phoneNumber")}</p>
-                        <p
-                          className={`text-sm font-extrabold tabular-nums truncate ${
-                            deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
-                          }`}
-                          dir="ltr"
-                        >
-                          {deliveryPhone || t("keyboard.tapToEnter")}
-                        </p>
-                      </div>
-                      {phoneKnown === true ? (
-                        <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
-                      ) : phoneKnown === false ? (
-                        <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                      ) : null}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddressPadOpen(true)}
-                      className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
-                    >
-                      <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
-                        <MapPin className="w-4 h-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground">{t("pos.deliveryAddress")}</p>
-                        <p
-                          className={`text-sm font-extrabold truncate ${
-                            deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
-                          }`}
-                        >
-                          {deliveryAddress || t("keyboard.tapToType")}
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                  <ModernCombobox
-                    label={t("drivers.driver")}
-                    icon={Bike}
-                    value={selectedDriverId == null ? "" : String(selectedDriverId)}
-                    onChange={(v) => setSelectedDriverId(v ? Number(v) : null)}
-                    options={driverOptions}
-                    placeholder={t("pos.selectDriver")}
-                    searchPlaceholder={t("drivers.search")}
-                  />
+                        {deliveryAddress || t("keyboard.tapToType")}
+                      </p>
+                    </div>
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -1173,33 +1177,45 @@ export default function POS() {
             </div>
           ) : null}
 
-          <div className="flex justify-between font-bold text-xl text-foreground pt-1 border-t border-border/50">
-            <span>{t("common.total")}</span>
-            <span
-              className={`font-display ${
-                total < 0 ? "text-rose-600 dark:text-rose-400" : "text-primary"
+          <div className="flex items-stretch gap-2.5 pt-1">
+            <div
+              className={`min-w-0 flex-1 relative overflow-hidden rounded-2xl border px-3.5 py-2.5 sm:px-4 sm:py-3 ${
+                total < 0
+                  ? "border-rose-500/35 bg-gradient-to-br from-rose-500/15 via-rose-500/5 to-transparent"
+                  : "border-primary/35 bg-gradient-to-br from-primary/20 via-primary/8 to-amber-500/10 shadow-[0_10px_28px_-16px_hsl(var(--primary)/0.55)]"
               }`}
             >
-              {formatMoneyAmount(total)}
-            </span>
-          </div>
+              <div className="absolute -end-6 -top-8 h-20 w-20 rounded-full bg-primary/15 blur-2xl pointer-events-none" />
+              <p className="relative text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                {t("common.total")}
+              </p>
+              <p
+                className={`relative mt-0.5 font-display text-xl sm:text-2xl md:text-[1.7rem] font-black tabular-nums leading-none tracking-tight truncate ${
+                  total < 0 ? "text-rose-600 dark:text-rose-400" : "text-primary"
+                }`}
+                dir="ltr"
+              >
+                {formatMoneyAmount(total)}
+              </p>
+            </div>
 
-          <Button
-            className="w-full h-12 sm:h-14 text-base sm:text-lg touch-target"
-            isLoading={saveForCashier && isSavingOrder}
-            disabled={
-              cart.length === 0 ||
-              (orderType === "dine_in" && !selectedTableId) ||
-              isSavingOrder
-            }
-            onClick={openCheckout}
-          >
-            {orderType === "dine_in" && !selectedTableId
-              ? t("pos.chooseSeatFirst")
-              : saveForCashier
-                ? t("pos.saveInvoice")
-                : t("pos.payAndInvoice")}
-          </Button>
+            <Button
+              className="h-auto min-h-[3.25rem] sm:min-h-[3.75rem] px-4 sm:px-5 text-sm sm:text-base font-extrabold touch-target rounded-2xl shadow-lg shadow-primary/20 whitespace-normal text-center leading-tight max-w-[46%] sm:max-w-[42%]"
+              isLoading={saveForCashier && isSavingOrder}
+              disabled={
+                cart.length === 0 ||
+                (orderType === "dine_in" && !selectedTableId) ||
+                isSavingOrder
+              }
+              onClick={openCheckout}
+            >
+              {orderType === "dine_in" && !selectedTableId
+                ? t("pos.chooseSeatFirst")
+                : saveForCashier
+                  ? t("pos.saveInvoice")
+                  : t("pos.payAndInvoice")}
+            </Button>
+          </div>
         </div>
       </div>
   );

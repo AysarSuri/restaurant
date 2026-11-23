@@ -129,10 +129,14 @@ export default function DriversPage() {
       return s.branchId === filterBranchId;
     });
     for (const s of scoped) {
+      const kindLabel =
+        s.kind === "evening" ? t("shifts.kindEvening") : t("shifts.kindMorning");
       opts.push({
         value: String(s.id),
-        label: s.nameAr?.trim() || s.name,
-        subtitle: `${s.startTime} – ${s.endTime}${s.branchName ? ` · ${s.branchName}` : ""}`,
+        label: `${kindLabel} · ${s.openDate}`,
+        subtitle: `${s.startTime}${s.endTime ? ` – ${s.endTime}` : ""}${
+          s.branchName ? ` · ${s.branchName}` : ""
+        }`,
         icon: Clock3,
       });
     }

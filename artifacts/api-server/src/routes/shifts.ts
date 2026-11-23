@@ -1,148 +1,97 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import {
-  shiftsTable,
-  shiftEmployeesTable,
-  branchesTable,
-  employeesTable,
-} from "@workspace/db/schema";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { shiftsTable, branchesTable } from "@workspace/db/schema";
+import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
+import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
 const router: IRouter = Router();
 
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
-const DAY_SET = new Set([0, 1, 2, 3, 4, 5, 6]);
+export type ShiftKind = "morning" | "evening";
 
-function normalizeTime(value: unknown): string | null {
-  const raw = String(value ?? "").trim();
-  if (!TIME_RE.test(raw)) return null;
-  return raw;
+const KIND_META: Record<
+  ShiftKind,
+  { name: string; color: string; startDefault: string; endDefault: string }
+> = {
+  morning: {
+    name: "صباحية",
+    color: "#0ea5e9",
+    startDefault: "08:00",
+    endDefault: "16:00",
+  },
+  evening: {
+    name: "مسائية",
+    color: "#64748b",
+    startDefault: "16:00",
+    endDefault: "00:00",
+  },
+};
+
+function normalizeKind(value: unknown): ShiftKind | null {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "morning" || raw === "صباحية" || raw === "صباحي") return "morning";
+  if (raw === "evening" || raw === "مسائية" || raw === "مسائي") return "evening";
+  return null;
 }
 
-function parseDaysOfWeek(input: unknown): number[] {
-  let arr: unknown[] = [];
-  if (typeof input === "string") {
-    try {
-      const parsed = JSON.parse(input);
-      if (Array.isArray(parsed)) arr = parsed;
-    } catch {
-      arr = input.split(",").map((s) => s.trim());
-    }
-  } else if (Array.isArray(input)) {
-    arr = input;
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function formatHm(d: Date) {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function dayBounds(d: Date) {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+  return { start, end };
+}
+
+function parseOpenDate(value: unknown): Date | null {
+  if (value == null || value === "") return new Date();
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split("-").map(Number);
+    const now = new Date();
+    return new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds(), 0);
   }
-  const days = [
-    ...new Set(
-      arr
-        .map((d) => Number(d))
-        .filter((d) => Number.isInteger(d) && DAY_SET.has(d))
-    ),
-  ].sort((a, b) => a - b);
-  return days.length > 0 ? days : [0, 1, 2, 3, 4, 5, 6];
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function normalizeEmployeeIds(input: unknown): number[] {
-  if (!Array.isArray(input)) return [];
-  return [
-    ...new Set(
-      input
-        .map((id) => Number(id))
-        .filter((id) => Number.isFinite(id) && id > 0)
-    ),
-  ];
-}
-
-function parseNonNegInt(value: unknown, fallback = 0, max = 24 * 60): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return fallback;
-  return Math.min(max, Math.floor(n));
-}
-
-function durationMinutes(startTime: string, endTime: string): number {
-  const [sh, sm] = startTime.split(":").map(Number);
-  const [eh, em] = endTime.split(":").map(Number);
-  let startM = sh * 60 + sm;
-  let endM = eh * 60 + em;
-  if (endM <= startM) endM += 24 * 60;
-  return endM - startM;
-}
-
-function isOvernight(startTime: string, endTime: string): boolean {
-  return endTime <= startTime;
-}
-
-async function isDuplicateName(
-  name: string,
-  branchId: number,
-  excludeId?: number
-) {
-  const normalized = name.trim().toLowerCase();
-  const conditions = [
-    sql`lower(${shiftsTable.name}) = ${normalized}`,
-    eq(shiftsTable.branchId, branchId),
-  ];
-  if (excludeId != null) conditions.push(ne(shiftsTable.id, excludeId));
-  const rows = await db
-    .select({ id: shiftsTable.id })
-    .from(shiftsTable)
-    .where(and(...conditions))
-    .limit(1);
-  return rows.length > 0;
-}
-
-async function getEmployeeIdsForShifts(shiftIds: number[]) {
-  const map = new Map<number, number[]>();
-  if (shiftIds.length === 0) return map;
-  const rows = await db
-    .select()
-    .from(shiftEmployeesTable)
-    .where(inArray(shiftEmployeesTable.shiftId, shiftIds));
-  for (const row of rows) {
-    const list = map.get(row.shiftId) ?? [];
-    list.push(row.employeeId);
-    map.set(row.shiftId, list);
-  }
-  return map;
-}
-
-async function setShiftEmployees(shiftId: number, employeeIds: number[]) {
-  await db
-    .delete(shiftEmployeesTable)
-    .where(eq(shiftEmployeesTable.shiftId, shiftId));
-  if (employeeIds.length === 0) return;
-  await db.insert(shiftEmployeesTable).values(
-    employeeIds.map((employeeId) => ({ shiftId, employeeId }))
-  );
-}
-
-function enrichShift(
+function serializeShift(
   shift: typeof shiftsTable.$inferSelect,
-  employeeIds: number[],
-  employeeNameMap: Map<number, string>,
-  branchNameMap: Map<number, string>
+  branchName?: string | null
 ) {
-  const daysOfWeek = parseDaysOfWeek(shift.daysOfWeek);
-  const duration = durationMinutes(shift.startTime, shift.endTime);
-  const breakMinutes = Math.max(0, Number(shift.breakMinutes) || 0);
+  const kind = (normalizeKind(shift.kind) ??
+    (String(shift.color).toLowerCase().includes("64748b") ? "evening" : "morning")) as ShiftKind;
+  const meta = KIND_META[kind];
+  const openedAt = shift.openedAt ? new Date(shift.openedAt) : new Date(shift.createdAt);
+  const closedAt = shift.closedAt ? new Date(shift.closedAt) : null;
+  const isOpen = closedAt == null && shift.isActive !== false;
   return {
-    ...shift,
-    daysOfWeek,
-    employeeIds,
-    employeeNames: employeeIds.map(
-      (id) => employeeNameMap.get(id) ?? `#${id}`
-    ),
-    branchName: branchNameMap.get(shift.branchId) ?? `فرع #${shift.branchId}`,
-    supervisorName: shift.supervisorEmployeeId
-      ? employeeNameMap.get(shift.supervisorEmployeeId) ?? null
-      : null,
-    durationMinutes: duration,
-    workMinutes: Math.max(0, duration - breakMinutes),
-    isOvernight: isOvernight(shift.startTime, shift.endTime),
+    id: shift.id,
+    kind,
+    name: meta.name,
+    branchId: shift.branchId,
+    branchName: branchName ?? null,
+    color: meta.color,
+    openedAt: openedAt.toISOString(),
+    closedAt: closedAt ? closedAt.toISOString() : null,
+    openDate: `${openedAt.getFullYear()}-${pad2(openedAt.getMonth() + 1)}-${pad2(openedAt.getDate())}`,
+    startTime: formatHm(openedAt),
+    endTime: closedAt ? formatHm(closedAt) : null,
+    notes: shift.notes ?? null,
+    isActive: isOpen,
+    isOpen,
+    createdAt: shift.createdAt,
+    updatedAt: shift.updatedAt,
   };
 }
 
 router.get("/", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
   const conditions = [];
   if (scope.mode === "one") {
@@ -150,347 +99,247 @@ router.get("/", async (req, res) => {
   }
 
   const shifts = await db
-    .select()
+    .select({
+      shift: shiftsTable,
+      branchName: branchesTable.name,
+    })
     .from(shiftsTable)
+    .leftJoin(branchesTable, eq(shiftsTable.branchId, branchesTable.id))
     .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(shiftsTable.createdAt));
+    .orderBy(desc(shiftsTable.openedAt), desc(shiftsTable.createdAt));
 
-  const employeeMap = await getEmployeeIdsForShifts(shifts.map((s) => s.id));
-  const [branches, employees] = await Promise.all([
-    db
-      .select({ id: branchesTable.id, name: branchesTable.name })
-      .from(branchesTable),
-    db
-      .select({ id: employeesTable.id, name: employeesTable.name })
-      .from(employeesTable),
-  ]);
-  const branchNameMap = new Map(branches.map((b) => [b.id, b.name]));
-  const employeeNameMap = new Map(employees.map((e) => [e.id, e.name]));
-
-  res.json(
-    shifts.map((s) =>
-      enrichShift(
-        s,
-        employeeMap.get(s.id) ?? [],
-        employeeNameMap,
-        branchNameMap
-      )
-    )
-  );
+  res.json(shifts.map((r) => serializeShift(r.shift, r.branchName)));
 });
 
 router.get("/:id", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) {
     res.status(400).json({ success: false, message: "معرف غير صالح" });
     return;
   }
-  const [shift] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id));
-  if (!shift) {
+  const [row] = await db
+    .select({
+      shift: shiftsTable,
+      branchName: branchesTable.name,
+    })
+    .from(shiftsTable)
+    .leftJoin(branchesTable, eq(shiftsTable.branchId, branchesTable.id))
+    .where(eq(shiftsTable.id, id))
+    .limit(1);
+  if (!row) {
     res.status(404).json({ success: false, message: "الوردية غير موجودة" });
     return;
   }
-  const employeeMap = await getEmployeeIdsForShifts([id]);
-  const [branches, employees] = await Promise.all([
-    db
-      .select({ id: branchesTable.id, name: branchesTable.name })
-      .from(branchesTable),
-    db
-      .select({ id: employeesTable.id, name: employeesTable.name })
-      .from(employeesTable),
-  ]);
-  const branchNameMap = new Map(branches.map((b) => [b.id, b.name]));
-  const employeeNameMap = new Map(employees.map((e) => [e.id, e.name]));
-  res.json(
-    enrichShift(
-      shift,
-      employeeMap.get(id) ?? [],
-      employeeNameMap,
-      branchNameMap
-    )
-  );
+  res.json(serializeShift(row.shift, row.branchName));
 });
 
+/** Open a new morning/evening shift for a branch. */
 router.post("/", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
-  const {
-    name,
-    nameAr,
-    code,
-    branchId,
-    startTime,
-    endTime,
-    breakMinutes,
-    graceMinutes,
-    daysOfWeek,
-    color,
-    supervisorEmployeeId,
-    notes,
-    isActive,
-    employeeIds,
-  } = req.body ?? {};
+  const { kind, branchId, notes, openedAt: openedAtRaw } = req.body ?? {};
 
-  const trimmedName = String(name ?? "").trim();
-  const start = normalizeTime(startTime);
-  const end = normalizeTime(endTime);
+  const normalizedKind = normalizeKind(kind);
+  if (!normalizedKind) {
+    res.status(400).json({ success: false, message: "اختر وردية صباحية أو مسائية" });
+    return;
+  }
   const resolvedBranchId = resolveWriteBranchId(
     scope,
     branchId != null ? Number(branchId) : null
   );
-  const staffIds = normalizeEmployeeIds(employeeIds);
-  const days = parseDaysOfWeek(daysOfWeek);
-  const breakMins = parseNonNegInt(breakMinutes, 0);
-  const graceMins = parseNonNegInt(graceMinutes, 0, 180);
-  const colorValue = String(color ?? "#0ea5e9").trim() || "#0ea5e9";
-  const supervisorId =
-    supervisorEmployeeId != null && Number(supervisorEmployeeId) > 0
-      ? Number(supervisorEmployeeId)
-      : null;
-
-  if (!trimmedName) {
-    res.status(400).json({ success: false, message: "اسم الوردية مطلوب" });
-    return;
-  }
   if (!resolvedBranchId) {
     res.status(400).json({ success: false, message: "اختر فرعاً للوردية" });
     return;
   }
-  if (!start || !end) {
-    res
-      .status(400)
-      .json({ success: false, message: "وقت البداية والنهاية بصيغة HH:mm" });
+
+  const openedAt = parseOpenDate(openedAtRaw);
+  if (!openedAt) {
+    res.status(400).json({ success: false, message: "تاريخ افتتاح الوردية غير صالح" });
     return;
   }
-  if (start === end) {
-    res
-      .status(400)
-      .json({ success: false, message: "وقت البداية والنهاية لا يمكن أن يتساويا" });
-    return;
-  }
-  const duration = durationMinutes(start, end);
-  if (breakMins >= duration) {
+
+  const meta = KIND_META[normalizedKind];
+  const { start: dayStart, end: dayEnd } = dayBounds(openedAt);
+
+  // One open (or same-day) shift of this kind per branch per calendar day
+  const [sameDay] = await db
+    .select({ id: shiftsTable.id })
+    .from(shiftsTable)
+    .where(
+      and(
+        eq(shiftsTable.branchId, resolvedBranchId),
+        eq(shiftsTable.kind, normalizedKind),
+        gte(shiftsTable.openedAt, dayStart),
+        lte(shiftsTable.openedAt, dayEnd)
+      )
+    )
+    .limit(1);
+  if (sameDay) {
     res.status(400).json({
       success: false,
-      message: "دقائق الاستراحة يجب أن تكون أقل من مدة الوردية",
+      message: `وردية ${meta.name} موجودة مسبقاً لهذا الفرع في نفس اليوم`,
     });
     return;
   }
-  if (await isDuplicateName(trimmedName, resolvedBranchId)) {
-    res
-      .status(400)
-      .json({ success: false, message: "اسم الوردية مستخدم مسبقاً في هذا الفرع" });
+
+  const [openSameKind] = await db
+    .select({ id: shiftsTable.id })
+    .from(shiftsTable)
+    .where(
+      and(
+        eq(shiftsTable.branchId, resolvedBranchId),
+        eq(shiftsTable.kind, normalizedKind),
+        eq(shiftsTable.isActive, true),
+        isNull(shiftsTable.closedAt)
+      )
+    )
+    .limit(1);
+  if (openSameKind) {
+    res.status(400).json({
+      success: false,
+      message: `يوجد وردية ${meta.name} مفتوحة لهذا الفرع — أغلقها أولاً`,
+    });
     return;
-  }
-
-  if (supervisorId != null) {
-    const [sup] = await db
-      .select({ id: employeesTable.id })
-      .from(employeesTable)
-      .where(eq(employeesTable.id, supervisorId))
-      .limit(1);
-    if (!sup) {
-      res.status(400).json({ success: false, message: "المشرف غير موجود" });
-      return;
-    }
-  }
-
-  if (staffIds.length > 0) {
-    const found = await db
-      .select({ id: employeesTable.id })
-      .from(employeesTable)
-      .where(inArray(employeesTable.id, staffIds));
-    if (found.length !== staffIds.length) {
-      res
-        .status(400)
-        .json({ success: false, message: "بعض الموظفين المحددين غير موجودين" });
-      return;
-    }
   }
 
   const [created] = await db
     .insert(shiftsTable)
     .values({
-      name: trimmedName,
-      nameAr: String(nameAr ?? "").trim() || null,
-      code: String(code ?? "").trim() || null,
+      name: meta.name,
+      kind: normalizedKind,
       branchId: resolvedBranchId,
-      startTime: start,
-      endTime: end,
-      breakMinutes: breakMins,
-      graceMinutes: graceMins,
-      daysOfWeek: JSON.stringify(days),
-      color: colorValue,
-      supervisorEmployeeId: supervisorId,
-      notes: String(notes ?? "").trim() || null,
-      isActive: isActive !== false,
+      startTime: formatHm(openedAt),
+      endTime: meta.endDefault,
+      breakMinutes: 0,
+      graceMinutes: 0,
+      daysOfWeek: "[0,1,2,3,4,5,6]",
+      color: meta.color,
+      openedAt,
+      closedAt: null,
+      notes: notes != null ? String(notes).trim() || null : null,
+      isActive: true,
     })
     .returning();
 
-  await setShiftEmployees(created.id, staffIds);
+  const [branch] = await db
+    .select({ name: branchesTable.name })
+    .from(branchesTable)
+    .where(eq(branchesTable.id, resolvedBranchId))
+    .limit(1);
 
-  const employeeMap = await getEmployeeIdsForShifts([created.id]);
-  const [branches, employees] = await Promise.all([
-    db
-      .select({ id: branchesTable.id, name: branchesTable.name })
-      .from(branchesTable),
-    db
-      .select({ id: employeesTable.id, name: employeesTable.name })
-      .from(employeesTable),
-  ]);
-  res.status(201).json(
-    enrichShift(
-      created,
-      employeeMap.get(created.id) ?? [],
-      new Map(employees.map((e) => [e.id, e.name])),
-      new Map(branches.map((b) => [b.id, b.name]))
-    )
-  );
+  res.status(201).json(serializeShift(created, branch?.name ?? null));
 });
 
+/** Update notes / or close shift when closedAt / close=true */
 router.put("/:id", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) {
     res.status(400).json({ success: false, message: "معرف غير صالح" });
     return;
   }
-  const [existing] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id));
+  const [existing] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ success: false, message: "الوردية غير موجودة" });
     return;
   }
 
-  const scope = parseBranchScope(req);
-  const {
-    name,
-    nameAr,
-    code,
-    branchId,
-    startTime,
-    endTime,
-    breakMinutes,
-    graceMinutes,
-    daysOfWeek,
-    color,
-    supervisorEmployeeId,
-    notes,
-    isActive,
-    employeeIds,
-  } = req.body ?? {};
+  const { notes, close, closedAt: closedAtRaw } = req.body ?? {};
+  const patch: Partial<typeof shiftsTable.$inferInsert> = {
+    updatedAt: new Date(),
+  };
 
-  const trimmedName = String(name ?? existing.name).trim();
-  const start = normalizeTime(startTime ?? existing.startTime);
-  const end = normalizeTime(endTime ?? existing.endTime);
-  const resolvedBranchId =
-    resolveWriteBranchId(
-      scope,
-      branchId != null ? Number(branchId) : existing.branchId
-    ) ?? existing.branchId;
-  const staffIds =
-    employeeIds !== undefined
-      ? normalizeEmployeeIds(employeeIds)
-      : (await getEmployeeIdsForShifts([id])).get(id) ?? [];
-  const days =
-    daysOfWeek !== undefined
-      ? parseDaysOfWeek(daysOfWeek)
-      : parseDaysOfWeek(existing.daysOfWeek);
-  const breakMins = parseNonNegInt(
-    breakMinutes ?? existing.breakMinutes,
-    0
-  );
-  const graceMins = parseNonNegInt(
-    graceMinutes ?? existing.graceMinutes,
-    0,
-    180
-  );
-  const colorValue =
-    String(color ?? existing.color ?? "#0ea5e9").trim() || "#0ea5e9";
-  const supervisorId =
-    supervisorEmployeeId === null
-      ? null
-      : supervisorEmployeeId != null && Number(supervisorEmployeeId) > 0
-        ? Number(supervisorEmployeeId)
-        : existing.supervisorEmployeeId;
+  if (notes !== undefined) {
+    patch.notes = String(notes ?? "").trim() || null;
+  }
 
-  if (!trimmedName) {
-    res.status(400).json({ success: false, message: "اسم الوردية مطلوب" });
-    return;
-  }
-  if (!start || !end) {
-    res
-      .status(400)
-      .json({ success: false, message: "وقت البداية والنهاية بصيغة HH:mm" });
-    return;
-  }
-  if (start === end) {
-    res
-      .status(400)
-      .json({ success: false, message: "وقت البداية والنهاية لا يمكن أن يتساويا" });
-    return;
-  }
-  const duration = durationMinutes(start, end);
-  if (breakMins >= duration) {
-    res.status(400).json({
-      success: false,
-      message: "دقائق الاستراحة يجب أن تكون أقل من مدة الوردية",
-    });
-    return;
-  }
-  if (await isDuplicateName(trimmedName, resolvedBranchId, id)) {
-    res
-      .status(400)
-      .json({ success: false, message: "اسم الوردية مستخدم مسبقاً في هذا الفرع" });
-    return;
+  const wantsClose = close === true || closedAtRaw != null;
+  if (wantsClose) {
+    if (existing.closedAt) {
+      res.status(400).json({ success: false, message: "الوردية مغلقة مسبقاً" });
+      return;
+    }
+    let closedAt = new Date();
+    if (closedAtRaw != null && closedAtRaw !== "") {
+      const parsed = new Date(String(closedAtRaw));
+      if (Number.isNaN(parsed.getTime())) {
+        res.status(400).json({ success: false, message: "وقت الإغلاق غير صالح" });
+        return;
+      }
+      closedAt = parsed;
+    }
+    const openedAt = existing.openedAt ? new Date(existing.openedAt) : new Date(existing.createdAt);
+    if (closedAt.getTime() < openedAt.getTime()) {
+      res.status(400).json({ success: false, message: "وقت الإغلاق قبل وقت الافتتاح" });
+      return;
+    }
+    patch.closedAt = closedAt;
+    patch.endTime = formatHm(closedAt);
+    patch.isActive = false;
   }
 
   const [updated] = await db
     .update(shiftsTable)
-    .set({
-      name: trimmedName,
-      nameAr: String(nameAr ?? existing.nameAr ?? "").trim() || null,
-      code: String(code ?? existing.code ?? "").trim() || null,
-      branchId: resolvedBranchId,
-      startTime: start,
-      endTime: end,
-      breakMinutes: breakMins,
-      graceMinutes: graceMins,
-      daysOfWeek: JSON.stringify(days),
-      color: colorValue,
-      supervisorEmployeeId: supervisorId,
-      notes: String(notes ?? existing.notes ?? "").trim() || null,
-      isActive: isActive !== undefined ? isActive !== false : existing.isActive,
-      updatedAt: new Date(),
-    })
+    .set(patch)
     .where(eq(shiftsTable.id, id))
     .returning();
 
-  await setShiftEmployees(id, staffIds);
+  const [branch] = await db
+    .select({ name: branchesTable.name })
+    .from(branchesTable)
+    .where(eq(branchesTable.id, updated.branchId))
+    .limit(1);
 
-  const employeeMap = await getEmployeeIdsForShifts([id]);
-  const [branches, employees] = await Promise.all([
-    db
-      .select({ id: branchesTable.id, name: branchesTable.name })
-      .from(branchesTable),
-    db
-      .select({ id: employeesTable.id, name: employeesTable.name })
-      .from(employeesTable),
-  ]);
-  res.json(
-    enrichShift(
-      updated,
-      employeeMap.get(id) ?? [],
-      new Map(employees.map((e) => [e.id, e.name])),
-      new Map(branches.map((b) => [b.id, b.name]))
-    )
-  );
+  res.json(serializeShift(updated, branch?.name ?? null));
 });
 
-router.delete("/:id", async (req, res) => {
+router.post("/:id/close", async (req, res) => {
+  await ensureSalesDeviceColumns();
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) {
     res.status(400).json({ success: false, message: "معرف غير صالح" });
     return;
   }
-  const [existing] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id));
+  const [existing] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id)).limit(1);
+  if (!existing) {
+    res.status(404).json({ success: false, message: "الوردية غير موجودة" });
+    return;
+  }
+  if (existing.closedAt) {
+    res.status(400).json({ success: false, message: "الوردية مغلقة مسبقاً" });
+    return;
+  }
+  const closedAt = new Date();
+  const [updated] = await db
+    .update(shiftsTable)
+    .set({
+      closedAt,
+      endTime: formatHm(closedAt),
+      isActive: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(shiftsTable.id, id))
+    .returning();
+
+  const [branch] = await db
+    .select({ name: branchesTable.name })
+    .from(branchesTable)
+    .where(eq(branchesTable.id, updated.branchId))
+    .limit(1);
+
+  res.json(serializeShift(updated, branch?.name ?? null));
+});
+
+router.delete("/:id", async (req, res) => {
+  await ensureSalesDeviceColumns();
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ success: false, message: "معرف غير صالح" });
+    return;
+  }
+  const [existing] = await db.select().from(shiftsTable).where(eq(shiftsTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ success: false, message: "الوردية غير موجودة" });
     return;

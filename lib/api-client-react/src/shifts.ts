@@ -17,47 +17,39 @@ import {
 
 type RequestOpts = CustomFetchOptions;
 
+export type ShiftKind = "morning" | "evening";
+
 export interface Shift {
   id: number;
+  kind: ShiftKind;
   name: string;
-  nameAr?: string | null;
-  code?: string | null;
   branchId: number;
-  branchName?: string;
-  startTime: string;
-  endTime: string;
-  breakMinutes: number;
-  graceMinutes: number;
-  daysOfWeek: number[];
+  branchName?: string | null;
   color: string;
-  supervisorEmployeeId?: number | null;
-  supervisorName?: string | null;
+  openedAt: string;
+  closedAt?: string | null;
+  openDate: string;
+  startTime: string;
+  endTime?: string | null;
   notes?: string | null;
   isActive: boolean;
-  employeeIds: number[];
-  employeeNames?: string[];
-  durationMinutes: number;
-  workMinutes: number;
-  isOvernight?: boolean;
+  isOpen: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface UpsertShiftBody {
-  name: string;
-  nameAr?: string;
-  code?: string;
+export interface OpenShiftBody {
+  kind: ShiftKind;
   branchId: number;
-  startTime: string;
-  endTime: string;
-  breakMinutes?: number;
-  graceMinutes?: number;
-  daysOfWeek?: number[];
-  color?: string;
-  supervisorEmployeeId?: number | null;
-  notes?: string;
-  isActive?: boolean;
-  employeeIds?: number[];
+  /** YYYY-MM-DD or ISO datetime — defaults to now */
+  openedAt?: string;
+  notes?: string | null;
+}
+
+export interface UpdateShiftBody {
+  notes?: string | null;
+  close?: boolean;
+  closedAt?: string | null;
 }
 
 export const getGetShiftsUrl = () => `/api/shifts`;
@@ -105,7 +97,7 @@ export function useGetShifts<
 }
 
 export const createShift = async (
-  body: UpsertShiftBody,
+  body: OpenShiftBody,
   options?: RequestOpts
 ): Promise<Shift> => {
   return customFetch<Shift>(getGetShiftsUrl(), {
@@ -120,14 +112,14 @@ export const useCreateShift = <TError = ErrorType<unknown>, TContext = unknown>(
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createShift>>,
     TError,
-    { data: BodyType<UpsertShiftBody> },
+    { data: BodyType<OpenShiftBody> },
     TContext
   >;
   request?: RequestOpts;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createShift>>,
   TError,
-  { data: BodyType<UpsertShiftBody> },
+  { data: BodyType<OpenShiftBody> },
   TContext
 > => {
   const { mutation: mutationOptions, request: requestOptions } = options ?? {};
@@ -140,7 +132,7 @@ export const useCreateShift = <TError = ErrorType<unknown>, TContext = unknown>(
 
 export const updateShift = async (
   id: number,
-  body: UpsertShiftBody,
+  body: UpdateShiftBody,
   options?: RequestOpts
 ): Promise<Shift> => {
   return customFetch<Shift>(`/api/shifts/${id}`, {
@@ -155,14 +147,14 @@ export const useUpdateShift = <TError = ErrorType<unknown>, TContext = unknown>(
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateShift>>,
     TError,
-    { id: number; data: BodyType<UpsertShiftBody> },
+    { id: number; data: BodyType<UpdateShiftBody> },
     TContext
   >;
   request?: RequestOpts;
 }): UseMutationResult<
   Awaited<ReturnType<typeof updateShift>>,
   TError,
-  { id: number; data: BodyType<UpsertShiftBody> },
+  { id: number; data: BodyType<UpdateShiftBody> },
   TContext
 > => {
   const { mutation: mutationOptions, request: requestOptions } = options ?? {};
@@ -170,6 +162,38 @@ export const useUpdateShift = <TError = ErrorType<unknown>, TContext = unknown>(
     mutationKey: ["updateShift"],
     ...mutationOptions,
     mutationFn: ({ id, data }) => updateShift(id, data, requestOptions),
+  });
+};
+
+export const closeShift = async (
+  id: number,
+  options?: RequestOpts
+): Promise<Shift> => {
+  return customFetch<Shift>(`/api/shifts/${id}/close`, {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const useCloseShift = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closeShift>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: RequestOpts;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closeShift>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  return useMutation({
+    mutationKey: ["closeShift"],
+    ...mutationOptions,
+    mutationFn: ({ id }) => closeShift(id, requestOptions),
   });
 };
 
