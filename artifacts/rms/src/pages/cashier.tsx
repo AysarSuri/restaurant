@@ -18,12 +18,10 @@ import {
   Banknote,
   RefreshCw,
   ShoppingBag,
-  Table2,
   ArrowRight,
   Bell,
   X,
-  DoorOpen,
-  User,
+  UserRound,
   Bike,
   Wallet,
   Pencil,
@@ -32,13 +30,14 @@ import {
   Lock,
   Undo2,
   Percent,
-  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
 import { useI18n } from "@/i18n";
 import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { DiningTableIcon } from "@/components/dining-table-icon";
+import { RoomIcon } from "@/components/room-icon";
 import { useCurrency } from "@/hooks/use-currency";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
 import { printKitchenTicketThermal } from "@/lib/print-receipt";
@@ -96,14 +95,6 @@ function formatCashierDateTime(iso: string | null | undefined) {
   }).format(d);
 }
 
-function seatIcon(kind: SeatKind): LucideIcon {
-  if (kind === "room") return DoorOpen;
-  if (kind === "person") return User;
-  if (kind === "delivery") return Bike;
-  if (kind === "takeaway") return ShoppingBag;
-  return Table2;
-}
-
 function seatTone(kind: SeatKind) {
   if (kind === "room")
     return "from-violet-500/20 to-fuchsia-500/10 text-violet-600 dark:text-violet-300 border-violet-500/30";
@@ -116,6 +107,40 @@ function seatTone(kind: SeatKind) {
   return "from-primary/20 to-primary/5 text-primary border-primary/30";
 }
 
+/** Distinct visual per order kind — table looks like a table, delivery like delivery */
+function SeatKindVisual({
+  kind,
+  tableNumber,
+  size = "md",
+  className = "",
+}: {
+  kind: SeatKind;
+  tableNumber?: string | number | null;
+  size?: "sm" | "md" | "lg";
+  className?: string;
+}) {
+  if (kind === "table") {
+    const cls =
+      size === "sm" ? "w-8 h-auto" : size === "lg" ? "w-11 h-auto" : "w-10 h-auto";
+    return <DiningTableIcon className={`${cls} ${className}`} number={tableNumber ?? undefined} />;
+  }
+  if (kind === "room") {
+    const cls =
+      size === "sm" ? "w-8 h-auto" : size === "lg" ? "w-11 h-auto" : "w-10 h-auto";
+    return <RoomIcon className={`${cls} ${className}`} number={tableNumber ?? undefined} />;
+  }
+  if (kind === "delivery") {
+    const cls = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-6 h-6" : "w-5 h-5";
+    return <Bike className={`${cls} ${className}`} />;
+  }
+  if (kind === "takeaway") {
+    const cls = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-6 h-6" : "w-5 h-5";
+    return <ShoppingBag className={`${cls} ${className}`} />;
+  }
+  const cls = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-6 h-6" : "w-5 h-5";
+  return <UserRound className={`${cls} ${className}`} />;
+}
+
 function resolveSeat(
   order: Order,
   t: (key: string, params?: Record<string, string | number>) => string
@@ -125,6 +150,7 @@ function resolveSeat(
   const tableType = String(table?.type || "").toLowerCase();
   const tableNo = table?.number?.trim();
 
+  // Order type wins first so icons match invoice kind
   if (order.type === "delivery") {
     const phone =
       order.deliveryPhone?.trim() ||
@@ -135,7 +161,7 @@ function resolveSeat(
     };
   }
 
-  if (order.type === "takeaway" && !tableNo) {
+  if (order.type === "takeaway") {
     const name = (order as { customer?: { name?: string } }).customer?.name?.trim();
     return {
       seatKind: "takeaway",
@@ -165,6 +191,11 @@ function resolveSeat(
     return { seatKind: "table", seatLabel: t("order.inside") };
   }
   return { seatKind: "takeaway", seatLabel: t("order.takeaway") };
+}
+
+function seatTableNumber(order: Order): string | undefined {
+  const n = (order as { table?: { number?: string } }).table?.number?.trim();
+  return n || undefined;
 }
 
 function toCard(
@@ -246,7 +277,6 @@ function OrderTicket({
   primaryLabel?: string;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
-  const Icon = seatIcon(card.seatKind);
   const tone = seatTone(card.seatKind);
   const createdAt = String(card.order.createdAt || "");
   const edited = isPosEdited(card.order);
@@ -272,9 +302,13 @@ function OrderTicket({
 
       <div className="p-3.5 flex items-start gap-3">
         <div
-          className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
+          className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center shrink-0 overflow-hidden ${tone}`}
         >
-          <Icon className="w-6 h-6" />
+          <SeatKindVisual
+            kind={card.seatKind}
+            tableNumber={seatTableNumber(card.order)}
+            size="md"
+          />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -422,7 +456,6 @@ function PaidListRow({
   onMoveToUnpaid?: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
-  const Icon = seatIcon(card.seatKind);
   const tone = seatTone(card.seatKind);
   const createdAt = String(card.order.createdAt || "");
   const edited = isPosEdited(card.order);
@@ -453,9 +486,13 @@ function PaidListRow({
       ) : null}
       <div className="px-3 sm:px-4 py-3 flex items-center gap-2.5 sm:gap-3 w-full min-h-[4.25rem]">
         <div
-          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border bg-gradient-to-br flex items-center justify-center shrink-0 overflow-hidden ${tone}`}
         >
-          <Icon className="w-5 h-5" />
+          <SeatKindVisual
+            kind={card.seatKind}
+            tableNumber={seatTableNumber(card.order)}
+            size="sm"
+          />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -984,7 +1021,6 @@ export default function Cashier() {
             <div className="flex-1 flex gap-2 overflow-x-auto pb-0.5 pt-1">
               <AnimatePresence>
                 {tableAlerts.map((card) => {
-                  const Icon = seatIcon(card.seatKind);
                   return (
                     <motion.button
                       key={card.order.id}
@@ -995,7 +1031,14 @@ export default function Cashier() {
                       onClick={() => openPaymentDialog(card.order)}
                       className="flex-shrink-0 flex items-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-xl px-3 py-1.5 transition-all"
                     >
-                      <Icon className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300" />
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 overflow-hidden shrink-0">
+                        <SeatKindVisual
+                          kind={card.seatKind}
+                          tableNumber={seatTableNumber(card.order)}
+                          size="sm"
+                          className="text-amber-700 dark:text-amber-300"
+                        />
+                      </span>
                       <span className="text-sm font-bold">{card.seatLabel}</span>
                       <span className="text-xs text-amber-700 dark:text-amber-300 font-display font-bold tabular-nums">
                         {formatIQD(card.amount)}
@@ -1175,7 +1218,6 @@ export default function Cashier() {
             ) : null}
             {(() => {
               const card = toCard(selectedOrder, t);
-              const Icon = seatIcon(card.seatKind);
               const received = isOrderReceived(selectedOrder);
               const typeLabel =
                 selectedOrder.type === "delivery"
@@ -1187,9 +1229,13 @@ export default function Cashier() {
                 <div className="rounded-2xl border border-border/50 bg-gradient-to-l from-secondary/40 via-card to-card p-4">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center ${seatTone(card.seatKind)}`}
+                      className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center overflow-hidden ${seatTone(card.seatKind)}`}
                     >
-                      <Icon className="w-6 h-6" />
+                      <SeatKindVisual
+                        kind={card.seatKind}
+                        tableNumber={seatTableNumber(selectedOrder)}
+                        size="lg"
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-extrabold text-[16px] truncate">{card.seatLabel}</p>
@@ -1385,10 +1431,15 @@ export default function Cashier() {
           <div className="space-y-4">
             {(() => {
               const card = toCard(paymentDialog, t);
-              const Icon = seatIcon(card.seatKind);
               return (
                 <div className="px-4 py-2.5 bg-primary/10 rounded-xl text-primary text-sm font-semibold flex items-center gap-2">
-                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/15 border border-primary/25 overflow-hidden shrink-0">
+                    <SeatKindVisual
+                      kind={card.seatKind}
+                      tableNumber={seatTableNumber(paymentDialog)}
+                      size="sm"
+                    />
+                  </span>
                   <span className="truncate">
                     {card.seatLabel} · #{card.shortNo}
                   </span>
