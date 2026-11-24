@@ -193,9 +193,14 @@ export default function POS() {
   const { data: paymentCards } = useGetCards();
   const { data: branches } = useGetBranches();
   const { data: devicePrinters } = useGetDevicePrinters();
-  const { data: driversData } = useGetDrivers({
-    params: {
-      branchId: selectedBranchId === "all" ? "" : selectedBranchId,
+  /** All active fleet drivers for delivery picker (not limited to current branch scope). */
+  const { data: driversData, isLoading: driversLoading } = useGetDrivers({
+    params: {},
+    request: {
+      headers: { "x-branch-id": "all" },
+    },
+    query: {
+      queryKey: ["/api/drivers", { scope: "pos-fleet" }],
     },
   });
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
@@ -573,10 +578,20 @@ export default function POS() {
     orderType === "delivery" ? Math.max(0, Number(appSettings?.deliveryFee) || 0) : 0;
   const total = subtotal - discount + deliveryFeeAmount;
 
-  const activeDrivers = useMemo(
-    () => (driversData?.drivers ?? []).filter((x) => x.isActive !== false),
-    [driversData?.drivers]
-  );
+  const activeDrivers = useMemo(() => {
+    const list = (driversData?.drivers ?? []).filter((x) => x.isActive !== false);
+    const branchId = selectedBranchId === "all" ? null : selectedBranchId;
+    return [...list].sort((a, b) => {
+      const rank = (d: (typeof list)[number]) => {
+        if (branchId != null && d.branchId === branchId) return 0;
+        if (d.branchId == null) return 1;
+        return 2;
+      };
+      const diff = rank(a) - rank(b);
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name, "ar");
+    });
+  }, [driversData?.drivers, selectedBranchId]);
 
   const selectedDriver = useMemo(
     () => activeDrivers.find((d) => d.id === selectedDriverId) ?? null,
@@ -2139,6 +2154,60 @@ export default function POS() {
             </div>
 
             <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-secondary/30 overflow-hidden shadow-sm">
+              <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-muted-foreground">
+                  {t("cashier.subtotal")}
+                </span>
+                <span
+                  className="font-display text-base sm:text-lg font-extrabold tabular-nums"
+                  dir="ltr"
+                >
+                  {formatMoneyAmount(subtotal)}
+                </span>
+              </div>
+
+              <div className="px-4 py-3 border-b border-border/40">
+                <button
+                  type="button"
+                  onClick={() => setIsDiscountPadOpen(true)}
+                  className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 hover:border-amber-500/50 hover:bg-amber-500/5 px-3 py-2.5 transition-colors touch-manipulation"
+                >
+                  <span className="inline-flex items-center gap-2 font-extrabold text-sm">
+                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                      <Percent className="w-4 h-4" />
+                    </span>
+                    {t("pos.invoiceDiscount")}
+                  </span>
+                  <span
+                    className={`font-display text-lg sm:text-xl font-extrabold tabular-nums ${
+                      discount > 0
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-muted-foreground"
+                    }`}
+                    dir="ltr"
+                  >
+                    {discount > 0
+                      ? `− ${formatMoneyAmount(discount)}`
+                      : formatMoneyAmount(0)}
+                  </span>
+                </button>
+              </div>
+
+              {deliveryFeeAmount > 0 ? (
+                <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-sky-700 dark:text-sky-300 inline-flex items-center gap-1.5">
+                    <Bike className="w-3.5 h-3.5" />
+                    {t("pos.deliveryFee")}
+                  </span>
+                  <span
+                    className="font-display text-base sm:text-lg font-extrabold tabular-nums text-sky-700 dark:text-sky-300"
+                    dir="ltr"
+                  >
+                    {formatMoneyAmount(deliveryFeeAmount)}
+                  </span>
+                </div>
+              ) : null}
+
               <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Lock className="w-4 h-4" />
@@ -2323,7 +2392,12 @@ export default function POS() {
           label={t("pos.enterDiscount")}
           onCancel={() => setIsDiscountPadOpen(false)}
           onConfirm={(v) => {
-            setDiscount(Math.max(0, Math.min(v, subtotal || v)));
+            const next = Math.max(0, Math.min(v, subtotal > 0 ? subtotal : v));
+            setDiscount(next);
+            const nextTotal = subtotal - next + deliveryFeeAmount;
+            if (isCheckoutOpen && !orderSuccess) {
+              setCheckoutReceived(Math.max(0, nextTotal));
+            }
             setIsDiscountPadOpen(false);
           }}
         />
@@ -2373,7 +2447,11 @@ export default function POS() {
                 </span>
               ) : null}
             </div>
-            {activeDrivers.length === 0 ? (
+            {driversLoading ? (
+              <div className="rounded-2xl border border-border/60 bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground font-semibold">
+                {t("common.loading")}
+              </div>
+            ) : activeDrivers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/30 px-4 py-8 text-center text-sm text-muted-foreground font-semibold">
                 {t("pos.noDriversAvailable")}
               </div>
@@ -2404,9 +2482,11 @@ export default function POS() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="font-extrabold text-sm truncate">{driver.name}</p>
-                          {(driver.phone || driver.vehicleInfo) && (
-                            <p className="text-[11px] text-muted-foreground font-medium truncate mt-0.5" dir="ltr">
-                              {[driver.phone, driver.vehicleInfo].filter(Boolean).join(" · ")}
+                          {(driver.phone || driver.vehicleInfo || driver.branchName) && (
+                            <p className="text-[11px] text-muted-foreground font-medium truncate mt-0.5">
+                              {[driver.phone, driver.vehicleInfo, driver.branchName]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </p>
                           )}
                         </div>
