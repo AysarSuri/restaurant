@@ -290,6 +290,25 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  if (type === "delivery") {
+    const phoneDigits = String(deliveryPhone ?? "").replace(/\D/g, "");
+    const address = String(deliveryAddress ?? "").trim();
+    const driverOk =
+      driverId != null && Number.isFinite(Number(driverId)) && Number(driverId) > 0;
+    if (!driverOk) {
+      res.status(400).json({ error: "اختر السائق لطلب التوصيل" });
+      return;
+    }
+    if (phoneDigits.length < 7) {
+      res.status(400).json({ error: "رقم الموبايل مطلوب لطلب التوصيل" });
+      return;
+    }
+    if (!address) {
+      res.status(400).json({ error: "عنوان التوصيل مطلوب" });
+      return;
+    }
+  }
+
   let subtotal = 0;
   const itemsWithPrice: { menuItemId: number; quantity: number; unitPrice: number; notes?: string }[] = [];
 

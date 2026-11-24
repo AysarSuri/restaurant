@@ -596,7 +596,27 @@ export default function POS() {
 
   const checkoutChange = Math.max(0, checkoutReceived - total);
 
+  const deliveryPhoneDigits = deliveryPhone.replace(/\D/g, "");
+  const deliveryReady =
+    orderType !== "delivery" ||
+    (selectedDriverId != null &&
+      deliveryPhoneDigits.length >= 7 &&
+      deliveryAddress.trim().length > 0);
+
+  const deliveryBlockReason = () => {
+    if (orderType !== "delivery") return null;
+    if (selectedDriverId == null) return t("pos.needDriver");
+    if (deliveryPhoneDigits.length < 7) return t("pos.needDeliveryPhone");
+    if (!deliveryAddress.trim()) return t("pos.needDeliveryAddress");
+    return null;
+  };
+
   const openCheckout = () => {
+    const blocked = deliveryBlockReason();
+    if (blocked) {
+      toast({ title: blocked, variant: "destructive" });
+      return;
+    }
     setCartOpen(false);
     setCheckoutPayMethod("cash");
     setCheckoutReceived(total);
@@ -747,6 +767,11 @@ export default function POS() {
     paymentMethod: "cash" | "card" | "transfer",
     opts?: { cardId?: number | null; cardName?: string; print?: boolean }
   ) => {
+    const blocked = deliveryBlockReason();
+    if (blocked) {
+      toast({ title: blocked, variant: "destructive" });
+      return;
+    }
     const cardNote =
       paymentMethod === "card" && opts?.cardName
         ? t("pos.cardLine", { name: opts.cardName })
@@ -922,9 +947,13 @@ export default function POS() {
                       value={selectedDriverId == null ? "" : String(selectedDriverId)}
                       onChange={(v) => setSelectedDriverId(v ? Number(v) : null)}
                       options={driverOptions}
-                      placeholder={t("pos.selectDriver")}
+                      placeholder={`${t("pos.selectDriver")} *`}
                       searchPlaceholder={t("drivers.search")}
-                      className="w-full"
+                      className={`w-full ${
+                        selectedDriverId == null
+                          ? "[&_button]:border-rose-500/55 [&_button]:ring-1 [&_button]:ring-rose-500/25"
+                          : ""
+                      }`}
                     />
                   </div>
                 )}
@@ -976,24 +1005,30 @@ export default function POS() {
                     className={`min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start ${
                       phoneKnown === true
                         ? "border-success/60"
-                        : phoneKnown === false
-                          ? "border-destructive/60"
-                          : "border-border/60 hover:border-primary/40"
+                        : deliveryPhoneDigits.length < 7
+                          ? "border-rose-500/55 ring-1 ring-rose-500/20"
+                          : phoneKnown === false
+                            ? "border-destructive/60"
+                            : "border-border/60 hover:border-primary/40"
                     }`}
                   >
                     <span
                       className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         phoneKnown === true
                           ? "bg-success/15 text-success"
-                          : phoneKnown === false
-                            ? "bg-destructive/15 text-destructive"
-                            : "bg-primary/15 text-primary"
+                          : deliveryPhoneDigits.length < 7
+                            ? "bg-rose-500/15 text-rose-600"
+                            : phoneKnown === false
+                              ? "bg-destructive/15 text-destructive"
+                              : "bg-primary/15 text-primary"
                       }`}
                     >
                       <Phone className="w-4 h-4" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground">{t("common.phoneNumber")}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground">
+                        {t("common.phoneNumber")} *
+                      </p>
                       <p
                         className={`text-sm font-extrabold tabular-nums truncate ${
                           deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
@@ -1012,13 +1047,25 @@ export default function POS() {
                   <button
                     type="button"
                     onClick={() => setIsAddressPadOpen(true)}
-                    className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
+                    className={`min-w-0 flex-1 flex items-center gap-2 rounded-xl border-2 bg-background/60 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start ${
+                      deliveryAddress.trim()
+                        ? "border-border/60 hover:border-primary/40"
+                        : "border-rose-500/55 ring-1 ring-rose-500/20"
+                    }`}
                   >
-                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                    <span
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        deliveryAddress.trim()
+                          ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                          : "bg-rose-500/15 text-rose-600"
+                      }`}
+                    >
                       <MapPin className="w-4 h-4" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground">{t("pos.deliveryAddress")}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground">
+                        {t("pos.deliveryAddress")} *
+                      </p>
                       <p
                         className={`text-sm font-extrabold truncate ${
                           deliveryAddress ? "text-foreground" : "text-muted-foreground/70"
@@ -1206,15 +1253,18 @@ export default function POS() {
               disabled={
                 cart.length === 0 ||
                 (orderType === "dine_in" && !selectedTableId) ||
+                !deliveryReady ||
                 isSavingOrder
               }
               onClick={openCheckout}
             >
               {orderType === "dine_in" && !selectedTableId
                 ? t("pos.chooseSeatFirst")
-                : saveForCashier
-                  ? t("pos.saveInvoice")
-                  : t("pos.payAndInvoice")}
+                : orderType === "delivery" && !deliveryReady
+                  ? t("pos.deliveryRequiresAll")
+                  : saveForCashier
+                    ? t("pos.saveInvoice")
+                    : t("pos.payAndInvoice")}
             </Button>
           </div>
         </div>

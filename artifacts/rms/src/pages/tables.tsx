@@ -25,6 +25,7 @@ import {
 import { DiningTableIcon } from "@/components/dining-table-icon";
 import { RoomIcon } from "@/components/room-icon";
 import { TABLE_STATUS_META } from "@/lib/table-status";
+import { useBranch } from "@/lib/branch-context";
 
 type EntityType = RestaurantTableType;
 
@@ -91,6 +92,7 @@ const EMPTY_TABLE_FORM = {
 const STATUS_META = TABLE_STATUS_META;
 
 export default function Tables() {
+  const { selectedBranchId } = useBranch();
   const { data: tables, isLoading, refetch } = useGetTables();
   const { mutate: updateTable, isPending } = useUpdateTable();
   const { mutate: createTable, isPending: isCreating } = useCreateTable();
@@ -218,9 +220,7 @@ export default function Tables() {
     const type = addForm.type;
     const labels = TYPE_META[type];
     const isPerson = type === "person";
-    const number = isPerson
-      ? addForm.number.trim().replace(/\s+/g, " ")
-      : addForm.number.trim();
+    const number = addForm.number.trim().replace(/\s+/g, " ");
     const capacity = Number(addForm.capacity);
     if (!number) {
       setAddError(isPerson ? "اسم الشخص مطلوب" : `${labels.numberLabel} مطلوب`);
@@ -230,13 +230,26 @@ export default function Tables() {
       setAddError("السعة يجب أن تكون رقمًا أكبر من صفر");
       return;
     }
+    const targetKey = normalizeName(number);
     const duplicate = tables?.some((t) => {
       if ((t.type ?? "table") !== type) return false;
-      if (isPerson) return normalizeName(String(t.number)) === normalizeName(number);
-      return t.number === number;
+      if (
+        selectedBranchId !== "all" &&
+        t.branchId != null &&
+        t.branchId !== selectedBranchId
+      ) {
+        return false;
+      }
+      return normalizeName(String(t.number)) === targetKey;
     });
     if (duplicate) {
-      setAddError(isPerson ? "اسم الشخص مستخدم مسبقًا" : `${labels.numberLabel} مستخدم مسبقًا`);
+      setAddError(
+        isPerson
+          ? "اسم الشخص مستخدم مسبقًا في هذا الفرع"
+          : type === "room"
+            ? "رقم الغرفة مستخدم مسبقًا في هذا الفرع"
+            : "رقم الطاولة مستخدم مسبقًا في هذا الفرع"
+      );
       return;
     }
     setAddError("");
@@ -260,6 +273,7 @@ export default function Tables() {
         onError: (err: any) => {
           setAddError(
             err?.data?.error ||
+              err?.response?.data?.error ||
               err?.data?.message ||
               err?.message ||
               `تعذر إضافة ${labels.label}`

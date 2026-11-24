@@ -940,6 +940,11 @@ export default function SettingsPage() {
                                     {t(labelKey)}
                                   </p>
                                 </div>
+                                {type === "delivery" ? (
+                                  <div className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2.5 text-[11px] sm:text-xs font-bold text-cyan-900 dark:text-cyan-100 leading-relaxed">
+                                    {t("settings.deliveryRequiredFields")}
+                                  </div>
+                                ) : null}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                   <button
                                     type="button"

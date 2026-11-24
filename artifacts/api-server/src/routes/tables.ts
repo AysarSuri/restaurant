@@ -1,16 +1,49 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { restaurantTablesTable } from "@workspace/db/schema";
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, ne } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 
 const router: IRouter = Router();
 
-const normalizePersonName = (value: string) =>
+type SeatType = "table" | "room" | "person";
+
+const normalizeSeatNumber = (value: unknown) =>
   String(value ?? "")
     .trim()
     .replace(/\s+/g, " ")
     .toLowerCase();
+
+function duplicateError(type: SeatType) {
+  if (type === "person") return "اسم الشخص مستخدم مسبقًا في هذا الفرع";
+  if (type === "room") return "رقم الغرفة مستخدم مسبقًا في هذا الفرع";
+  return "رقم الطاولة مستخدم مسبقًا في هذا الفرع";
+}
+
+async function findDuplicateSeat(opts: {
+  type: SeatType;
+  number: string;
+  branchId: number;
+  excludeId?: number;
+}) {
+  const target = normalizeSeatNumber(opts.number);
+  if (!target) return null;
+
+  const rows = await db
+    .select()
+    .from(restaurantTablesTable)
+    .where(
+      and(
+        eq(restaurantTablesTable.type, opts.type),
+        eq(restaurantTablesTable.branchId, opts.branchId),
+        opts.excludeId != null
+          ? ne(restaurantTablesTable.id, opts.excludeId)
+          : undefined
+      )
+    );
+
+  return rows.find((row) => normalizeSeatNumber(row.number) === target) ?? null;
+}
 
 router.get("/", async (req, res) => {
   const scope = parseBranchScope(req);
@@ -31,36 +64,33 @@ router.post("/", async (req, res) => {
     res.status(400).json({ error: "اختر فرعاً قبل إضافة طاولة" });
     return;
   }
-  const resolvedType =
+  const resolvedType: SeatType =
     type === "room" || type === "person" || type === "table" ? type : "table";
-  const resolvedNumber =
-    resolvedType === "person"
-      ? String(number ?? "")
-          .trim()
-          .replace(/\s+/g, " ")
-      : number;
+  const resolvedNumber = String(number ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
   if (!resolvedNumber) {
     res.status(400).json({
-      error: resolvedType === "person" ? "اسم الشخص مطلوب" : "رقم الطاولة مطلوب",
+      error:
+        resolvedType === "person"
+          ? "اسم الشخص مطلوب"
+          : resolvedType === "room"
+            ? "رقم الغرفة مطلوب"
+            : "رقم الطاولة مطلوب",
     });
     return;
   }
-  if (resolvedType === "person") {
-    const existing = await db
-      .select()
-      .from(restaurantTablesTable)
-      .where(
-        and(
-          eq(restaurantTablesTable.type, "person"),
-          eq(restaurantTablesTable.branchId, resolvedBranchId)
-        )
-      );
-    const target = normalizePersonName(resolvedNumber);
-    if (existing.some((row) => normalizePersonName(row.number) === target)) {
-      res.status(400).json({ error: "اسم الشخص مستخدم مسبقًا" });
-      return;
-    }
+
+  const dup = await findDuplicateSeat({
+    type: resolvedType,
+    number: resolvedNumber,
+    branchId: resolvedBranchId,
+  });
+  if (dup) {
+    res.status(400).json({ error: duplicateError(resolvedType) });
+    return;
   }
+
   const [table] = await db
     .insert(restaurantTablesTable)
     .values({
@@ -78,16 +108,62 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   const { number, capacity, location, status, type, branchId } = req.body;
-  const resolvedType =
-    type === "room" || type === "person" || type === "table" ? type : undefined;
+
+  const [existing] = await db
+    .select()
+    .from(restaurantTablesTable)
+    .where(eq(restaurantTablesTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const resolvedType: SeatType =
+    type === "room" || type === "person" || type === "table"
+      ? type
+      : ((existing.type as SeatType) ?? "table");
+  const nextNumber =
+    number !== undefined && number !== null
+      ? String(number).trim().replace(/\s+/g, " ")
+      : existing.number;
+  const nextBranchId =
+    branchId != null && Number.isFinite(Number(branchId))
+      ? Number(branchId)
+      : existing.branchId;
+
+  if (!nextNumber) {
+    res.status(400).json({
+      error:
+        resolvedType === "person"
+          ? "اسم الشخص مطلوب"
+          : resolvedType === "room"
+            ? "رقم الغرفة مطلوب"
+            : "رقم الطاولة مطلوب",
+    });
+    return;
+  }
+
+  if (nextBranchId != null) {
+    const dup = await findDuplicateSeat({
+      type: resolvedType,
+      number: nextNumber,
+      branchId: nextBranchId,
+      excludeId: id,
+    });
+    if (dup) {
+      res.status(400).json({ error: duplicateError(resolvedType) });
+      return;
+    }
+  }
+
   const [table] = await db
     .update(restaurantTablesTable)
     .set({
-      number,
-      capacity,
-      location,
-      status,
-      ...(resolvedType ? { type: resolvedType } : {}),
+      number: nextNumber,
+      ...(capacity !== undefined ? { capacity } : {}),
+      ...(location !== undefined ? { location } : {}),
+      ...(status !== undefined ? { status } : {}),
+      type: resolvedType,
       ...(branchId != null ? { branchId: Number(branchId) } : {}),
     })
     .where(eq(restaurantTablesTable.id, id))
