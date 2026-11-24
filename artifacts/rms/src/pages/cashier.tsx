@@ -7,6 +7,7 @@ import {
   useGetSettings,
   useGetBranches,
   useGetDevicePrinters,
+  useGetCards,
   type Order,
 } from "@workspace/api-client-react";
 import { Button, Badge, Dialog } from "@/components/ui-elements";
@@ -15,7 +16,6 @@ import {
   CheckCircle2,
   CreditCard,
   Banknote,
-  Phone,
   RefreshCw,
   ShoppingBag,
   Table2,
@@ -28,6 +28,8 @@ import {
   Wallet,
   Pencil,
   Printer,
+  FileText,
+  Lock,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/App";
@@ -37,7 +39,8 @@ import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { useCurrency } from "@/hooks/use-currency";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
-import { printThermalReceipt } from "@/lib/print-receipt";
+import { printKitchenTicketThermal } from "@/lib/print-receipt";
+import { NumericKeypad } from "@/components/numeric-keypad";
 import { toast } from "@/hooks/use-toast";
 
 type SeatKind = "table" | "room" | "person" | "takeaway" | "delivery";
@@ -228,12 +231,11 @@ function OrderTicket({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.18 }}
-      className={`group rounded-[1.35rem] overflow-hidden shadow-[0_8px_24px_-18px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_28px_-16px_rgba(0,0,0,0.4)] transition-shadow cursor-pointer ${urgencyRing(createdAt)} ${
+      className={`group rounded-[1.35rem] overflow-hidden shadow-[0_8px_24px_-18px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_28px_-16px_rgba(0,0,0,0.4)] transition-shadow ${urgencyRing(createdAt)} ${
         page === "unpaid"
           ? "border-2 border-amber-500/60 bg-gradient-to-b from-amber-500/18 via-card to-orange-500/8 hover:border-amber-500/80"
           : "border-2 border-emerald-500/55 bg-gradient-to-b from-emerald-500/15 via-card to-teal-500/8 hover:border-emerald-500/75"
       } ${edited ? "ring-2 ring-indigo-500/35" : ""}`}
-      onClick={onOpen}
     >
       {edited ? (
         <div className="px-3 pt-3">
@@ -302,39 +304,76 @@ function OrderTicket({
         </div>
       </div>
 
-      <div className="px-3.5 pb-3.5 space-y-2">
-        {onPrint ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrint();
-            }}
-            className="w-full h-10 rounded-xl border-2 border-border/60 bg-background/70 hover:bg-background font-extrabold text-[12px] flex items-center justify-center gap-2 touch-manipulation active:scale-[0.99] transition-all"
-          >
-            <Printer className="w-4 h-4" />
-            {t("cashier.printReceipt")}
-          </button>
-        ) : null}
-        {page === "unpaid" && onPrimary ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrimary();
-            }}
-            className="w-full h-11 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all bg-gradient-to-l from-amber-500 to-orange-500"
-          >
-            <Wallet className="w-4 h-4" />
-            {primaryLabel}
-          </button>
-        ) : null}
-        {page === "paid" ? (
-          <div className="h-9 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[12px] font-extrabold flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            {t("cashier.received")}
+      <div className="px-3.5 pb-3.5">
+        {page === "unpaid" ? (
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrint?.();
+              }}
+              disabled={!onPrint}
+              className="h-12 min-h-12 rounded-xl border-2 border-border/70 bg-background/80 hover:bg-background font-extrabold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 touch-manipulation active:scale-[0.98] transition-all px-1.5 disabled:opacity-50"
+            >
+              <Printer className="w-4 h-4 shrink-0" />
+              <span className="truncate leading-tight">{t("common.print")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen();
+              }}
+              className="h-12 min-h-12 rounded-xl border-2 border-sky-500/45 bg-sky-500/10 hover:bg-sky-500/15 text-sky-800 dark:text-sky-200 font-extrabold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 touch-manipulation active:scale-[0.98] transition-all px-1.5"
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              <span className="truncate leading-tight">{t("cashier.details")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrimary?.();
+              }}
+              disabled={!onPrimary}
+              className="h-12 min-h-12 rounded-xl text-white font-extrabold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 hover:brightness-105 active:scale-[0.98] transition-all touch-manipulation bg-gradient-to-l from-amber-500 to-orange-500 px-1.5 disabled:opacity-50"
+            >
+              <Wallet className="w-4 h-4 shrink-0" />
+              <span className="truncate leading-tight">{t("cashier.collectShort")}</span>
+            </button>
           </div>
-        ) : null}
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrint?.();
+              }}
+              disabled={!onPrint}
+              className="h-12 min-h-12 rounded-xl border-2 border-border/70 bg-background/80 hover:bg-background font-extrabold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 touch-manipulation active:scale-[0.98] transition-all px-1.5 disabled:opacity-50"
+            >
+              <Printer className="w-4 h-4 shrink-0" />
+              <span className="truncate leading-tight">{t("common.print")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen();
+              }}
+              className="h-12 min-h-12 rounded-xl border-2 border-sky-500/45 bg-sky-500/10 hover:bg-sky-500/15 text-sky-800 dark:text-sky-200 font-extrabold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 touch-manipulation active:scale-[0.98] transition-all px-1.5"
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              <span className="truncate leading-tight">{t("cashier.details")}</span>
+            </button>
+            <div className="h-12 min-h-12 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] sm:text-xs font-extrabold flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="truncate leading-tight">{t("cashier.colPaid")}</span>
+            </div>
+          </div>
+        )}
       </div>
     </motion.article>
   );
@@ -365,18 +404,16 @@ function PaidListRow({
           : t("cashier.received");
 
   return (
-    <motion.button
-      type="button"
+    <motion.div
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      onClick={onOpen}
-      className={`w-full text-start rounded-2xl border-2 px-3 sm:px-4 py-3 flex flex-col gap-2 transition-colors touch-manipulation ${
+      className={`w-full rounded-2xl border-2 px-3 sm:px-4 py-3 flex flex-col gap-2.5 ${
         edited
-          ? "border-indigo-500/45 bg-gradient-to-l from-indigo-500/10 via-emerald-500/10 to-card hover:border-indigo-500/60"
-          : "border-emerald-500/40 bg-gradient-to-l from-emerald-500/12 via-card to-teal-500/8 hover:border-emerald-500/55"
+          ? "border-indigo-500/45 bg-gradient-to-l from-indigo-500/10 via-emerald-500/10 to-card"
+          : "border-emerald-500/40 bg-gradient-to-l from-emerald-500/12 via-card to-teal-500/8"
       }`}
     >
       {edited ? <PosEditedBanner order={card.order} t={t} compact /> : null}
@@ -402,38 +439,41 @@ function PaidListRow({
             <span>{pay}</span>
           </div>
         </div>
-      <div className="shrink-0 text-end flex flex-col items-end gap-1.5">
-        <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
-          {formatIQD(card.amount)}
-        </p>
-        <div className="flex items-center gap-1.5">
-          {onPrint ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPrint();
-              }}
-              className="h-7 w-7 rounded-lg border border-border/60 bg-background/80 hover:bg-background flex items-center justify-center touch-manipulation"
-              title={t("cashier.printReceipt")}
-              aria-label={t("cashier.printReceipt")}
-            >
-              <Printer className="w-3.5 h-3.5" />
-            </button>
-          ) : null}
-          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+        <div className="shrink-0 text-end">
+          <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
+            {formatIQD(card.amount)}
+          </p>
+          <span className="inline-flex items-center gap-1 mt-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="w-3 h-3" />
             {t("cashier.colPaid")}
           </span>
         </div>
       </div>
-    </div>
-    </motion.button>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onPrint}
+          disabled={!onPrint}
+          className="h-11 min-h-11 rounded-xl border-2 border-border/70 bg-background/80 hover:bg-background font-extrabold text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          <Printer className="w-4 h-4 shrink-0" />
+          {t("common.print")}
+        </button>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="h-11 min-h-11 rounded-xl border-2 border-sky-500/45 bg-sky-500/10 hover:bg-sky-500/15 text-sky-800 dark:text-sky-200 font-extrabold text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all"
+        >
+          <FileText className="w-4 h-4 shrink-0" />
+          {t("cashier.details")}
+        </button>
+      </div>
+    </motion.div>
   );
 }
 
 export default function Cashier() {
-  const { t, formatDate } = useI18n();
+  const { t } = useI18n();
   const { user } = useAuth();
   const { selectedBranchId, branchLabel } = useBranch();
   const [, navigate] = useLocation();
@@ -479,7 +519,12 @@ export default function Cashier() {
   const { mutate: updateStatus, isPending: isUpdating } = useUpdateOrderStatus();
   const { data: appSettings } = useGetSettings();
   const { data: branches } = useGetBranches();
-  const { format: formatMoneyAmount } = useCurrency();
+  const { data: paymentCards } = useGetCards();
+  const {
+    format: formatMoneyAmount,
+    symbol: currencySymbol,
+    decimalPlaces,
+  } = useCurrency();
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
   const { data: devicePrinters } = useGetDevicePrinters();
   const devicePrinter = useMemo(() => {
@@ -491,9 +536,19 @@ export default function Cashier() {
     );
   }, [devicePrinters, deviceKey]);
 
+  const branchPaymentCards = useMemo(() => {
+    const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
+    if (selectedBranchId === "all") return list;
+    return list.filter((c) => (c.branchIds ?? []).includes(selectedBranchId));
+  }, [paymentCards, selectedBranchId]);
+
   const [page, setPage] = useState<CashierPage>("unpaid");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [paymentDialog, setPaymentDialog] = useState<Order | null>(null);
+  const [checkoutPayMethod, setCheckoutPayMethod] = useState<"cash" | "card">("cash");
+  const [checkoutReceived, setCheckoutReceived] = useState(0);
+  const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
+  const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
   const [dismissedTableNotifs, setDismissedTableNotifs] = useState<Set<number>>(
     () => new Set()
   );
@@ -509,8 +564,18 @@ export default function Cashier() {
   useEffect(() => {
     setSelectedOrder(null);
     setPaymentDialog(null);
+    setIsReceivedPadOpen(false);
     setDismissedTableNotifs(new Set());
   }, [selectedBranchId]);
+
+  const openPaymentDialog = (order: Order) => {
+    const total = Number(order.total) || 0;
+    setCheckoutPayMethod("cash");
+    setCheckoutReceived(total);
+    setCheckoutCardId(null);
+    setIsReceivedPadOpen(false);
+    setPaymentDialog(order);
+  };
 
   useEffect(() => {
     const bump = () => {
@@ -609,18 +674,22 @@ export default function Cashier() {
     }
   };
 
-  const confirmCashierSave = (
-    order: Order,
-    paymentMethod: "cash" | "card" | "transfer"
-  ) => {
+  const confirmCashierCollect = () => {
+    if (!paymentDialog) return;
+    const total = Number(paymentDialog.total) || 0;
+    if (checkoutPayMethod === "cash" && checkoutReceived < total) return;
+    if (checkoutPayMethod === "card" && !checkoutCardId) return;
+
+    const paymentMethod = checkoutPayMethod === "card" ? "card" : "cash";
     // Cashier collect = واصل only — never send to kitchen from this screen
     const keepKitchen =
-      order.status === "preparing" || order.status === "ready"
-        ? order.status
+      paymentDialog.status === "preparing" || paymentDialog.status === "ready"
+        ? paymentDialog.status
         : "paid";
+
     updateStatus(
       {
-        id: order.id,
+        id: paymentDialog.id,
         data: {
           status: keepKitchen,
           paymentMethod,
@@ -630,6 +699,7 @@ export default function Cashier() {
         onSuccess: () => {
           setPaymentDialog(null);
           setSelectedOrder(null);
+          setIsReceivedPadOpen(false);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
           try {
             localStorage.setItem("rms-orders-bump", String(Date.now()));
@@ -645,13 +715,6 @@ export default function Cashier() {
 
   const primaryPayLabel = t("cashier.collectPaid");
 
-  const paymentLabelFor = (order: Order) => {
-    if (order.paymentMethod === "cash") return t("pos.cash");
-    if (order.paymentMethod === "card") return t("common.card");
-    if (order.paymentMethod === "transfer") return t("common.transfer");
-    return t("cashier.colUnpaid");
-  };
-
   const printCashierReceipt = (order: Order) => {
     const card = toCard(order, t);
     const branch =
@@ -662,58 +725,57 @@ export default function Cashier() {
         ? (branches ?? []).find((b) => b.id === selectedBranchId)
         : null);
     const created = new Date(order.createdAt);
-    const pad2 = (n: number) => String(n).padStart(2, "0");
-    const timeLabel = `${pad2(created.getHours())}:${pad2(created.getMinutes())}:${pad2(created.getSeconds())}`;
+    const statusLabel =
+      order.status === "ready"
+        ? t("kds.colReady")
+        : order.status === "served"
+          ? t("kds.colServed")
+          : order.status === "preparing"
+            ? t("kds.colPreparing")
+            : t("cashier.colUnpaid");
     const typeLabel =
       order.type === "delivery"
         ? t("order.delivery")
         : order.type === "takeaway"
           ? t("order.takeaway")
           : t("order.dineIn");
-    const total = Number(order.total) || 0;
-    const subtotal = Number(order.subtotal) || 0;
-    const discount = Number(order.discount) || 0;
-    const deliveryFee = Number(order.deliveryFee) || 0;
 
     try {
-      printThermalReceipt({
+      // Same kitchen thermal ticket as KDS (no prices)
+      printKitchenTicketThermal({
         restaurantName:
           appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
         branchName: branch?.name?.trim() || branchLabel,
-        mobile1: branch?.mobile1,
-        mobile2: branch?.mobile2,
-        address: branch?.address,
         logoUrl: branch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
         invoiceNumber: order.orderNumber,
-        dateLabel: formatDate(created),
-        timeLabel,
+        dateLabel: created.toLocaleDateString("en-GB", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          numberingSystem: "latn",
+        }),
+        timeLabel: created.toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          numberingSystem: "latn",
+        }),
         orderTypeLabel: typeLabel,
         seatLabel: card.seatLabel,
-        items: (order.items ?? []).map((item: any) => {
-          const unit = Number(item.unitPrice ?? item.price ?? item.menuItem?.price ?? 0) || 0;
-          const qty = Number(item.quantity) || 0;
-          return {
-            name: item.menuItem?.nameAr || t("common.item"),
-            quantity: qty,
-            unitPrice: unit,
-            lineTotal: Number(item.totalPrice) || unit * qty,
-          };
-        }),
-        subtotal,
-        discount,
-        deliveryFee,
-        total,
-        paymentLabel: paymentLabelFor(order),
-        received: isOrderReceived(order) ? total : undefined,
-        change: undefined,
-        formatMoney: formatMoneyAmount,
+        kitchenStatusLabel: statusLabel,
+        items: (order.items ?? []).map((item: any) => ({
+          name: item.menuItem?.nameAr || t("common.item"),
+          quantity: item.quantity,
+          notes: item.notes,
+        })),
+        orderNotes: order.notes,
         printerName: devicePrinter?.printerName?.trim() || null,
       });
       toast({
         title: t("cashier.printOk"),
         description: devicePrinter?.printerName?.trim()
           ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
-          : t("cashier.printHint"),
+          : t("kds.printTicketHint"),
       });
     } catch {
       toast({
@@ -723,6 +785,14 @@ export default function Cashier() {
       });
     }
   };
+
+  const paymentTotal = Number(paymentDialog?.total) || 0;
+  const checkoutChange = Math.max(0, checkoutReceived - paymentTotal);
+  const canConfirmCollect =
+    Boolean(paymentDialog) &&
+    !isUpdating &&
+    ((checkoutPayMethod === "cash" && checkoutReceived >= paymentTotal) ||
+      (checkoutPayMethod === "card" && checkoutCardId != null));
 
   const showSpin = manualRefreshing;
 
@@ -798,7 +868,7 @@ export default function Cashier() {
                       initial={{ opacity: 0, scale: 0.92 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.92 }}
-                      onClick={() => setPaymentDialog(card.order)}
+                      onClick={() => openPaymentDialog(card.order)}
                       className="flex-shrink-0 flex items-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-xl px-3 py-1.5 transition-all"
                     >
                       <Icon className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300" />
@@ -947,7 +1017,7 @@ export default function Cashier() {
                       page="unpaid"
                       t={t}
                       onOpen={() => setSelectedOrder(card.order)}
-                      onPrimary={() => setPaymentDialog(card.order)}
+                      onPrimary={() => openPaymentDialog(card.order)}
                       onPrint={() => printCashierReceipt(card.order)}
                       primaryLabel={primaryPayLabel}
                     />
@@ -975,81 +1045,139 @@ export default function Cashier() {
               const card = toCard(selectedOrder, t);
               const Icon = seatIcon(card.seatKind);
               const received = isOrderReceived(selectedOrder);
+              const typeLabel =
+                selectedOrder.type === "delivery"
+                  ? t("order.delivery")
+                  : selectedOrder.type === "takeaway"
+                    ? t("order.takeaway")
+                    : t("order.dineIn");
               return (
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center ${seatTone(card.seatKind)}`}
-                  >
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-extrabold text-[16px]">{card.seatLabel}</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      <Badge
-                        variant="outline"
-                        className={
-                          received
-                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                            : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200"
-                        }
-                      >
-                        {received ? t("cashier.colPaid") : t("cashier.colUnpaid")}
-                      </Badge>
-                      <Badge variant="warning">
-                        <Clock className="w-3 h-3 me-1" />
-                        {elapsed(String(card.order.createdAt), t)}
-                      </Badge>
+                <div className="rounded-2xl border border-border/50 bg-gradient-to-l from-secondary/40 via-card to-card p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center ${seatTone(card.seatKind)}`}
+                    >
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-extrabold text-[16px] truncate">{card.seatLabel}</p>
+                      <p className="text-xs font-bold text-muted-foreground mt-0.5 tabular-nums">
+                        #{selectedOrder.orderNumber} · {typeLabel}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <Badge
+                          variant="outline"
+                          className={
+                            received
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                              : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                          }
+                        >
+                          {received ? t("cashier.colPaid") : t("cashier.colUnpaid")}
+                        </Badge>
+                        <Badge variant="warning">
+                          <Clock className="w-3 h-3 me-1" />
+                          {elapsed(String(card.order.createdAt), t)}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </div>
               );
             })()}
 
-            <div className="space-y-2 bg-secondary/30 rounded-xl p-4">
-              {(selectedOrder.items ?? []).map((item: any, idx: number) => (
-                <div
-                  key={idx}
-                  className="flex justify-between text-sm border-b border-border/30 pb-2 last:border-0 last:pb-0 gap-3"
-                >
-                  <span className="font-semibold">
-                    {item.menuItem?.nameAr || t("common.item")}
+            <div className="rounded-2xl border border-border/50 overflow-hidden">
+              <div className="px-3.5 py-2.5 border-b border-border/40 bg-secondary/35 flex items-center justify-between gap-2">
+                <p className="text-xs font-extrabold tracking-wide uppercase text-muted-foreground">
+                  {t("cashier.invoiceLines")}
+                </p>
+                <p className="text-[10px] font-bold text-muted-foreground">
+                  {t("cashier.linesCount", { n: selectedOrder.items?.length ?? 0 })}
+                </p>
+              </div>
+              <div className="divide-y divide-border/40">
+                {(selectedOrder.items ?? []).map((item: any, idx: number) => {
+                  const unit =
+                    Number(item.unitPrice ?? item.price ?? item.menuItem?.price ?? 0) || 0;
+                  const qty = Number(item.quantity) || 0;
+                  const line = Number(item.totalPrice) || unit * qty;
+                  return (
+                    <div key={item.id ?? idx} className="px-3.5 py-3 flex items-start gap-3">
+                      <span className="min-w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm font-black tabular-nums shrink-0">
+                        {qty}×
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-extrabold text-sm leading-snug">
+                          {item.menuItem?.nameAr || t("common.item")}
+                        </p>
+                        <p className="text-[11px] font-semibold text-muted-foreground mt-0.5 tabular-nums">
+                          {t("cashier.unitPrice")}: {formatMoneyAmount(unit)}
+                        </p>
+                        {item.notes ? (
+                          <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mt-1">
+                            {t("common.note", { text: item.notes })}
+                          </p>
+                        ) : null}
+                      </div>
+                      <p className="font-display font-black text-primary tabular-nums text-sm shrink-0">
+                        {formatMoneyAmount(line)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-3.5 py-3 bg-secondary/25 space-y-1.5 border-t border-border/40">
+                <div className="flex justify-between text-sm font-bold">
+                  <span className="text-muted-foreground">{t("cashier.subtotal")}</span>
+                  <span className="tabular-nums font-display">
+                    {formatMoneyAmount(Number(selectedOrder.subtotal) || 0)}
                   </span>
-                  <div className="flex gap-4 shrink-0">
-                    <span className="text-muted-foreground">×{item.quantity}</span>
-                    <span className="font-display font-bold text-primary tabular-nums">
-                      {formatIQD(
-                        (item.price ?? item.unitPrice ?? item.menuItem?.price ?? 0) *
-                          item.quantity
-                      )}
+                </div>
+                {Number(selectedOrder.discount) > 0 ? (
+                  <div className="flex justify-between text-sm font-bold">
+                    <span className="text-muted-foreground">{t("pos.discountShort")}</span>
+                    <span className="tabular-nums font-display text-rose-600">
+                      − {formatMoneyAmount(Number(selectedOrder.discount) || 0)}
                     </span>
                   </div>
+                ) : null}
+                {Number(selectedOrder.deliveryFee) > 0 ? (
+                  <div className="flex justify-between text-sm font-bold">
+                    <span className="text-muted-foreground">{t("pos.deliveryFee")}</span>
+                    <span className="tabular-nums font-display">
+                      {formatMoneyAmount(Number(selectedOrder.deliveryFee) || 0)}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between items-center pt-2 border-t border-border/50">
+                  <span className="font-black text-base">{t("common.total")}</span>
+                  <span className="text-primary font-display font-black text-xl tabular-nums">
+                    {formatMoneyAmount(Number(selectedOrder.total) || 0)}
+                  </span>
                 </div>
-              ))}
+              </div>
             </div>
 
-            <div className="flex justify-between font-black text-xl border-t border-border/50 pt-3">
-              <span>{t("common.total")}</span>
-              <span className="text-primary font-display tabular-nums">
-                {formatIQD(selectedOrder.total ?? 0)}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2.5">
+            <div
+              className={`grid gap-2.5 ${
+                !isOrderReceived(selectedOrder) ? "grid-cols-2" : "grid-cols-1"
+              }`}
+            >
               <Button
                 variant="outline"
-                className="w-full h-12 gap-2 font-extrabold rounded-2xl"
+                className="h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation"
                 onClick={() => printCashierReceipt(selectedOrder)}
               >
-                <Printer className="w-5 h-5" />
-                {t("cashier.printReceipt")}
+                <Printer className="w-5 h-5 shrink-0" />
+                <span className="truncate">{t("cashier.printReceipt")}</span>
               </Button>
               {!isOrderReceived(selectedOrder) ? (
                 <Button
-                  className="w-full h-12 gap-2 font-extrabold"
-                  onClick={() => setPaymentDialog(selectedOrder)}
+                  className="h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation"
+                  onClick={() => openPaymentDialog(selectedOrder)}
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  {primaryPayLabel}
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  <span className="truncate">{primaryPayLabel}</span>
                 </Button>
               ) : null}
             </div>
@@ -1058,9 +1186,13 @@ export default function Cashier() {
       </Dialog>
 
       <Dialog
-        isOpen={!!paymentDialog}
-        onClose={() => setPaymentDialog(null)}
+        isOpen={!!paymentDialog && !isReceivedPadOpen}
+        onClose={() => {
+          if (isUpdating) return;
+          setPaymentDialog(null);
+        }}
         title={t("pos.choosePayment")}
+        maxWidth="max-w-lg"
       >
         {paymentDialog ? (
           <div className="space-y-4">
@@ -1068,61 +1200,206 @@ export default function Cashier() {
               const card = toCard(paymentDialog, t);
               const Icon = seatIcon(card.seatKind);
               return (
-                <div className="bg-secondary/50 rounded-2xl p-4 text-center space-y-2">
-                  <div
-                    className={`mx-auto w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center ${seatTone(card.seatKind)}`}
-                  >
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <p className="text-sm font-bold text-muted-foreground">
+                <div className="px-4 py-2.5 bg-primary/10 rounded-xl text-primary text-sm font-semibold flex items-center gap-2">
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
                     {card.seatLabel} · #{card.shortNo}
-                  </p>
-                  <p className="text-3xl font-black text-primary font-display tabular-nums">
-                    {formatIQD(card.amount)}
-                  </p>
+                  </span>
                 </div>
               );
             })()}
 
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                {
-                  method: "cash" as const,
-                  label: t("pos.cash"),
-                  icon: Banknote,
-                  color: "text-green-500",
-                },
-                {
-                  method: "card" as const,
-                  label: t("common.card"),
-                  icon: CreditCard,
-                  color: "text-blue-500",
-                },
-                {
-                  method: "transfer" as const,
-                  label: t("common.transfer"),
-                  icon: Phone,
-                  color: "text-purple-500",
-                },
-              ].map(({ method, label, icon: PayIcon, color }) => (
-                <Button
-                  key={method}
-                  variant="outline"
-                  className="h-24 flex flex-col gap-2"
-                  isLoading={isUpdating}
-                  onClick={() => confirmCashierSave(paymentDialog, method)}
-                >
-                  <PayIcon className={`w-8 h-8 ${color}`} />
-                  <span className="font-bold">{label}</span>
-                </Button>
-              ))}
+            <div className="grid grid-cols-2 gap-2.5 p-1.5 rounded-2xl border border-border/60 bg-secondary/40">
+              <button
+                type="button"
+                onClick={() => {
+                  setCheckoutPayMethod("cash");
+                  setCheckoutReceived(paymentTotal);
+                  setCheckoutCardId(null);
+                }}
+                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all touch-manipulation ${
+                  checkoutPayMethod === "cash"
+                    ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                }`}
+              >
+                <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
+                {t("pos.cash")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCheckoutPayMethod("card");
+                  setCheckoutReceived(paymentTotal);
+                }}
+                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all touch-manipulation ${
+                  checkoutPayMethod === "card"
+                    ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                }`}
+              >
+                <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
+                {t("pos.cardShort")}
+              </button>
             </div>
 
-            <p className="text-xs text-center text-muted-foreground font-semibold">
+            <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-secondary/30 overflow-hidden shadow-sm">
+              <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Lock className="w-4 h-4" />
+                  <span className="text-sm font-bold">{t("pos.invoiceTotal")}</span>
+                </div>
+                <span
+                  className="font-display text-xl sm:text-2xl font-extrabold text-primary tabular-nums"
+                  dir="ltr"
+                >
+                  {formatMoneyAmount(paymentTotal)}
+                </span>
+              </div>
+
+              <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm font-bold text-foreground">
+                    {t("pos.receivedTotal")}
+                  </span>
+                </div>
+                {checkoutPayMethod === "cash" ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsReceivedPadOpen(true)}
+                    className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors touch-manipulation"
+                    dir="ltr"
+                  >
+                    {formatMoneyAmount(checkoutReceived)}
+                  </button>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border/50 bg-secondary/50 px-3 py-2 font-display text-lg sm:text-xl font-extrabold tabular-nums text-foreground"
+                    dir="ltr"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                    {formatMoneyAmount(paymentTotal)}
+                  </span>
+                )}
+              </div>
+
+              {checkoutPayMethod === "cash" ? (
+                <div className="px-4 py-3 flex items-center justify-between gap-3 bg-secondary/25">
+                  <span className="text-sm font-bold text-muted-foreground">
+                    {t("pos.change")}
+                  </span>
+                  <span
+                    className={`font-display text-lg font-extrabold tabular-nums ${
+                      checkoutReceived >= paymentTotal
+                        ? "text-amber-500"
+                        : "text-rose-500"
+                    }`}
+                    dir="ltr"
+                  >
+                    {checkoutReceived >= paymentTotal
+                      ? formatMoneyAmount(checkoutChange)
+                      : t("pos.shortage", {
+                          amount: formatMoneyAmount(paymentTotal - checkoutReceived),
+                        })}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            {checkoutPayMethod === "card" ? (
+              <div className="space-y-2.5">
+                <p className="text-sm font-extrabold flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-sky-500" />
+                  {t("pos.chooseCard")}
+                </p>
+                {branchPaymentCards.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/30 py-8 text-center text-muted-foreground">
+                    <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-45" />
+                    <p className="text-sm font-bold">{t("pos.noActiveCards")}</p>
+                    <p className="text-xs mt-1 opacity-80">{t("pos.addCardFirst")}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[min(36vh,280px)] overflow-y-auto overscroll-contain pe-0.5">
+                    {branchPaymentCards.map((card) => {
+                      const active = checkoutCardId === card.id;
+                      return (
+                        <button
+                          key={card.id}
+                          type="button"
+                          onClick={() => setCheckoutCardId(card.id)}
+                          className={`text-start rounded-2xl border-2 px-3.5 py-3 transition-all touch-manipulation ${
+                            active
+                              ? "border-sky-500 bg-sky-500/10 shadow-md shadow-sky-500/15"
+                              : "border-border/60 bg-card/70 hover:border-sky-500/40"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                active
+                                  ? "bg-sky-500 text-white"
+                                  : "bg-secondary text-muted-foreground"
+                              }`}
+                            >
+                              <CreditCard className="w-4 h-4" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-extrabold text-sm truncate">{card.name}</p>
+                              <p
+                                className="text-[10px] text-muted-foreground font-display tabular-nums mt-0.5"
+                                dir="ltr"
+                              >
+                                {formatMoneyAmount(Number(card.balance ?? 0))}
+                              </p>
+                            </div>
+                            {active ? (
+                              <CheckCircle2 className="w-5 h-5 text-sky-500 flex-shrink-0" />
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <Button
+              className="w-full h-14 text-sm sm:text-base touch-manipulation gap-2 font-extrabold rounded-2xl"
+              isLoading={isUpdating}
+              disabled={!canConfirmCollect}
+              onClick={confirmCashierCollect}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              {t("cashier.collectPaid")}
+            </Button>
+            <p className="text-[11px] text-center text-muted-foreground font-semibold">
               {t("cashier.payWillSave")}
             </p>
           </div>
         ) : null}
+      </Dialog>
+
+      <Dialog
+        isOpen={isReceivedPadOpen}
+        onClose={() => setIsReceivedPadOpen(false)}
+        title={t("pos.receivedTotal")}
+        maxWidth="max-w-sm"
+        layer="overlay"
+      >
+        <NumericKeypad
+          value={checkoutReceived}
+          suffix={currencySymbol}
+          allowDecimal={decimalPlaces > 0}
+          maxDecimalPlaces={decimalPlaces}
+          label={t("pos.enterReceived")}
+          onCancel={() => setIsReceivedPadOpen(false)}
+          onConfirm={(v) => {
+            setCheckoutReceived(Math.max(0, v));
+            setIsReceivedPadOpen(false);
+          }}
+        />
       </Dialog>
     </div>
   );
