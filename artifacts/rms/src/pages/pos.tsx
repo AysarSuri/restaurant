@@ -137,6 +137,28 @@ function formatClock(date: Date) {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
 
+/** Full date + time (Latin digits) for edit-lists rows */
+function formatListDateTime(iso: string | Date | null | undefined) {
+  if (!iso) return "—";
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    numberingSystem: "latn",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function isPosOrderReceived(order: Pick<Order, "paymentMethod" | "status">) {
+  if (order.paymentMethod) return true;
+  return order.status === "paid";
+}
+
 interface CartItem extends MenuItem {
   cartQuantity: number;
   price: number;
@@ -285,7 +307,7 @@ export default function POS() {
   }, [now.getFullYear(), now.getMonth(), now.getDate()]);
 
   const todayOrdersParams = useMemo(
-    () => ({ date: todayDateKey, limit: 200 }),
+    () => ({ date: todayDateKey, limit: 500 }),
     [todayDateKey]
   );
 
@@ -306,9 +328,12 @@ export default function POS() {
       selectedBranchId === "all"
         ? list
         : list.filter((o) => o.branchId == null || o.branchId === selectedBranchId);
-    return [...filtered].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    // Newest first by created date+time (exclude cancelled from edit picker)
+    return [...filtered]
+      .filter((o) => o.status !== "cancelled")
+      .sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
   }, [todayOrders, selectedBranchId]);
 
   const openSeatStages = useMemo(() => {
@@ -524,12 +549,6 @@ export default function POS() {
       setDeliveryAddress(order.deliveryAddress ?? "");
     }
     closeSeatPicker();
-  };
-
-  const listStatusLabel = (status: string) => {
-    const key = `pos.listStatus.${status}`;
-    const label = t(key);
-    return label === key ? status : label;
   };
 
   const orderListTitle = (order: Order) => {
@@ -1579,15 +1598,7 @@ export default function POS() {
                         (order.table as RestaurantTable | undefined);
                       const seatType = (seat?.type ?? "table") as SeatEntityType;
                       const isSelected = editingOrderId === order.id;
-                      const status = String(order.status);
-                      const statusTone =
-                        status === "paid"
-                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
-                          : status === "cancelled"
-                            ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30"
-                            : status === "preparing" || status === "ready" || status === "served"
-                              ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30"
-                              : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
+                      const received = isPosOrderReceived(order);
                       const typeLabel =
                         order.type === "takeaway"
                           ? t("order.takeaway")
@@ -1598,7 +1609,18 @@ export default function POS() {
                               : seatType === "person"
                                 ? t("seat.person")
                                 : t("seat.table");
-                      const created = new Date(order.createdAt);
+                      const payable = (() => {
+                        const subtotal = Number(order.subtotal) || 0;
+                        const discount = Math.max(0, Number(order.discount) || 0);
+                        const deliveryFee = Math.max(
+                          0,
+                          Number((order as Order & { deliveryFee?: number }).deliveryFee) || 0
+                        );
+                        if (subtotal > 0 || discount > 0 || deliveryFee > 0) {
+                          return Math.max(0, subtotal - discount + deliveryFee);
+                        }
+                        return Math.max(0, Number(order.total) || 0);
+                      })();
                       return (
                         <motion.button
                           key={order.id}
@@ -1609,27 +1631,38 @@ export default function POS() {
                           transition={{ delay: Math.min(idx * 0.02, 0.28) }}
                           onClick={() => selectTodayOrder(order)}
                           className={`w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 flex items-center gap-3 sm:gap-4 transition-colors cursor-pointer ${
-                            isSelected ? "bg-primary/10" : "hover:bg-primary/5"
+                            isSelected
+                              ? "bg-primary/10"
+                              : received
+                                ? "hover:bg-emerald-500/5"
+                                : "hover:bg-amber-500/5"
                           } ${isUpdatingPerson ? "opacity-60" : ""}`}
                         >
-                          <div
-                            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border flex-shrink-0 overflow-hidden ${
-                              isSelected
-                                ? "bg-primary/15 border-primary/40 text-primary"
-                                : "bg-secondary/80 border-border/60 text-foreground"
-                            }`}
-                          >
-                            {order.type === "takeaway" ? (
-                              <ShoppingBag className="w-6 h-6 text-primary" />
-                            ) : order.type === "delivery" ? (
-                              <Truck className="w-6 h-6 text-primary" />
-                            ) : seatType === "room" ? (
-                              <RoomIcon className="w-10 h-auto" />
-                            ) : seatType === "person" ? (
-                              <UserRound className="w-6 h-6 text-primary" />
-                            ) : (
-                              <DiningTableIcon className="w-10 h-auto" />
-                            )}
+                          <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                            <span className="text-[11px] font-black tabular-nums text-muted-foreground">
+                              #{idx + 1}
+                            </span>
+                            <div
+                              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border overflow-hidden ${
+                                isSelected
+                                  ? "bg-primary/15 border-primary/40 text-primary"
+                                  : received
+                                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                                    : "bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200"
+                              }`}
+                            >
+                              {order.type === "takeaway" ? (
+                                <ShoppingBag className="w-6 h-6" />
+                              ) : order.type === "delivery" ? (
+                                <Truck className="w-6 h-6" />
+                              ) : seatType === "room" ? (
+                                <RoomIcon className="w-10 h-auto" />
+                              ) : seatType === "person" ? (
+                                <UserRound className="w-6 h-6" />
+                              ) : (
+                                <DiningTableIcon className="w-10 h-auto" />
+                              )}
+                            </div>
                           </div>
 
                           <div className="min-w-0 flex-1">
@@ -1641,18 +1674,27 @@ export default function POS() {
                                 {typeLabel}
                               </span>
                               <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${statusTone}`}
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${
+                                  received
+                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                                    : "bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-500/30"
+                                }`}
                               >
-                                {listStatusLabel(status)}
+                                {received
+                                  ? t("cashier.colPaid")
+                                  : t("cashier.colUnpaid")}
                               </span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] sm:text-xs text-muted-foreground">
                               <span className="font-display font-bold text-foreground/80">
                                 {order.orderNumber}
                               </span>
-                              <span className="inline-flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-primary/80" />
-                                {formatClock(created)}
+                              <span
+                                className="inline-flex items-center gap-1 tabular-nums font-bold text-foreground/85"
+                                dir="ltr"
+                              >
+                                <Clock className="w-3.5 h-3.5 text-primary/80 shrink-0" />
+                                {formatListDateTime(order.createdAt)}
                               </span>
                               {order.type === "delivery" && order.deliveryAddress ? (
                                 <span className="inline-flex items-center gap-1 truncate">
@@ -1671,7 +1713,7 @@ export default function POS() {
 
                           <div className="flex flex-col items-end gap-1 flex-shrink-0">
                             <span className="font-display text-sm sm:text-base font-extrabold tabular-nums text-foreground">
-                              {formatMoneyAmount(Number(order.total) || 0)}
+                              {formatMoneyAmount(payable)}
                             </span>
                             {isSelected ? (
                               <CheckCircle2 className="w-5 h-5 text-primary" />

@@ -30,6 +30,8 @@ import {
   Printer,
   FileText,
   Lock,
+  Undo2,
+  Percent,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/App";
@@ -59,15 +61,40 @@ const SILENT_REFETCH_MS = 4_000;
 const formatIQD = (v: number | string) =>
   new Intl.NumberFormat("en-IQ").format(Math.round(Number(v)));
 
-const elapsed = (
-  dateStr: string,
-  t: (key: string, params?: Record<string, string | number>) => string
-) => {
-  const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
-  if (mins < 1) return t("cashier.justNow");
-  if (mins < 60) return t("cashier.minutes", { n: mins });
-  return t("cashier.hours", { h: Math.floor(mins / 60), m: mins % 60 });
-};
+/** Payable total after invoice discount (+ delivery fee / tax when present) */
+function orderPayableAmount(order: {
+  subtotal?: number | string | null;
+  discount?: number | string | null;
+  deliveryFee?: number | string | null;
+  tax?: number | string | null;
+  total?: number | string | null;
+}) {
+  const subtotal = Number(order.subtotal) || 0;
+  const discount = Math.max(0, Number(order.discount) || 0);
+  const deliveryFee = Math.max(0, Number(order.deliveryFee) || 0);
+  const tax = Math.max(0, Number(order.tax) || 0);
+  if (subtotal > 0 || discount > 0 || deliveryFee > 0) {
+    return Math.max(0, subtotal - discount + deliveryFee + tax);
+  }
+  return Math.max(0, Number(order.total) || 0);
+}
+
+/** Absolute date + time with Latin digits for cashier lists */
+function formatCashierDateTime(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    numberingSystem: "latn",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+}
 
 function seatIcon(kind: SeatKind): LucideIcon {
   if (kind === "room") return DoorOpen;
@@ -148,7 +175,7 @@ function toCard(
   return {
     order,
     ...seat,
-    amount: Number(order.total) || 0,
+    amount: orderPayableAmount(order),
     shortNo: String(order.orderNumber || "").slice(-4),
   };
 }
@@ -260,12 +287,15 @@ function OrderTicket({
               </p>
             </div>
             <div className="text-end shrink-0">
-              <p className="text-[16px] font-black text-primary tabular-nums leading-tight">
+              <p className="text-[19px] sm:text-[20px] font-black text-primary tabular-nums leading-tight">
                 {formatIQD(card.amount)}
               </p>
-              <p className="text-[10px] font-bold text-muted-foreground flex items-center justify-end gap-1 mt-0.5">
-                <Clock className="w-3 h-3" />
-                {elapsed(createdAt, t)}
+              <p
+                className="text-[13px] sm:text-[14px] font-bold text-muted-foreground flex items-center justify-end gap-1.5 mt-0.5 tabular-nums"
+                dir="ltr"
+              >
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                {formatCashierDateTime(createdAt)}
               </p>
             </div>
           </div>
@@ -383,11 +413,13 @@ function PaidListRow({
   card,
   onOpen,
   onPrint,
+  onMoveToUnpaid,
   t,
 }: {
   card: OrderCardModel;
   onOpen: () => void;
   onPrint?: () => void;
+  onMoveToUnpaid?: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const Icon = seatIcon(card.seatKind);
@@ -440,20 +472,32 @@ function PaidListRow({
             </span>
           </div>
           <div className="flex items-center gap-2 mt-1 text-[11px] font-semibold text-muted-foreground flex-wrap">
-            <span className="inline-flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {elapsed(createdAt, t)}
+            <span
+              className="inline-flex items-center gap-1.5 text-[13px] sm:text-[14px] font-bold tabular-nums"
+              dir="ltr"
+            >
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              {formatCashierDateTime(createdAt)}
             </span>
             <span className="text-border">·</span>
             <span>{pay}</span>
             <span className="text-border">·</span>
-            <span className="font-display font-black text-primary tabular-nums text-[13px]">
+            <span className="font-display font-black text-primary tabular-nums text-[16px] sm:text-[17px]">
               {formatIQD(card.amount)}
             </span>
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
+          <button
+            type="button"
+            onClick={onMoveToUnpaid}
+            disabled={!onMoveToUnpaid}
+            className="h-11 min-h-11 min-w-[4.75rem] sm:min-w-[5.5rem] px-2.5 sm:px-3 rounded-xl border-2 border-amber-500/45 bg-amber-500/10 hover:bg-amber-500/15 text-amber-800 dark:text-amber-200 font-extrabold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            <Undo2 className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t("cashier.moveToUnpaid")}</span>
+          </button>
           <button
             type="button"
             onClick={onPrint}
@@ -549,11 +593,14 @@ export default function Cashier() {
 
   const [page, setPage] = useState<CashierPage>("unpaid");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [unpayConfirmOrder, setUnpayConfirmOrder] = useState<Order | null>(null);
   const [paymentDialog, setPaymentDialog] = useState<Order | null>(null);
   const [checkoutPayMethod, setCheckoutPayMethod] = useState<"cash" | "card">("cash");
   const [checkoutReceived, setCheckoutReceived] = useState(0);
+  const [checkoutDiscount, setCheckoutDiscount] = useState(0);
   const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
   const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
+  const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
   const [dismissedTableNotifs, setDismissedTableNotifs] = useState<Set<number>>(
     () => new Set()
   );
@@ -568,17 +615,23 @@ export default function Cashier() {
 
   useEffect(() => {
     setSelectedOrder(null);
+    setUnpayConfirmOrder(null);
     setPaymentDialog(null);
     setIsReceivedPadOpen(false);
+    setIsDiscountPadOpen(false);
+    setCheckoutDiscount(0);
     setDismissedTableNotifs(new Set());
   }, [selectedBranchId]);
 
   const openPaymentDialog = (order: Order) => {
-    const total = Number(order.total) || 0;
+    const discount = Math.max(0, Number(order.discount) || 0);
+    const total = orderPayableAmount({ ...order, discount });
     setCheckoutPayMethod("cash");
+    setCheckoutDiscount(discount);
     setCheckoutReceived(total);
     setCheckoutCardId(null);
     setIsReceivedPadOpen(false);
+    setIsDiscountPadOpen(false);
     setPaymentDialog(order);
   };
 
@@ -616,16 +669,13 @@ export default function Cashier() {
     );
   }, [todayOrders, openOrders, selectedBranchId]);
 
+  /** Newest date/time first (descending) for both unpaid and paid lists */
   const sortCashierCards = (cards: OrderCardModel[]) =>
     [...cards].sort((a, b) => {
-      const aEdit = (a.order as Order & { posEditedAt?: string | null }).posEditedAt;
-      const bEdit = (b.order as Order & { posEditedAt?: string | null }).posEditedAt;
-      const aEditMs = aEdit ? new Date(aEdit).getTime() : 0;
-      const bEditMs = bEdit ? new Date(bEdit).getTime() : 0;
-      if (aEditMs !== bEditMs) return bEditMs - aEditMs;
-      return (
-        new Date(b.order.createdAt).getTime() - new Date(a.order.createdAt).getTime()
-      );
+      const aMs = new Date(a.order.createdAt || 0).getTime();
+      const bMs = new Date(b.order.createdAt || 0).getTime();
+      if (bMs !== aMs) return bMs - aMs;
+      return (b.order.id || 0) - (a.order.id || 0);
     });
 
   // Show all POS order invoices on cashier — including kitchen-bound (preparing/ready)
@@ -697,7 +747,12 @@ export default function Cashier() {
 
   const confirmCashierCollect = () => {
     if (!paymentDialog) return;
-    const total = Number(paymentDialog.total) || 0;
+    const subtotal = Number(paymentDialog.subtotal) || 0;
+    const discount = Math.max(
+      0,
+      Math.min(checkoutDiscount, subtotal > 0 ? subtotal : checkoutDiscount)
+    );
+    const total = orderPayableAmount({ ...paymentDialog, discount });
     if (checkoutPayMethod === "cash" && checkoutReceived < total) return;
     if (checkoutPayMethod === "card" && !checkoutCardId) return;
 
@@ -714,6 +769,7 @@ export default function Cashier() {
         data: {
           status: keepKitchen,
           paymentMethod,
+          discount,
         } as any,
       },
       {
@@ -721,6 +777,7 @@ export default function Cashier() {
           setPaymentDialog(null);
           setSelectedOrder(null);
           setIsReceivedPadOpen(false);
+          setIsDiscountPadOpen(false);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
           try {
             localStorage.setItem("rms-orders-bump", String(Date.now()));
@@ -729,6 +786,49 @@ export default function Cashier() {
           }
           void refreshAll(false);
           setPage("paid");
+        },
+      }
+    );
+  };
+
+  const confirmMoveToUnpaid = () => {
+    if (!unpayConfirmOrder) return;
+    const keepKitchen =
+      unpayConfirmOrder.status === "preparing" ||
+      unpayConfirmOrder.status === "ready" ||
+      unpayConfirmOrder.status === "confirmed" ||
+      unpayConfirmOrder.status === "pending"
+        ? unpayConfirmOrder.status
+        : "preparing";
+
+    updateStatus(
+      {
+        id: unpayConfirmOrder.id,
+        data: {
+          status: keepKitchen,
+          clearPayment: true,
+        } as any,
+      },
+      {
+        onSuccess: () => {
+          setUnpayConfirmOrder(null);
+          setSelectedOrder(null);
+          setPaymentDialog(null);
+          void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+          try {
+            localStorage.setItem("rms-orders-bump", String(Date.now()));
+          } catch {
+            /* ignore */
+          }
+          void refreshAll(false);
+          setPage("unpaid");
+          toast({ title: t("cashier.moveToUnpaidOk") });
+        },
+        onError: () => {
+          toast({
+            title: t("cashier.moveToUnpaidFail"),
+            variant: "destructive",
+          });
         },
       }
     );
@@ -807,7 +907,10 @@ export default function Cashier() {
     }
   };
 
-  const paymentTotal = Number(paymentDialog?.total) || 0;
+  const paymentSubtotal = Number(paymentDialog?.subtotal) || 0;
+  const paymentTotal = paymentDialog
+    ? orderPayableAmount({ ...paymentDialog, discount: checkoutDiscount })
+    : 0;
   const checkoutChange = Math.max(0, checkoutReceived - paymentTotal);
   const canConfirmCollect =
     Boolean(paymentDialog) &&
@@ -1030,6 +1133,7 @@ export default function Cashier() {
                         t={t}
                         onOpen={() => setSelectedOrder(card.order)}
                         onPrint={() => printCashierReceipt(card.order)}
+                        onMoveToUnpaid={() => setUnpayConfirmOrder(card.order)}
                       />
                     ))}
                   </AnimatePresence>
@@ -1103,9 +1207,13 @@ export default function Cashier() {
                         >
                           {received ? t("cashier.colPaid") : t("cashier.colUnpaid")}
                         </Badge>
-                        <Badge variant="warning">
-                          <Clock className="w-3 h-3 me-1" />
-                          {elapsed(String(card.order.createdAt), t)}
+                        <Badge
+                          variant="warning"
+                          className="tabular-nums text-[13px] sm:text-[14px] font-bold px-2.5 py-1"
+                          dir="ltr"
+                        >
+                          <Clock className="w-3.5 h-3.5 me-1.5 shrink-0" />
+                          {formatCashierDateTime(String(card.order.createdAt))}
                         </Badge>
                       </div>
                     </div>
@@ -1180,7 +1288,7 @@ export default function Cashier() {
                 <div className="flex justify-between items-center pt-2 border-t border-border/50">
                   <span className="font-black text-base">{t("common.total")}</span>
                   <span className="text-primary font-display font-black text-xl tabular-nums">
-                    {formatMoneyAmount(Number(selectedOrder.total) || 0)}
+                    {formatMoneyAmount(orderPayableAmount(selectedOrder))}
                   </span>
                 </div>
               </div>
@@ -1208,6 +1316,57 @@ export default function Cashier() {
                   <span className="truncate">{primaryPayLabel}</span>
                 </Button>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        isOpen={!!unpayConfirmOrder}
+        onClose={() => {
+          if (isUpdating) return;
+          setUnpayConfirmOrder(null);
+        }}
+        title={t("cashier.moveToUnpaid")}
+        maxWidth="max-w-md"
+      >
+        {unpayConfirmOrder ? (
+          <div className="space-y-4">
+            <p className="text-sm sm:text-base font-bold leading-relaxed text-foreground">
+              {t("cashier.moveToUnpaidAsk")}
+            </p>
+            {(() => {
+              const card = toCard(unpayConfirmOrder, t);
+              return (
+                <div className="rounded-xl border border-border/60 bg-secondary/40 px-3.5 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-extrabold truncate">{card.seatLabel}</p>
+                    <p className="text-xs font-bold text-muted-foreground tabular-nums mt-0.5">
+                      #{card.shortNo}
+                    </p>
+                  </div>
+                  <p className="font-display font-black text-primary tabular-nums text-lg shrink-0">
+                    {formatIQD(card.amount)}
+                  </p>
+                </div>
+              );
+            })()}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <Button
+                variant="outline"
+                className="h-14 min-h-14 rounded-2xl font-extrabold text-base touch-manipulation"
+                disabled={isUpdating}
+                onClick={() => setUnpayConfirmOrder(null)}
+              >
+                {t("common.no")}
+              </Button>
+              <Button
+                className="h-14 min-h-14 rounded-2xl font-extrabold text-base touch-manipulation bg-amber-500 hover:bg-amber-600 text-white"
+                disabled={isUpdating}
+                onClick={confirmMoveToUnpaid}
+              >
+                {t("common.yes")}
+              </Button>
             </div>
           </div>
         ) : null}
@@ -1272,6 +1431,45 @@ export default function Cashier() {
             </div>
 
             <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-secondary/30 overflow-hidden shadow-sm">
+              <div className="px-4 py-3 border-b border-border/40 flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-muted-foreground">
+                  {t("cashier.subtotal")}
+                </span>
+                <span
+                  className="font-display text-base sm:text-lg font-extrabold tabular-nums"
+                  dir="ltr"
+                >
+                  {formatMoneyAmount(paymentSubtotal)}
+                </span>
+              </div>
+
+              <div className="px-4 py-3 border-b border-border/40">
+                <button
+                  type="button"
+                  onClick={() => setIsDiscountPadOpen(true)}
+                  className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 hover:border-amber-500/50 hover:bg-amber-500/5 px-3 py-2.5 transition-colors touch-manipulation"
+                >
+                  <span className="inline-flex items-center gap-2 font-extrabold text-sm">
+                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                      <Percent className="w-4 h-4" />
+                    </span>
+                    {t("pos.invoiceDiscount")}
+                  </span>
+                  <span
+                    className={`font-display text-lg sm:text-xl font-extrabold tabular-nums ${
+                      checkoutDiscount > 0
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-muted-foreground"
+                    }`}
+                    dir="ltr"
+                  >
+                    {checkoutDiscount > 0
+                      ? `− ${formatMoneyAmount(checkoutDiscount)}`
+                      : formatMoneyAmount(0)}
+                  </span>
+                </button>
+              </div>
+
               <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Lock className="w-4 h-4" />
@@ -1423,6 +1621,39 @@ export default function Cashier() {
           onConfirm={(v) => {
             setCheckoutReceived(Math.max(0, v));
             setIsReceivedPadOpen(false);
+          }}
+        />
+      </Dialog>
+
+      <Dialog
+        isOpen={isDiscountPadOpen}
+        onClose={() => setIsDiscountPadOpen(false)}
+        title={t("pos.invoiceDiscount")}
+        maxWidth="max-w-sm"
+        layer="overlay"
+      >
+        <NumericKeypad
+          value={checkoutDiscount}
+          suffix={currencySymbol}
+          allowDecimal={decimalPlaces > 0}
+          maxDecimalPlaces={decimalPlaces}
+          maxValue={paymentSubtotal > 0 ? paymentSubtotal : undefined}
+          label={t("pos.enterDiscount")}
+          onCancel={() => setIsDiscountPadOpen(false)}
+          onConfirm={(v) => {
+            const next = Math.max(
+              0,
+              Math.min(v, paymentSubtotal > 0 ? paymentSubtotal : v)
+            );
+            setCheckoutDiscount(next);
+            if (paymentDialog) {
+              const nextTotal = orderPayableAmount({
+                ...paymentDialog,
+                discount: next,
+              });
+              setCheckoutReceived(nextTotal);
+            }
+            setIsDiscountPadOpen(false);
           }}
         />
       </Dialog>

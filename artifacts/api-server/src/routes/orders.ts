@@ -458,21 +458,60 @@ router.put("/:id", async (req, res) => {
 // PATCH /orders/:id/status
 router.patch("/:id/status", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { status, paymentMethod } = req.body;
+  const { status, paymentMethod, clearPayment, discount } = req.body;
 
-  const patch: Record<string, unknown> = { status, updatedAt: new Date() };
-  if (paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer") {
-    patch.paymentMethod = paymentMethod;
-    patch.collectAtCashier = false;
+  const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
+  if (!order) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+
+  if (clearPayment === true) {
+    // Move invoice back to غير واصل (cashier unpaid board)
+    patch.paymentMethod = null;
+    patch.collectAtCashier = true;
+    if (typeof status === "string" && status) {
+      patch.status = status;
+    } else if (order.status === "paid" || order.status === "served") {
+      // Keep kitchen-friendly open status when undoing a paid-only mark
+      patch.status = "preparing";
+    }
+  } else {
+    if (typeof status === "string" && status) patch.status = status;
+    if (paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer") {
+      patch.paymentMethod = paymentMethod;
+      patch.collectAtCashier = false;
+    }
+    // Allow cashier/POS to set invoice discount at collect time
+    if (discount !== undefined && discount !== null) {
+      const subtotal = parseFloat(String(order.subtotal ?? "0")) || 0;
+      const deliveryFeeAmt = parseFloat(String(order.deliveryFee ?? "0")) || 0;
+      const taxAmt = parseFloat(String(order.tax ?? "0")) || 0;
+      const discountAmt = Math.max(0, parseFloat(String(discount)) || 0);
+      const capped = Math.min(discountAmt, subtotal > 0 ? subtotal : discountAmt);
+      patch.discount = capped.toString();
+      patch.total = Math.max(0, subtotal - capped + deliveryFeeAmt + taxAmt).toString();
+    }
   }
 
   await db.update(ordersTable).set(patch).where(eq(ordersTable.id, id));
 
-  // If served, free table
-  if (status === "served" || status === "paid" || status === "cancelled") {
-    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
-    if (order?.tableId) {
-      await db.update(restaurantTablesTable).set({ status: "available" }).where(eq(restaurantTablesTable.id, order.tableId));
+  const nextStatus = String(patch.status ?? order.status);
+  if (clearPayment === true) {
+    if (order.tableId && order.type === "dine_in" && nextStatus !== "cancelled") {
+      await db
+        .update(restaurantTablesTable)
+        .set({ status: "occupied" })
+        .where(eq(restaurantTablesTable.id, order.tableId));
+    }
+  } else if (nextStatus === "served" || nextStatus === "paid" || nextStatus === "cancelled") {
+    if (order.tableId) {
+      await db
+        .update(restaurantTablesTable)
+        .set({ status: "available" })
+        .where(eq(restaurantTablesTable.id, order.tableId));
     }
   }
 
