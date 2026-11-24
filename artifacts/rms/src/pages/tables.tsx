@@ -90,29 +90,6 @@ const EMPTY_TABLE_FORM = {
 
 const STATUS_META = TABLE_STATUS_META;
 
-/** Persons: موجود = available, مو موجود = occupied (default) */
-const PERSON_STATUS_META = {
-  available: {
-    label: "موجود",
-    chip: "bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/40",
-    filterActive: "bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/35",
-    filterIdle:
-      "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20",
-    dot: "bg-emerald-500",
-  },
-  occupied: {
-    label: "مو موجود",
-    chip: "bg-slate-500 text-white border-slate-600 shadow-sm shadow-slate-500/40",
-    filterActive: "bg-slate-500 text-white border-slate-600 shadow-md shadow-slate-500/35",
-    filterIdle:
-      "bg-slate-500/10 border-slate-500/40 text-slate-700 dark:text-slate-300 hover:bg-slate-500/20",
-    dot: "bg-slate-500",
-  },
-} as const;
-
-const personPresence = (status: string): "available" | "occupied" =>
-  status === "available" ? "available" : "occupied";
-
 export default function Tables() {
   const { data: tables, isLoading, refetch } = useGetTables();
   const { mutate: updateTable, isPending } = useUpdateTable();
@@ -161,15 +138,10 @@ export default function Tables() {
       ...items.map((t) => {
         const statusLabel = STATUS_META[t.status]?.label ?? t.status;
         const location = t.location?.trim();
-        const personLabel =
-          entityType === "person"
-            ? PERSON_STATUS_META[personPresence(t.status)].label
-            : statusLabel;
-        const shownStatus = entityType === "person" ? personLabel : statusLabel;
         return {
           value: String(t.id),
           label: String(t.number),
-          subtitle: location ? `${shownStatus} · ${location}` : shownStatus,
+          subtitle: location ? `${statusLabel} · ${location}` : statusLabel,
           icon: Icon,
         };
       }),
@@ -185,24 +157,17 @@ export default function Tables() {
     const base = { all: 0, available: 0, occupied: 0, reserved: 0, cleaning: 0 };
     for (const t of searchedTables) {
       base.all += 1;
-      if (entityType === "person") {
-        if (personPresence(t.status) === "available") base.available += 1;
-        else base.occupied += 1;
-      } else if (t.status in base) {
+      if (t.status in base) {
         (base as any)[t.status] += 1;
       }
     }
     return base;
-  }, [searchedTables, entityType]);
+  }, [searchedTables]);
 
   const filtered = useMemo(() => {
     let list = searchedTables;
     if (filter !== "all") {
-      if (entityType === "person") {
-        list = searchedTables.filter((t) => personPresence(t.status) === filter);
-      } else {
-        list = searchedTables.filter((t) => t.status === filter);
-      }
+      list = searchedTables.filter((t) => t.status === filter);
     }
     if (entityType !== "person") return list;
     return [...list].sort((a, b) =>
@@ -282,7 +247,7 @@ export default function Tables() {
           capacity,
           type,
           location: addForm.location.trim() || undefined,
-          status: isPerson ? "occupied" : "available",
+          status: "available",
         },
       },
       {
@@ -382,11 +347,7 @@ export default function Tables() {
                   const found = typedTables.find((t) => String(t.id) === value);
                   if (found) {
                     setSelectedTable(found);
-                    setStatus(
-                      entityType === "person"
-                        ? personPresence(found.status)
-                        : found.status
-                    );
+                    setStatus(found.status);
                   }
                 }
               }}
@@ -410,26 +371,16 @@ export default function Tables() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(entityType === "person"
-          ? ([
-              ["all", "الكل", counts.all],
-              ["available", "موجود", counts.available],
-              ["occupied", "مو موجود", counts.occupied],
-            ] as const)
-          : ([
-              ["all", "الكل", counts.all],
-              ["available", "متاح", counts.available],
-              ["occupied", "مشغول", counts.occupied],
-              ["reserved", "محجوز", counts.reserved],
-              ["cleaning", "تنظيف", counts.cleaning],
-            ] as const)
+        {(
+          [
+            ["all", "الكل", counts.all],
+            ["available", "متاح", counts.available],
+            ["occupied", "مشغول", counts.occupied],
+            ["reserved", "محجوز", counts.reserved],
+            ["cleaning", "تنظيف", counts.cleaning],
+          ] as const
         ).map(([key, label, count]) => {
-          const meta =
-            key === "all"
-              ? null
-              : entityType === "person"
-                ? PERSON_STATUS_META[key as "available" | "occupied"]
-                : STATUS_META[key];
+          const meta = key === "all" ? null : STATUS_META[key];
           const active =
             key === "all"
               ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/25"
@@ -489,8 +440,7 @@ export default function Tables() {
           </div>
           <div className="divide-y divide-border/50">
             {filtered.map((person, idx) => {
-              const presence = personPresence(person.status);
-              const meta = PERSON_STATUS_META[presence];
+              const meta = STATUS_META[person.status] ?? STATUS_META.available;
               const name = String(person.number);
               return (
                 <motion.button
@@ -501,7 +451,7 @@ export default function Tables() {
                   transition={{ delay: Math.min(idx * 0.03, 0.3) }}
                   onClick={() => {
                     setSelectedTable(person);
-                    setStatus(presence);
+                    setStatus(person.status);
                   }}
                   className="w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_40px] gap-2 sm:gap-3 items-center hover:bg-primary/5 transition-colors group"
                 >
@@ -775,42 +725,21 @@ export default function Tables() {
 
             <div>
               <label className="text-sm font-semibold mb-2 block">الحالة الجديدة</label>
-              {(selectedTable.type ?? "table") === "person" ? (
-                <Select
-                  value={personPresence(status)}
-                  onChange={(e) => setStatus(e.target.value as RestaurantTableStatus)}
-                >
-                  <option value="available">موجود</option>
-                  <option value="occupied">مو موجود</option>
-                </Select>
-              ) : (
-                <Select value={status} onChange={(e) => setStatus(e.target.value as RestaurantTableStatus)}>
-                  <option value="available">متاح</option>
-                  <option value="occupied">مشغول</option>
-                  <option value="reserved">محجوز</option>
-                  <option value="cleaning">تنظيف</option>
-                </Select>
-              )}
+              <Select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as RestaurantTableStatus)}
+              >
+                <option value="available">متاح</option>
+                <option value="occupied">مشغول</option>
+                <option value="reserved">محجوز</option>
+                <option value="cleaning">تنظيف</option>
+              </Select>
             </div>
 
-            <div
-              className={`grid gap-2 ${
-                (selectedTable.type ?? "table") === "person"
-                  ? "grid-cols-2"
-                  : "grid-cols-2 sm:grid-cols-4"
-              }`}
-            >
-              {((selectedTable.type ?? "table") === "person"
-                ? (["available", "occupied"] as const)
-                : (["available", "occupied", "reserved", "cleaning"] as const)
-              ).map((s) => {
-                const isPerson = (selectedTable.type ?? "table") === "person";
-                const m = isPerson
-                  ? PERSON_STATUS_META[s as "available" | "occupied"]
-                  : STATUS_META[s];
-                const active = isPerson
-                  ? personPresence(status) === s
-                  : status === s;
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(["available", "occupied", "reserved", "cleaning"] as const).map((s) => {
+                const m = STATUS_META[s];
+                const active = status === s;
                 return (
                   <button
                     key={s}

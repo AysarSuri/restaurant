@@ -13,6 +13,10 @@ import {
 import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
+import {
+  isOrderPaymentReceived,
+  syncRestaurantSeatFromOrders,
+} from "../lib/seat-sync";
 
 type SalesPaymentAt = "pos" | "cashier";
 type OrderTypeKey = "dine_in" | "takeaway" | "delivery";
@@ -366,9 +370,9 @@ router.post("/", async (req, res) => {
     });
   }
 
-  // Update table status if dine_in
+  // Seat: غير واصل dine-in → occupied; واصل at create → available
   if (type === "dine_in" && tableId) {
-    await db.update(restaurantTablesTable).set({ status: "occupied" }).where(eq(restaurantTablesTable.id, tableId));
+    await syncRestaurantSeatFromOrders(tableId);
   }
 
   const full = await getOrderWithDetails(order.id);
@@ -499,20 +503,29 @@ router.patch("/:id/status", async (req, res) => {
   await db.update(ordersTable).set(patch).where(eq(ordersTable.id, id));
 
   const nextStatus = String(patch.status ?? order.status);
-  if (clearPayment === true) {
-    if (order.tableId && order.type === "dine_in" && nextStatus !== "cancelled") {
-      await db
-        .update(restaurantTablesTable)
-        .set({ status: "occupied" })
-        .where(eq(restaurantTablesTable.id, order.tableId));
-    }
-  } else if (nextStatus === "served" || nextStatus === "paid" || nextStatus === "cancelled") {
-    if (order.tableId) {
-      await db
-        .update(restaurantTablesTable)
-        .set({ status: "available" })
-        .where(eq(restaurantTablesTable.id, order.tableId));
-    }
+  const nextPay =
+    clearPayment === true
+      ? null
+      : paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer"
+        ? paymentMethod
+        : order.paymentMethod;
+  const paymentChanged =
+    clearPayment === true ||
+    paymentMethod === "cash" ||
+    paymentMethod === "card" ||
+    paymentMethod === "transfer";
+  const seatRelevant =
+    order.tableId != null &&
+    order.type === "dine_in" &&
+    (paymentChanged ||
+      nextStatus === "cancelled" ||
+      nextStatus === "paid" ||
+      isOrderPaymentReceived({ paymentMethod: nextPay, status: nextStatus }) !==
+        isOrderPaymentReceived(order));
+
+  // Do NOT free seat on kitchen "served" alone — only payment / cancel sync
+  if (seatRelevant) {
+    await syncRestaurantSeatFromOrders(order.tableId);
   }
 
   const full = await getOrderWithDetails(id);
@@ -539,9 +552,9 @@ router.post("/:id/pay", async (req, res) => {
     .set({ status: "paid", paymentMethod, discount: discountAmt.toString(), total: total.toString(), updatedAt: new Date() })
     .where(eq(ordersTable.id, id));
 
-  // Free table
-  if (order.tableId) {
-    await db.update(restaurantTablesTable).set({ status: "available" }).where(eq(restaurantTablesTable.id, order.tableId));
+  // واصل → sync seat (available if no other unpaid dine-in on this seat)
+  if (order.tableId && order.type === "dine_in") {
+    await syncRestaurantSeatFromOrders(order.tableId);
   }
 
   // Update customer stats

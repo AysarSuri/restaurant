@@ -56,32 +56,19 @@ const SEAT_TABS: {
   { key: "person", labelKey: "pos.persons", icon: UserRound },
 ];
 
-const PERSON_STATUS_META = {
-  available: {
-    labelKey: "seat.present",
-    chip: "bg-emerald-500 text-white border-emerald-600 shadow-sm shadow-emerald-500/40",
-    card: "bg-emerald-500/10",
-    ring: "ring-emerald-500/70 border-emerald-500",
-    glow: "from-emerald-500/45 via-emerald-400/15 to-transparent",
-  },
-  occupied: {
-    labelKey: "seat.absent",
-    chip: "bg-slate-500 text-white border-slate-600 shadow-sm shadow-slate-500/40",
-    card: "bg-slate-500/10",
-    ring: "ring-slate-500/70 border-slate-500",
-    glow: "from-slate-500/45 via-slate-400/15 to-transparent",
-  },
-} as const;
-
-const personPresence = (status: string): "available" | "occupied" =>
-  status === "available" ? "available" : "occupied";
-
 const personInitials = (name: string) => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2);
   return `${parts[0][0]}${parts[1][0]}`;
 };
+
+function seatStatusLabelKey(status: string) {
+  if (status === "occupied") return "seat.occupied";
+  if (status === "reserved") return "seat.reserved";
+  if (status === "cleaning") return "seat.cleaning";
+  return "seat.available";
+}
 
 function seatLabel(
   seat: { type?: string | null; number: string | number } | undefined | null,
@@ -503,28 +490,10 @@ export default function POS() {
     closeSeatPicker();
   };
 
-  /** Any person can be picked; absent becomes present automatically */
+  /** Pick person seat without forcing status — seat sync follows unpaid/paid invoices */
   const selectPerson = (person: RestaurantTable) => {
     if (isUpdatingPerson) return;
-    const markPresent = () => {
-      if (personPresence(person.status) === "available") {
-        finishPersonSelection(person.id);
-        return;
-      }
-      updateTable(
-        { id: person.id, data: { status: "available" } },
-        {
-          onSuccess: () => {
-            void refetchTables();
-            finishPersonSelection(person.id);
-          },
-          onError: () => {
-            finishPersonSelection(person.id);
-          },
-        }
-      );
-    };
-    markPresent();
+    finishPersonSelection(person.id);
   };
 
   const selectTodayOrder = (order: Order) => {
@@ -698,7 +667,9 @@ export default function POS() {
 
   const invalidateOrdersQueries = () => {
     void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
     void refetchTodayOrders();
+    void refetchTables();
     try {
       localStorage.setItem("rms-orders-bump", String(Date.now()));
     } catch {
@@ -1878,8 +1849,8 @@ export default function POS() {
             <div className="rounded-2xl border border-border/60 bg-card/60 overflow-hidden max-h-[min(55vh,520px)] overflow-y-auto overscroll-contain">
               <div className="divide-y divide-border/50">
                 {pickerSeats.map((person, idx) => {
-                  const presence = personPresence(person.status);
-                  const meta = PERSON_STATUS_META[presence];
+                  const meta =
+                    TABLE_STATUS_META[person.status] ?? TABLE_STATUS_META.available;
                   const isSelected = selectedTableId === person.id;
                   const name = String(person.number);
                   const openStage = openSeatStages.get(person.id);
@@ -1934,7 +1905,7 @@ export default function POS() {
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold flex-shrink-0 ${meta.chip}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                        {t(meta.labelKey)}
+                        {t(seatStatusLabelKey(person.status))}
                       </div>
                       {isSelected && (
                         <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
@@ -1964,7 +1935,11 @@ export default function POS() {
               {pickerSeats.map((table, idx) => {
                 const meta = TABLE_STATUS_META[table.status] ?? TABLE_STATUS_META.available;
                 const openStage = openSeatStages.get(table.id);
-                const canPick = table.status === "available";
+                // Allow pick when available/occupied or already has an open invoice
+                const canPick =
+                  table.status === "available" ||
+                  table.status === "occupied" ||
+                  Boolean(openStage);
                 const isSelected = selectedTableId === table.id;
                 const isRoom = pickerEntityType === "room";
                 return (
@@ -1998,15 +1973,7 @@ export default function POS() {
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-bold ${meta.chip}`}
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          {t(
-                            table.status === "occupied"
-                              ? "seat.occupied"
-                              : table.status === "reserved"
-                                ? "seat.reserved"
-                                : table.status === "cleaning"
-                                  ? "seat.cleaning"
-                                  : "seat.available"
-                          )}
+                          {t(seatStatusLabelKey(table.status))}
                         </div>
                         {openStage && (
                           <div className="flex flex-wrap items-center justify-center gap-1">
@@ -2501,8 +2468,8 @@ export default function POS() {
                   </div>
                 ) : (
                   pickerSeats.map((person) => {
-                    const presence = personPresence(person.status);
-                    const meta = PERSON_STATUS_META[presence];
+                    const meta =
+                      TABLE_STATUS_META[person.status] ?? TABLE_STATUS_META.available;
                     const isSelected = selectedTableId === person.id;
                     const name = String(person.number);
                     return (
@@ -2535,7 +2502,7 @@ export default function POS() {
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold flex-shrink-0 ${meta.chip}`}
                         >
-                          {t(meta.labelKey)}
+                          {t(seatStatusLabelKey(person.status))}
                         </span>
                       </button>
                     );

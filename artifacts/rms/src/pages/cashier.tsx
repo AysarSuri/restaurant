@@ -823,6 +823,7 @@ export default function Cashier() {
           setIsReceivedPadOpen(false);
           setIsDiscountPadOpen(false);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
           try {
             localStorage.setItem("rms-orders-bump", String(Date.now()));
           } catch {
@@ -859,6 +860,7 @@ export default function Cashier() {
           setSelectedOrder(null);
           setPaymentDialog(null);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
           try {
             localStorage.setItem("rms-orders-bump", String(Date.now()));
           } catch {
