@@ -5,6 +5,8 @@ import {
   useGetOrders,
   useUpdateOrderStatus,
   useGetSettings,
+  useGetBranches,
+  useGetDevicePrinters,
   type Order,
 } from "@workspace/api-client-react";
 import { Button, Badge, Dialog } from "@/components/ui-elements";
@@ -14,7 +16,6 @@ import {
   CreditCard,
   Banknote,
   Phone,
-  ChefHat,
   RefreshCw,
   ShoppingBag,
   Table2,
@@ -26,6 +27,7 @@ import {
   Bike,
   Wallet,
   Pencil,
+  Printer,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/App";
@@ -33,6 +35,10 @@ import { useLocation } from "wouter";
 import { useI18n } from "@/i18n";
 import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { useCurrency } from "@/hooks/use-currency";
+import { getOrCreateDeviceKey } from "@/lib/device-id";
+import { printThermalReceipt } from "@/lib/print-receipt";
+import { toast } from "@/hooks/use-toast";
 
 type SeatKind = "table" | "room" | "person" | "takeaway" | "delivery";
 type CashierPage = "unpaid" | "paid";
@@ -198,6 +204,7 @@ function OrderTicket({
   page,
   onOpen,
   onPrimary,
+  onPrint,
   primaryLabel,
   t,
 }: {
@@ -205,6 +212,7 @@ function OrderTicket({
   page: CashierPage;
   onOpen: () => void;
   onPrimary?: () => void;
+  onPrint?: () => void;
   primaryLabel?: string;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
@@ -294,28 +302,40 @@ function OrderTicket({
         </div>
       </div>
 
-      {page === "unpaid" && onPrimary ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPrimary();
-          }}
-          className="w-full h-11 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all bg-gradient-to-l from-amber-500 to-orange-500"
-        >
-          <Wallet className="w-4 h-4" />
-          {primaryLabel}
-        </button>
-      ) : null}
-
-      {page === "paid" ? (
-        <div className="px-3.5 pb-3.5">
+      <div className="px-3.5 pb-3.5 space-y-2">
+        {onPrint ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrint();
+            }}
+            className="w-full h-10 rounded-xl border-2 border-border/60 bg-background/70 hover:bg-background font-extrabold text-[12px] flex items-center justify-center gap-2 touch-manipulation active:scale-[0.99] transition-all"
+          >
+            <Printer className="w-4 h-4" />
+            {t("cashier.printReceipt")}
+          </button>
+        ) : null}
+        {page === "unpaid" && onPrimary ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrimary();
+            }}
+            className="w-full h-11 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all bg-gradient-to-l from-amber-500 to-orange-500"
+          >
+            <Wallet className="w-4 h-4" />
+            {primaryLabel}
+          </button>
+        ) : null}
+        {page === "paid" ? (
           <div className="h-9 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[12px] font-extrabold flex items-center justify-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5" />
             {t("cashier.received")}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </motion.article>
   );
 }
@@ -323,10 +343,12 @@ function OrderTicket({
 function PaidListRow({
   card,
   onOpen,
+  onPrint,
   t,
 }: {
   card: OrderCardModel;
   onOpen: () => void;
+  onPrint?: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const Icon = seatIcon(card.seatKind);
@@ -380,22 +402,38 @@ function PaidListRow({
             <span>{pay}</span>
           </div>
         </div>
-        <div className="shrink-0 text-end flex flex-col items-end gap-1">
-          <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
-            {formatIQD(card.amount)}
-          </p>
+      <div className="shrink-0 text-end flex flex-col items-end gap-1.5">
+        <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
+          {formatIQD(card.amount)}
+        </p>
+        <div className="flex items-center gap-1.5">
+          {onPrint ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrint();
+              }}
+              className="h-7 w-7 rounded-lg border border-border/60 bg-background/80 hover:bg-background flex items-center justify-center touch-manipulation"
+              title={t("cashier.printReceipt")}
+              aria-label={t("cashier.printReceipt")}
+            >
+              <Printer className="w-3.5 h-3.5" />
+            </button>
+          ) : null}
           <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="w-3 h-3" />
             {t("cashier.colPaid")}
           </span>
         </div>
       </div>
+    </div>
     </motion.button>
   );
 }
 
 export default function Cashier() {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
   const { user } = useAuth();
   const { selectedBranchId, branchLabel } = useBranch();
   const [, navigate] = useLocation();
@@ -440,7 +478,18 @@ export default function Cashier() {
 
   const { mutate: updateStatus, isPending: isUpdating } = useUpdateOrderStatus();
   const { data: appSettings } = useGetSettings();
-  const cashierSendToKitchen = appSettings?.cashierSendToKitchen !== false;
+  const { data: branches } = useGetBranches();
+  const { format: formatMoneyAmount } = useCurrency();
+  const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
+  const { data: devicePrinters } = useGetDevicePrinters();
+  const devicePrinter = useMemo(() => {
+    const list = devicePrinters ?? [];
+    return (
+      list.find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
+      list.find((p) => p.deviceKey === deviceKey) ??
+      null
+    );
+  }, [devicePrinters, deviceKey]);
 
   const [page, setPage] = useState<CashierPage>("unpaid");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -564,11 +613,16 @@ export default function Cashier() {
     order: Order,
     paymentMethod: "cash" | "card" | "transfer"
   ) => {
+    // Cashier collect = واصل only — never send to kitchen from this screen
+    const keepKitchen =
+      order.status === "preparing" || order.status === "ready"
+        ? order.status
+        : "paid";
     updateStatus(
       {
         id: order.id,
         data: {
-          status: cashierSendToKitchen ? "preparing" : "paid",
+          status: keepKitchen,
           paymentMethod,
         } as any,
       },
@@ -577,6 +631,11 @@ export default function Cashier() {
           setPaymentDialog(null);
           setSelectedOrder(null);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+          try {
+            localStorage.setItem("rms-orders-bump", String(Date.now()));
+          } catch {
+            /* ignore */
+          }
           void refreshAll(false);
           setPage("paid");
         },
@@ -584,9 +643,86 @@ export default function Cashier() {
     );
   };
 
-  const primaryPayLabel = cashierSendToKitchen
-    ? t("cashier.collectSendKitchen")
-    : t("cashier.collectPaid");
+  const primaryPayLabel = t("cashier.collectPaid");
+
+  const paymentLabelFor = (order: Order) => {
+    if (order.paymentMethod === "cash") return t("pos.cash");
+    if (order.paymentMethod === "card") return t("common.card");
+    if (order.paymentMethod === "transfer") return t("common.transfer");
+    return t("cashier.colUnpaid");
+  };
+
+  const printCashierReceipt = (order: Order) => {
+    const card = toCard(order, t);
+    const branch =
+      (order.branchId != null
+        ? (branches ?? []).find((b) => b.id === order.branchId)
+        : null) ??
+      (selectedBranchId !== "all"
+        ? (branches ?? []).find((b) => b.id === selectedBranchId)
+        : null);
+    const created = new Date(order.createdAt);
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const timeLabel = `${pad2(created.getHours())}:${pad2(created.getMinutes())}:${pad2(created.getSeconds())}`;
+    const typeLabel =
+      order.type === "delivery"
+        ? t("order.delivery")
+        : order.type === "takeaway"
+          ? t("order.takeaway")
+          : t("order.dineIn");
+    const total = Number(order.total) || 0;
+    const subtotal = Number(order.subtotal) || 0;
+    const discount = Number(order.discount) || 0;
+    const deliveryFee = Number(order.deliveryFee) || 0;
+
+    try {
+      printThermalReceipt({
+        restaurantName:
+          appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
+        branchName: branch?.name?.trim() || branchLabel,
+        mobile1: branch?.mobile1,
+        mobile2: branch?.mobile2,
+        address: branch?.address,
+        logoUrl: branch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
+        invoiceNumber: order.orderNumber,
+        dateLabel: formatDate(created),
+        timeLabel,
+        orderTypeLabel: typeLabel,
+        seatLabel: card.seatLabel,
+        items: (order.items ?? []).map((item: any) => {
+          const unit = Number(item.unitPrice ?? item.price ?? item.menuItem?.price ?? 0) || 0;
+          const qty = Number(item.quantity) || 0;
+          return {
+            name: item.menuItem?.nameAr || t("common.item"),
+            quantity: qty,
+            unitPrice: unit,
+            lineTotal: Number(item.totalPrice) || unit * qty,
+          };
+        }),
+        subtotal,
+        discount,
+        deliveryFee,
+        total,
+        paymentLabel: paymentLabelFor(order),
+        received: isOrderReceived(order) ? total : undefined,
+        change: undefined,
+        formatMoney: formatMoneyAmount,
+        printerName: devicePrinter?.printerName?.trim() || null,
+      });
+      toast({
+        title: t("cashier.printOk"),
+        description: devicePrinter?.printerName?.trim()
+          ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
+          : t("cashier.printHint"),
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: t("cashier.printFailed"),
+        description: t("pos.printPopupBlocked"),
+      });
+    }
+  };
 
   const showSpin = manualRefreshing;
 
@@ -795,6 +931,7 @@ export default function Cashier() {
                         card={card}
                         t={t}
                         onOpen={() => setSelectedOrder(card.order)}
+                        onPrint={() => printCashierReceipt(card.order)}
                       />
                     ))}
                   </AnimatePresence>
@@ -811,6 +948,7 @@ export default function Cashier() {
                       t={t}
                       onOpen={() => setSelectedOrder(card.order)}
                       onPrimary={() => setPaymentDialog(card.order)}
+                      onPrint={() => printCashierReceipt(card.order)}
                       primaryLabel={primaryPayLabel}
                     />
                   ))}
@@ -896,19 +1034,25 @@ export default function Cashier() {
               </span>
             </div>
 
-            {!isOrderReceived(selectedOrder) ? (
+            <div className="grid grid-cols-1 gap-2.5">
               <Button
-                className="w-full h-12 gap-2 font-extrabold"
-                onClick={() => setPaymentDialog(selectedOrder)}
+                variant="outline"
+                className="w-full h-12 gap-2 font-extrabold rounded-2xl"
+                onClick={() => printCashierReceipt(selectedOrder)}
               >
-                {cashierSendToKitchen ? (
-                  <ChefHat className="w-5 h-5" />
-                ) : (
-                  <CheckCircle2 className="w-5 h-5" />
-                )}
-                {primaryPayLabel}
+                <Printer className="w-5 h-5" />
+                {t("cashier.printReceipt")}
               </Button>
-            ) : null}
+              {!isOrderReceived(selectedOrder) ? (
+                <Button
+                  className="w-full h-12 gap-2 font-extrabold"
+                  onClick={() => setPaymentDialog(selectedOrder)}
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  {primaryPayLabel}
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </Dialog>
@@ -975,9 +1119,7 @@ export default function Cashier() {
             </div>
 
             <p className="text-xs text-center text-muted-foreground font-semibold">
-              {cashierSendToKitchen
-                ? t("cashier.payWillKitchen")
-                : t("cashier.payWillSave")}
+              {t("cashier.payWillSave")}
             </p>
           </div>
         ) : null}
