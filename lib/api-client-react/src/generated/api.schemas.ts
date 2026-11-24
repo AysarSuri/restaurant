@@ -270,6 +270,8 @@ export interface Order {
   paymentMethod?: OrderPaymentMethod;
   /** Saved from POS without payment — awaiting cashier */
   collectAtCashier?: boolean;
+  /** Last POS edit timestamp — cashier shows “edited” badge */
+  posEditedAt?: string | null;
   notes?: string;
   deliveryAddress?: string;
   deliveryPhone?: string;

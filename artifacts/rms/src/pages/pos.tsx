@@ -210,16 +210,10 @@ export default function POS() {
     );
   }, [devicePrinters, deviceKey]);
 
-  const salesPaymentAt =
-    devicePrinter?.salesPaymentAt === "cashier" ? "cashier" : "pos";
   const salesSendToKitchen =
     devicePrinter != null
       ? devicePrinter.salesSendToKitchen !== false
       : appSettings?.posSaveTarget !== "none";
-  /** Classic pay-at-POS without kitchen */
-  const isDirectSave = salesPaymentAt === "pos" && !salesSendToKitchen;
-  /** Save invoice for cashier collection — no payment dialog */
-  const saveForCashier = salesPaymentAt === "cashier";
 
   const branchTables = useMemo(() => {
     const list = tables ?? [];
@@ -234,6 +228,23 @@ export default function POS() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<OrderType>("dine_in");
+
+  const salesPaymentAt = useMemo(() => {
+    if (!devicePrinter) return "pos" as const;
+    const legacy = devicePrinter.salesPaymentAt === "cashier" ? "cashier" : "pos";
+    const byType =
+      orderType === "takeaway"
+        ? devicePrinter.salesPaymentAtTakeaway
+        : orderType === "delivery"
+          ? devicePrinter.salesPaymentAtDelivery
+          : devicePrinter.salesPaymentAtDineIn;
+    if (byType == null) return legacy;
+    return byType === "cashier" ? ("cashier" as const) : ("pos" as const);
+  }, [devicePrinter, orderType]);
+  /** Classic pay-at-POS without kitchen */
+  const isDirectSave = salesPaymentAt === "pos" && !salesSendToKitchen;
+  /** Save invoice for cashier collection — no payment dialog */
+  const saveForCashier = salesPaymentAt === "cashier";
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryPhone, setDeliveryPhone] = useState("");

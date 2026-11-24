@@ -57,11 +57,29 @@ import {
   X,
   Phone,
   Bike,
+  UtensilsCrossed,
+  Package,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 
 type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
 type DeviceSalesPaymentAt = "pos" | "cashier";
+type SalesPaymentOrderType = "dine_in" | "takeaway" | "delivery";
+
+function paymentAtForType(
+  row: DevicePrinter,
+  orderType: SalesPaymentOrderType
+): DeviceSalesPaymentAt {
+  const legacy = row.salesPaymentAt === "cashier" ? "cashier" : "pos";
+  const byType =
+    orderType === "takeaway"
+      ? row.salesPaymentAtTakeaway
+      : orderType === "delivery"
+        ? row.salesPaymentAtDelivery
+        : row.salesPaymentAtDineIn;
+  if (byType == null) return legacy;
+  return byType === "cashier" ? "cashier" : "pos";
+}
 
 const MAX_LOGO_BYTES = 2.5 * 1024 * 1024;
 
@@ -433,24 +451,36 @@ export default function SettingsPage() {
 
   const handleSaveDeviceSales = (
     row: DevicePrinter,
-    patch: { salesPaymentAt?: DeviceSalesPaymentAt; salesSendToKitchen?: boolean }
+    patch: {
+      salesPaymentAtDineIn?: DeviceSalesPaymentAt;
+      salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
+      salesPaymentAtDelivery?: DeviceSalesPaymentAt;
+      salesSendToKitchen?: boolean;
+    }
   ) => {
     clearSaveFlash();
     setSaveMsg("");
     setSaveErr("");
-    const nextPaymentAt: DeviceSalesPaymentAt =
-      patch.salesPaymentAt ?? (row.salesPaymentAt === "cashier" ? "cashier" : "pos");
+    const nextDineIn =
+      patch.salesPaymentAtDineIn ?? paymentAtForType(row, "dine_in");
+    const nextTakeaway =
+      patch.salesPaymentAtTakeaway ?? paymentAtForType(row, "takeaway");
+    const nextDelivery =
+      patch.salesPaymentAtDelivery ?? paymentAtForType(row, "delivery");
     const nextKitchen =
       patch.salesSendToKitchen ?? row.salesSendToKitchen !== false;
 
-    // Optimistic UI so "من شاشة الكاشير" sticks immediately
-    syncPrinters((list) =>
-      list.map((p) =>
-        p.id === row.id
-          ? { ...p, salesPaymentAt: nextPaymentAt, salesSendToKitchen: nextKitchen }
-          : p
-      )
-    );
+    const optimistic: DevicePrinter = {
+      ...row,
+      salesPaymentAt: nextDineIn,
+      salesPaymentAtDineIn: nextDineIn,
+      salesPaymentAtTakeaway: nextTakeaway,
+      salesPaymentAtDelivery: nextDelivery,
+      salesSendToKitchen: nextKitchen,
+    };
+
+    // Optimistic UI so choices stick immediately
+    syncPrinters((list) => list.map((p) => (p.id === row.id ? optimistic : p)));
 
     updatePrinter(
       {
@@ -460,7 +490,10 @@ export default function SettingsPage() {
           printerName: row.printerName ?? "",
           branchId: row.branchId ?? null,
           isActive: row.isActive !== false,
-          salesPaymentAt: nextPaymentAt,
+          salesPaymentAt: nextDineIn,
+          salesPaymentAtDineIn: nextDineIn,
+          salesPaymentAtTakeaway: nextTakeaway,
+          salesPaymentAtDelivery: nextDelivery,
           salesSendToKitchen: nextKitchen,
         },
       },
@@ -472,13 +505,30 @@ export default function SettingsPage() {
                 ? {
                     ...p,
                     ...updated,
-                    // Keep requested value if API omits the field (old server / missing column)
+                    salesPaymentAtDineIn:
+                      updated.salesPaymentAtDineIn != null
+                        ? updated.salesPaymentAtDineIn === "cashier"
+                          ? "cashier"
+                          : "pos"
+                        : nextDineIn,
+                    salesPaymentAtTakeaway:
+                      updated.salesPaymentAtTakeaway != null
+                        ? updated.salesPaymentAtTakeaway === "cashier"
+                          ? "cashier"
+                          : "pos"
+                        : nextTakeaway,
+                    salesPaymentAtDelivery:
+                      updated.salesPaymentAtDelivery != null
+                        ? updated.salesPaymentAtDelivery === "cashier"
+                          ? "cashier"
+                          : "pos"
+                        : nextDelivery,
                     salesPaymentAt:
                       updated.salesPaymentAt != null
                         ? updated.salesPaymentAt === "cashier"
                           ? "cashier"
                           : "pos"
-                        : nextPaymentAt,
+                        : nextDineIn,
                     salesSendToKitchen:
                       updated.salesSendToKitchen != null
                         ? updated.salesSendToKitchen !== false
@@ -745,10 +795,45 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-4">
               {(printers ?? []).map((row) => {
-                const paymentAt: DeviceSalesPaymentAt =
-                  row.salesPaymentAt === "cashier" ? "cashier" : "pos";
                 const kitchenOn = row.salesSendToKitchen !== false;
                 const isMine = row.deviceKey === deviceKey;
+                const paymentRows: {
+                  type: SalesPaymentOrderType;
+                  labelKey: string;
+                  Icon: typeof UtensilsCrossed;
+                  accent: string;
+                  accentBg: string;
+                  selectedBorder: string;
+                  selectedBg: string;
+                }[] = [
+                  {
+                    type: "dine_in",
+                    labelKey: "order.dineIn",
+                    Icon: UtensilsCrossed,
+                    accent: "bg-amber-500 text-white",
+                    accentBg: "bg-secondary",
+                    selectedBorder: "border-amber-500/60",
+                    selectedBg: "bg-amber-500/10",
+                  },
+                  {
+                    type: "takeaway",
+                    labelKey: "order.takeaway",
+                    Icon: Package,
+                    accent: "bg-violet-500 text-white",
+                    accentBg: "bg-secondary",
+                    selectedBorder: "border-violet-500/60",
+                    selectedBg: "bg-violet-500/10",
+                  },
+                  {
+                    type: "delivery",
+                    labelKey: "order.delivery",
+                    Icon: Bike,
+                    accent: "bg-cyan-500 text-white",
+                    accentBg: "bg-secondary",
+                    selectedBorder: "border-cyan-500/60",
+                    selectedBg: "bg-cyan-500/10",
+                  },
+                ];
                 return (
                   <Card
                     key={row.id}
@@ -818,75 +903,117 @@ export default function SettingsPage() {
                     </div>
 
                     <div>
-                      <p className="text-sm font-extrabold mb-2">{t("settings.saveOnlyWhere")}</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          disabled={updatingPrinter}
-                          onClick={() =>
-                            handleSaveDeviceSales(row, { salesPaymentAt: "pos" })
+                      <p className="text-sm font-extrabold mb-1">{t("settings.saveOnlyWhere")}</p>
+                      <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                        {t("settings.saveOnlyWhereByTypeHint")}
+                      </p>
+                      <div className="space-y-3">
+                        {paymentRows.map(
+                          ({
+                            type,
+                            labelKey,
+                            Icon,
+                            accent,
+                            accentBg,
+                            selectedBorder,
+                            selectedBg,
+                          }) => {
+                            const paymentAt = paymentAtForType(row, type);
+                            const patchKey =
+                              type === "takeaway"
+                                ? "salesPaymentAtTakeaway"
+                                : type === "delivery"
+                                  ? "salesPaymentAtDelivery"
+                                  : "salesPaymentAtDineIn";
+                            return (
+                              <div
+                                key={type}
+                                className={`rounded-2xl border-2 p-3.5 sm:p-4 space-y-3 ${selectedBorder} ${selectedBg}`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${accent}`}
+                                  >
+                                    <Icon className="w-4 h-4" />
+                                  </span>
+                                  <p className="font-extrabold text-sm sm:text-base">
+                                    {t(labelKey)}
+                                  </p>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  <button
+                                    type="button"
+                                    disabled={updatingPrinter}
+                                    onClick={() =>
+                                      handleSaveDeviceSales(row, {
+                                        [patchKey]: "pos",
+                                      })
+                                    }
+                                    className={`text-start rounded-xl border-2 p-3 transition-all touch-manipulation ${
+                                      paymentAt === "pos"
+                                        ? "border-emerald-500/70 bg-emerald-500/10"
+                                        : "border-border/70 bg-card/70"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <span
+                                        className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                                          paymentAt === "pos"
+                                            ? "bg-emerald-500 text-white"
+                                            : accentBg
+                                        }`}
+                                      >
+                                        <ShoppingBag className="w-4 h-4" />
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-extrabold text-sm">
+                                          {t("settings.saveFromPos")}
+                                        </p>
+                                      </div>
+                                      {paymentAt === "pos" ? (
+                                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                                      ) : null}
+                                    </div>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={updatingPrinter}
+                                    onClick={() =>
+                                      handleSaveDeviceSales(row, {
+                                        [patchKey]: "cashier",
+                                      })
+                                    }
+                                    className={`text-start rounded-xl border-2 p-3 transition-all touch-manipulation ${
+                                      paymentAt === "cashier"
+                                        ? "border-sky-500/70 bg-sky-500/10"
+                                        : "border-border/70 bg-card/70"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <span
+                                        className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                                          paymentAt === "cashier"
+                                            ? "bg-sky-500 text-white"
+                                            : accentBg
+                                        }`}
+                                      >
+                                        <Wallet className="w-4 h-4" />
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-extrabold text-sm">
+                                          {t("settings.saveFromCashier")}
+                                        </p>
+                                      </div>
+                                      {paymentAt === "cashier" ? (
+                                        <Check className="w-4 h-4 text-sky-500 flex-shrink-0" />
+                                      ) : null}
+                                    </div>
+                                  </button>
+                                </div>
+                              </div>
+                            );
                           }
-                          className={`text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
-                            paymentAt === "pos"
-                              ? "border-emerald-500/70 bg-emerald-500/10"
-                              : "border-border/70 bg-card/50"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 mb-2">
-                            <span
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                paymentAt === "pos"
-                                  ? "bg-emerald-500 text-white"
-                                  : "bg-secondary"
-                              }`}
-                            >
-                              <ShoppingBag className="w-5 h-5" />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-extrabold">{t("settings.saveFromPos")}</p>
-                            </div>
-                            {paymentAt === "pos" ? (
-                              <Check className="w-4 h-4 text-emerald-500" />
-                            ) : null}
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {t("settings.saveFromPosBody")}
-                          </p>
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={updatingPrinter}
-                          onClick={() =>
-                            handleSaveDeviceSales(row, { salesPaymentAt: "cashier" })
-                          }
-                          className={`text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
-                            paymentAt === "cashier"
-                              ? "border-sky-500/70 bg-sky-500/10"
-                              : "border-border/70 bg-card/50"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 mb-2">
-                            <span
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                paymentAt === "cashier"
-                                  ? "bg-sky-500 text-white"
-                                  : "bg-secondary"
-                              }`}
-                            >
-                              <Wallet className="w-5 h-5" />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-extrabold">{t("settings.saveFromCashier")}</p>
-                            </div>
-                            {paymentAt === "cashier" ? (
-                              <Check className="w-4 h-4 text-sky-500" />
-                            ) : null}
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {t("settings.saveFromCashierBody")}
-                          </p>
-                        </button>
+                        )}
                       </div>
                     </div>
                   </Card>

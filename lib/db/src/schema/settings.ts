@@ -55,11 +55,18 @@ export const devicePrintersTable = pgTable("device_printers", {
   isActive: boolean("is_active").default(true).notNull(),
   note: text("note"),
   /**
-   * Where payment is collected for this device:
+   * Legacy / fallback where payment is collected:
    * - pos → pay on POS (choose payment method)
    * - cashier → save invoice only; collect payment on cashier screen
+   * Prefer per-order-type columns below.
    */
   salesPaymentAt: text("sales_payment_at").default("pos").notNull(),
+  /** Payment source for dine-in (table) orders: pos | cashier */
+  salesPaymentAtDineIn: text("sales_payment_at_dine_in").default("pos").notNull(),
+  /** Payment source for takeaway orders: pos | cashier */
+  salesPaymentAtTakeaway: text("sales_payment_at_takeaway").default("pos").notNull(),
+  /** Payment source for delivery orders: pos | cashier */
+  salesPaymentAtDelivery: text("sales_payment_at_delivery").default("pos").notNull(),
   /** Independent kitchen routing for this device */
   salesSendToKitchen: boolean("sales_send_to_kitchen").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

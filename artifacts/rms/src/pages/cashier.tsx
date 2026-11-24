@@ -25,6 +25,7 @@ import {
   User,
   Bike,
   Wallet,
+  Pencil,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/App";
@@ -144,12 +145,45 @@ function toCard(
 }
 
 function isOrderReceived(order: Order) {
+  // Payment / واصل only — kitchen "served" must NOT mark as received
   if (order.paymentMethod) return true;
-  return order.status === "paid" || order.status === "served";
+  return order.status === "paid";
 }
 
-function isCashierCollect(order: Order) {
-  return Boolean((order as Order & { collectAtCashier?: boolean }).collectAtCashier);
+function isPosEdited(order: Order) {
+  return Boolean((order as Order & { posEditedAt?: string | null }).posEditedAt);
+}
+
+function isRecentlyPosEdited(order: Order) {
+  const at = (order as Order & { posEditedAt?: string | null }).posEditedAt;
+  if (!at) return false;
+  const mins = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  return mins >= 0 && mins < 20;
+}
+
+function PosEditedBanner({
+  order,
+  t,
+  compact = false,
+}: {
+  order: Order;
+  t: (key: string, params?: Record<string, string | number>) => string;
+  compact?: boolean;
+}) {
+  if (!isPosEdited(order)) return null;
+  const recent = isRecentlyPosEdited(order);
+  return (
+    <div
+      className={`flex items-center gap-1.5 font-extrabold text-indigo-800 dark:text-indigo-200 border border-indigo-500/40 bg-gradient-to-l from-indigo-500/20 via-violet-500/15 to-fuchsia-500/10 ${
+        compact
+          ? "rounded-lg px-2 py-1 text-[10px]"
+          : "rounded-xl px-3 py-2 text-[11px] sm:text-xs"
+      } ${recent ? "animate-pulse shadow-[0_0_0_1px_rgba(99,102,241,0.35)]" : ""}`}
+    >
+      <Pencil className={compact ? "w-3 h-3 shrink-0" : "w-3.5 h-3.5 shrink-0"} />
+      <span className="leading-tight">{t("cashier.editedFromPos")}</span>
+    </div>
+  );
 }
 
 function urgencyRing(createdAt: string) {
@@ -177,8 +211,7 @@ function OrderTicket({
   const Icon = seatIcon(card.seatKind);
   const tone = seatTone(card.seatKind);
   const createdAt = String(card.order.createdAt || "");
-
-  const fromPosCashier = page === "unpaid" && isCashierCollect(card.order);
+  const edited = isPosEdited(card.order);
 
   return (
     <motion.article
@@ -188,12 +221,18 @@ function OrderTicket({
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.18 }}
       className={`group rounded-[1.35rem] overflow-hidden shadow-[0_8px_24px_-18px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_28px_-16px_rgba(0,0,0,0.4)] transition-shadow cursor-pointer ${urgencyRing(createdAt)} ${
-        fromPosCashier
-          ? "border-2 border-sky-500/55 bg-gradient-to-b from-sky-500/15 via-card to-sky-500/5 hover:border-sky-500/70"
-          : "border border-border/55 bg-gradient-to-b from-card via-card to-secondary/25 hover:border-border"
-      }`}
+        page === "unpaid"
+          ? "border-2 border-amber-500/60 bg-gradient-to-b from-amber-500/18 via-card to-orange-500/8 hover:border-amber-500/80"
+          : "border-2 border-emerald-500/55 bg-gradient-to-b from-emerald-500/15 via-card to-teal-500/8 hover:border-emerald-500/75"
+      } ${edited ? "ring-2 ring-indigo-500/35" : ""}`}
       onClick={onOpen}
     >
+      {edited ? (
+        <div className="px-3 pt-3">
+          <PosEditedBanner order={card.order} t={t} />
+        </div>
+      ) : null}
+
       <div className="p-3.5 flex items-start gap-3">
         <div
           className={`w-12 h-12 rounded-2xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
@@ -220,6 +259,27 @@ function OrderTicket({
               </p>
             </div>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold border ${
+                page === "unpaid"
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                  : "border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
+              }`}
+            >
+              {page === "unpaid" ? (
+                <>
+                  <Wallet className="w-3 h-3" />
+                  {t("cashier.colUnpaid")}
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3 h-3" />
+                  {t("cashier.colPaid")}
+                </>
+              )}
+            </span>
+          </div>
           {(card.order.items?.length ?? 0) > 0 ? (
             <p className="text-[11px] text-muted-foreground font-semibold mt-2 truncate">
               {(card.order.items ?? [])
@@ -241,11 +301,7 @@ function OrderTicket({
             e.stopPropagation();
             onPrimary();
           }}
-          className={`w-full h-11 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all ${
-            fromPosCashier
-              ? "bg-gradient-to-l from-sky-500 to-blue-600"
-              : "bg-gradient-to-l from-amber-500 to-orange-500"
-          }`}
+          className="w-full h-11 text-white font-extrabold text-[13px] flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition-all bg-gradient-to-l from-amber-500 to-orange-500"
         >
           <Wallet className="w-4 h-4" />
           {primaryLabel}
@@ -276,6 +332,7 @@ function PaidListRow({
   const Icon = seatIcon(card.seatKind);
   const tone = seatTone(card.seatKind);
   const createdAt = String(card.order.createdAt || "");
+  const edited = isPosEdited(card.order);
   const pay =
     card.order.paymentMethod === "cash"
       ? t("pos.cash")
@@ -294,37 +351,44 @@ function PaidListRow({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       onClick={onOpen}
-      className="w-full text-start rounded-2xl border border-border/50 bg-card/80 hover:bg-card hover:border-emerald-500/35 px-3 sm:px-4 py-3 flex items-center gap-3 transition-colors touch-manipulation"
+      className={`w-full text-start rounded-2xl border-2 px-3 sm:px-4 py-3 flex flex-col gap-2 transition-colors touch-manipulation ${
+        edited
+          ? "border-indigo-500/45 bg-gradient-to-l from-indigo-500/10 via-emerald-500/10 to-card hover:border-indigo-500/60"
+          : "border-emerald-500/40 bg-gradient-to-l from-emerald-500/12 via-card to-teal-500/8 hover:border-emerald-500/55"
+      }`}
     >
-      <div
-        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
-      >
-        <Icon className="w-5 h-5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 min-w-0">
-          <p className="text-[14px] sm:text-[15px] font-black truncate">{card.seatLabel}</p>
-          <span className="text-[11px] font-bold text-muted-foreground tabular-nums shrink-0">
-            #{card.shortNo}
+      {edited ? <PosEditedBanner order={card.order} t={t} compact /> : null}
+      <div className="flex items-center gap-3 w-full">
+        <div
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-[14px] sm:text-[15px] font-black truncate">{card.seatLabel}</p>
+            <span className="text-[11px] font-bold text-muted-foreground tabular-nums shrink-0">
+              #{card.shortNo}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {elapsed(createdAt, t)}
+            </span>
+            <span className="text-border">·</span>
+            <span>{pay}</span>
+          </div>
+        </div>
+        <div className="shrink-0 text-end flex flex-col items-end gap-1">
+          <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
+            {formatIQD(card.amount)}
+          </p>
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="w-3 h-3" />
+            {t("cashier.colPaid")}
           </span>
         </div>
-        <div className="flex items-center gap-2 mt-0.5 text-[11px] font-semibold text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {elapsed(createdAt, t)}
-          </span>
-          <span className="text-border">·</span>
-          <span>{pay}</span>
-        </div>
-      </div>
-      <div className="shrink-0 text-end flex flex-col items-end gap-1">
-        <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
-          {formatIQD(card.amount)}
-        </p>
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
-          <CheckCircle2 className="w-3 h-3" />
-          {t("cashier.received")}
-        </span>
       </div>
     </motion.button>
   );
@@ -433,23 +497,39 @@ export default function Cashier() {
     );
   }, [todayOrders, openOrders, selectedBranchId]);
 
+  const sortCashierCards = (cards: OrderCardModel[]) =>
+    [...cards].sort((a, b) => {
+      const aEdit = (a.order as Order & { posEditedAt?: string | null }).posEditedAt;
+      const bEdit = (b.order as Order & { posEditedAt?: string | null }).posEditedAt;
+      const aEditMs = aEdit ? new Date(aEdit).getTime() : 0;
+      const bEditMs = bEdit ? new Date(bEdit).getTime() : 0;
+      if (aEditMs !== bEditMs) return bEditMs - aEditMs;
+      return (
+        new Date(b.order.createdAt).getTime() - new Date(a.order.createdAt).getTime()
+      );
+    });
+
   const unpaid = useMemo(
     () =>
-      allOrders
-        .filter((o) => !isOrderReceived(o) && o.status !== "cancelled")
-        .map((o) => toCard(o, t)),
+      sortCashierCards(
+        allOrders
+          .filter((o) => !isOrderReceived(o) && o.status !== "cancelled")
+          .map((o) => toCard(o, t))
+      ),
     [allOrders, t]
   );
 
   const paid = useMemo(
     () =>
-      allOrders
-        .filter((o) => {
-          if (!isOrderReceived(o)) return false;
-          const day = String(o.createdAt || "").slice(0, 10);
-          return day === today || o.status === "preparing" || o.status === "ready";
-        })
-        .map((o) => toCard(o, t)),
+      sortCashierCards(
+        allOrders
+          .filter((o) => {
+            if (!isOrderReceived(o)) return false;
+            const day = String(o.createdAt || "").slice(0, 10);
+            return day === today || o.status === "preparing" || o.status === "ready";
+          })
+          .map((o) => toCard(o, t))
+      ),
     [allOrders, t, today]
   );
 
@@ -750,9 +830,13 @@ export default function Cashier() {
       >
         {selectedOrder ? (
           <div className="space-y-4">
+            {isPosEdited(selectedOrder) ? (
+              <PosEditedBanner order={selectedOrder} t={t} />
+            ) : null}
             {(() => {
               const card = toCard(selectedOrder, t);
               const Icon = seatIcon(card.seatKind);
+              const received = isOrderReceived(selectedOrder);
               return (
                 <div className="flex items-center gap-3">
                   <div
@@ -763,7 +847,16 @@ export default function Cashier() {
                   <div className="min-w-0">
                     <p className="font-extrabold text-[16px]">{card.seatLabel}</p>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      <Badge variant="outline">{card.order.status}</Badge>
+                      <Badge
+                        variant="outline"
+                        className={
+                          received
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+                        }
+                      >
+                        {received ? t("cashier.colPaid") : t("cashier.colUnpaid")}
+                      </Badge>
                       <Badge variant="warning">
                         <Clock className="w-3 h-3 me-1" />
                         {elapsed(String(card.order.createdAt), t)}

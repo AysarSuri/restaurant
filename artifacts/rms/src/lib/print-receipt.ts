@@ -310,18 +310,13 @@ function printFromWindow(win: Window) {
   };
 }
 
-/**
- * Prints a professional 80×80 thermal receipt from a dedicated document window
- * (not the host Cursor/app page — avoids empty "app doesn't support print preview").
- */
-export function printThermalReceipt(data: ThermalReceiptData) {
-  const html = buildReceiptHtml(data);
+function openThermalHtmlDocument(html: string, windowName: string, title: string) {
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
 
   const popup = window.open(
     url,
-    "rms-thermal-receipt",
+    windowName,
     "width=420,height=740,left=80,top=40"
   );
 
@@ -334,7 +329,6 @@ export function printThermalReceipt(data: ThermalReceiptData) {
       window.setTimeout(() => URL.revokeObjectURL(url), 8000);
     };
     popup.onload = start;
-    // Some browsers fire load before we attach the handler
     window.setTimeout(() => {
       try {
         if (popup.document?.readyState === "complete") start();
@@ -345,10 +339,9 @@ export function printThermalReceipt(data: ThermalReceiptData) {
     return;
   }
 
-  // Popup blocked — fallback: dedicated iframe with real size (not 0×0)
   URL.revokeObjectURL(url);
   const iframe = document.createElement("iframe");
-  iframe.title = "فاتورة 80×80";
+  iframe.title = title;
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
     "position:fixed;left:-10000px;top:0;width:80mm;height:1200px;border:0;opacity:0;pointer-events:none;z-index:-1;";
@@ -375,6 +368,283 @@ export function printThermalReceipt(data: ThermalReceiptData) {
       }
     }, 100);
   });
+}
+
+/**
+ * Prints a professional 80×80 thermal receipt from a dedicated document window
+ * (not the host Cursor/app page — avoids empty "app doesn't support print preview").
+ */
+export function printThermalReceipt(data: ThermalReceiptData) {
+  openThermalHtmlDocument(buildReceiptHtml(data), "rms-thermal-receipt", "فاتورة 80×80");
+}
+
+export type KitchenTicketLine = {
+  name: string;
+  quantity: number;
+  notes?: string | null;
+};
+
+/** Kitchen chit — items + qty only, never prices / totals / payment */
+export type KitchenTicketThermalData = {
+  restaurantName: string;
+  branchName: string;
+  logoUrl?: string | null;
+  invoiceNumber: string;
+  dateLabel: string;
+  timeLabel: string;
+  orderTypeLabel: string;
+  seatLabel?: string | null;
+  kitchenStatusLabel: string;
+  items: KitchenTicketLine[];
+  orderNotes?: string | null;
+  printerName?: string | null;
+};
+
+function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
+  const logo = data.logoUrl?.trim()
+    ? `<img class="logo" src="${esc(data.logoUrl.trim())}" alt="" />`
+    : "";
+  const itemCount = data.items.reduce((s, i) => s + Math.abs(Number(i.quantity) || 0), 0);
+  const itemsHtml = data.items
+    .map((item) => {
+      const note = item.notes?.trim()
+        ? `<div class="item-note">※ ${esc(item.notes.trim())}</div>`
+        : "";
+      return `
+      <div class="item">
+        <div class="item-row">
+          <span class="qty">${esc(String(item.quantity))}×</span>
+          <span class="name">${esc(item.name)}</span>
+        </div>
+        ${note}
+      </div>`;
+    })
+    .join("");
+
+  const seat = data.seatLabel?.trim()
+    ? `<div class="chip">${esc(data.seatLabel.trim())}</div>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(data.printerName ? `مطبخ — ${data.printerName}` : "تذكرة مطبخ 80×80")}</title>
+  <style>
+    @page { size: 80mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #111;
+      font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body { width: 80mm; }
+    .ticket {
+      width: 76mm;
+      margin: 0 auto;
+      padding: 3.5mm 2.8mm 5mm;
+    }
+    .logo {
+      display: block;
+      width: 24mm;
+      height: 24mm;
+      object-fit: contain;
+      margin: 0 auto 2.5mm;
+      border-radius: 3mm;
+      filter: grayscale(1) contrast(1.2);
+    }
+    .brand {
+      text-align: center;
+      font-size: 17px;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      line-height: 1.25;
+      margin: 0 0 1mm;
+    }
+    .branch {
+      text-align: center;
+      font-size: 12.5px;
+      font-weight: 800;
+      margin: 0 0 2.5mm;
+    }
+    .banner {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      padding: 2.2mm 0;
+      border: 2px solid #111;
+      border-radius: 2mm;
+      margin: 0 0 2.5mm;
+      text-transform: uppercase;
+    }
+    .order-no {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      margin: 1mm 0 2mm;
+      font-variant-numeric: tabular-nums;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.5mm;
+      margin: 0 0 2.5mm;
+    }
+    .chip {
+      display: inline-block;
+      border: 1.4px solid #111;
+      border-radius: 999px;
+      padding: 1mm 2.4mm;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .when {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.45;
+      margin: 0 0 2mm;
+      font-variant-numeric: tabular-nums;
+    }
+    .rule {
+      border: 0;
+      border-top: 2px solid #111;
+      margin: 2.5mm 0;
+    }
+    .rule-dashed {
+      border: 0;
+      border-top: 1.5px dashed #333;
+      margin: 2.5mm 0;
+    }
+    .section {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      margin: 0 0 2mm;
+      opacity: 0.85;
+    }
+    .item {
+      padding: 1.8mm 0;
+      border-bottom: 1px dotted #999;
+    }
+    .item:last-child { border-bottom: 0; }
+    .item-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 2.5mm;
+    }
+    .qty {
+      flex: 0 0 auto;
+      min-width: 9mm;
+      font-size: 16px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+    }
+    .name {
+      flex: 1 1 auto;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .item-note {
+      margin: 1.2mm 0 0 11.5mm;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
+      padding: 1.2mm 1.8mm;
+      border: 1px solid #111;
+      border-radius: 1.5mm;
+      background: #f3f3f3;
+    }
+    .count {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 900;
+      margin-top: 1mm;
+      font-variant-numeric: tabular-nums;
+    }
+    .order-notes {
+      margin-top: 2mm;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.4;
+      padding: 2mm;
+      border: 1.5px solid #111;
+      border-radius: 2mm;
+    }
+    .footer {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 800;
+      margin-top: 3mm;
+      line-height: 1.45;
+      opacity: 0.9;
+    }
+    .printer-hint {
+      text-align: center;
+      font-size: 9px;
+      font-weight: 700;
+      margin: 1.5mm 0 0;
+      opacity: 0.65;
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    ${logo}
+    <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
+    <p class="branch">${esc(data.branchName || "")}</p>
+    <div class="banner">تذكرة مطبخ</div>
+    <div class="order-no">#${esc(String(data.invoiceNumber || "").slice(-4) || data.invoiceNumber)}</div>
+    <div class="meta">
+      <div class="chip">${esc(data.orderTypeLabel)}</div>
+      ${seat}
+      <div class="chip">${esc(data.kitchenStatusLabel)}</div>
+    </div>
+    <p class="when" dir="ltr">${esc(data.dateLabel)} · ${esc(data.timeLabel)}</p>
+    <hr class="rule" />
+    <p class="section">الأصناف</p>
+    ${itemsHtml || `<p class="when">لا توجد أصناف</p>`}
+    <hr class="rule-dashed" />
+    <div class="count">
+      <span>عدد القطع</span>
+      <span dir="ltr">${itemCount}</span>
+    </div>
+    ${
+      data.orderNotes?.trim()
+        ? `<div class="order-notes"><strong>ملاحظة الطلب:</strong> ${esc(data.orderNotes.trim())}</div>`
+        : ""
+    }
+    <p class="footer">للمطبخ فقط · بدون أسعار<br/>Kitchen ticket · no prices</p>
+    ${
+      data.printerName?.trim()
+        ? `<p class="printer-hint">طابعة الجهاز: ${esc(data.printerName.trim())} · 80×80</p>`
+        : `<p class="printer-hint">تذكرة حرارية 80×80</p>`
+    }
+  </div>
+</body>
+</html>`;
+}
+
+/** Professional kitchen ticket for 80mm thermal paper (no prices). */
+export function printKitchenTicketThermal(data: KitchenTicketThermalData) {
+  openThermalHtmlDocument(
+    buildKitchenTicketHtml(data),
+    "rms-kitchen-ticket",
+    "تذكرة مطبخ 80×80"
+  );
 }
 
 export type SupplierPurchaseReceiptItem = {

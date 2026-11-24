@@ -248,10 +248,66 @@ function normalizeSalesPaymentAt(value: unknown) {
 }
 
 function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
+  const legacy = normalizeSalesPaymentAt(row.salesPaymentAt);
+  const dineIn = row.salesPaymentAtDineIn != null
+    ? normalizeSalesPaymentAt(row.salesPaymentAtDineIn)
+    : legacy;
+  const takeaway = row.salesPaymentAtTakeaway != null
+    ? normalizeSalesPaymentAt(row.salesPaymentAtTakeaway)
+    : legacy;
+  const delivery = row.salesPaymentAtDelivery != null
+    ? normalizeSalesPaymentAt(row.salesPaymentAtDelivery)
+    : legacy;
   return {
     ...row,
-    salesPaymentAt: normalizeSalesPaymentAt(row.salesPaymentAt),
+    salesPaymentAt: legacy,
+    salesPaymentAtDineIn: dineIn,
+    salesPaymentAtTakeaway: takeaway,
+    salesPaymentAtDelivery: delivery,
     salesSendToKitchen: row.salesSendToKitchen !== false,
+  };
+}
+
+function pickPaymentFields(
+  body: Record<string, unknown>,
+  existing?: {
+    salesPaymentAt?: string | null;
+    salesPaymentAtDineIn?: string | null;
+    salesPaymentAtTakeaway?: string | null;
+    salesPaymentAtDelivery?: string | null;
+  }
+) {
+  const legacyFallback = normalizeSalesPaymentAt(existing?.salesPaymentAt ?? "pos");
+  const dineIn =
+    body.salesPaymentAtDineIn != null
+      ? normalizeSalesPaymentAt(body.salesPaymentAtDineIn)
+      : existing?.salesPaymentAtDineIn != null
+        ? normalizeSalesPaymentAt(existing.salesPaymentAtDineIn)
+        : body.salesPaymentAt != null
+          ? normalizeSalesPaymentAt(body.salesPaymentAt)
+          : legacyFallback;
+  const takeaway =
+    body.salesPaymentAtTakeaway != null
+      ? normalizeSalesPaymentAt(body.salesPaymentAtTakeaway)
+      : existing?.salesPaymentAtTakeaway != null
+        ? normalizeSalesPaymentAt(existing.salesPaymentAtTakeaway)
+        : body.salesPaymentAt != null
+          ? normalizeSalesPaymentAt(body.salesPaymentAt)
+          : legacyFallback;
+  const delivery =
+    body.salesPaymentAtDelivery != null
+      ? normalizeSalesPaymentAt(body.salesPaymentAtDelivery)
+      : existing?.salesPaymentAtDelivery != null
+        ? normalizeSalesPaymentAt(existing.salesPaymentAtDelivery)
+        : body.salesPaymentAt != null
+          ? normalizeSalesPaymentAt(body.salesPaymentAt)
+          : legacyFallback;
+  return {
+    salesPaymentAtDineIn: dineIn,
+    salesPaymentAtTakeaway: takeaway,
+    salesPaymentAtDelivery: delivery,
+    // Keep legacy column aligned with dine-in for older clients
+    salesPaymentAt: dineIn,
   };
 }
 
@@ -271,6 +327,9 @@ router.get("/printers", async (_req, res) => {
       isActive: devicePrintersTable.isActive,
       note: devicePrintersTable.note,
       salesPaymentAt: devicePrintersTable.salesPaymentAt,
+      salesPaymentAtDineIn: devicePrintersTable.salesPaymentAtDineIn,
+      salesPaymentAtTakeaway: devicePrintersTable.salesPaymentAtTakeaway,
+      salesPaymentAtDelivery: devicePrintersTable.salesPaymentAtDelivery,
       salesSendToKitchen: devicePrintersTable.salesSendToKitchen,
       createdAt: devicePrintersTable.createdAt,
       updatedAt: devicePrintersTable.updatedAt,
@@ -302,6 +361,7 @@ router.get("/printers", async (_req, res) => {
 router.post("/printers", async (req, res) => {
   await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
+  const body = (req.body ?? {}) as Record<string, unknown>;
   const {
     deviceKey,
     deviceName,
@@ -309,9 +369,8 @@ router.post("/printers", async (req, res) => {
     branchId,
     note,
     isActive,
-    salesPaymentAt,
     salesSendToKitchen,
-  } = req.body ?? {};
+  } = body;
 
   const key = String(deviceKey ?? "").trim();
   const name = String(deviceName ?? "").trim();
@@ -334,6 +393,7 @@ router.post("/printers", async (req, res) => {
     : [];
 
   if (existing) {
+    const paymentFields = pickPaymentFields(body, existing);
     const [updated] = await db
       .update(devicePrintersTable)
       .set({
@@ -343,10 +403,7 @@ router.post("/printers", async (req, res) => {
         paperSize: "80x80",
         note: note != null ? String(note).trim() || null : existing.note,
         isActive: isActive ?? existing.isActive,
-        salesPaymentAt:
-          salesPaymentAt != null
-            ? normalizeSalesPaymentAt(salesPaymentAt)
-            : existing.salesPaymentAt || "pos",
+        ...paymentFields,
         salesSendToKitchen:
           salesSendToKitchen != null
             ? Boolean(salesSendToKitchen)
@@ -368,6 +425,7 @@ router.post("/printers", async (req, res) => {
     return;
   }
 
+  const createPayment = pickPaymentFields(body);
   try {
     const [created] = await db
       .insert(devicePrintersTable)
@@ -379,7 +437,7 @@ router.post("/printers", async (req, res) => {
         paperSize: "80x80",
         note: note ? String(note).trim() : null,
         isActive: isActive ?? true,
-        salesPaymentAt: normalizeSalesPaymentAt(salesPaymentAt),
+        ...createPayment,
         salesSendToKitchen: salesSendToKitchen != null ? Boolean(salesSendToKitchen) : true,
       })
       .returning();
@@ -413,7 +471,7 @@ router.post("/printers", async (req, res) => {
         paperSize: "80x80",
         note: note != null ? String(note).trim() || null : null,
         isActive: isActive ?? true,
-        salesPaymentAt: normalizeSalesPaymentAt(salesPaymentAt),
+        ...createPayment,
         salesSendToKitchen: salesSendToKitchen != null ? Boolean(salesSendToKitchen) : true,
         updatedAt: new Date(),
       })
@@ -434,15 +492,15 @@ router.post("/printers", async (req, res) => {
 router.put("/printers/:id", async (req, res) => {
   await ensureSalesDeviceColumns();
   const id = parseInt(req.params.id, 10);
+  const body = (req.body ?? {}) as Record<string, unknown>;
   const {
     deviceName,
     printerName,
     branchId,
     note,
     isActive,
-    salesPaymentAt,
     salesSendToKitchen,
-  } = req.body ?? {};
+  } = body;
 
   const [existing] = await db
     .select()
@@ -460,6 +518,7 @@ router.put("/printers/:id", async (req, res) => {
     return;
   }
 
+  const paymentFields = pickPaymentFields(body, existing);
   const [updated] = await db
     .update(devicePrintersTable)
     .set({
@@ -474,10 +533,7 @@ router.put("/printers/:id", async (req, res) => {
       paperSize: "80x80",
       note: note != null ? String(note).trim() || null : existing.note,
       isActive: isActive ?? existing.isActive,
-      salesPaymentAt:
-        salesPaymentAt != null
-          ? normalizeSalesPaymentAt(salesPaymentAt)
-          : existing.salesPaymentAt || "pos",
+      ...paymentFields,
       salesSendToKitchen:
         salesSendToKitchen != null
           ? Boolean(salesSendToKitchen)

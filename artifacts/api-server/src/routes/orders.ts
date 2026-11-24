@@ -15,13 +15,48 @@ import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
 type SalesPaymentAt = "pos" | "cashier";
+type OrderTypeKey = "dine_in" | "takeaway" | "delivery";
 
-async function resolveDeviceSalesRouting(deviceKey?: string | null) {
+function normalizeOrderType(value: unknown): OrderTypeKey {
+  const t = String(value ?? "").trim().toLowerCase();
+  if (t === "takeaway") return "takeaway";
+  if (t === "delivery") return "delivery";
+  return "dine_in";
+}
+
+function paymentAtFromDevice(
+  device: {
+    salesPaymentAt?: string | null;
+    salesPaymentAtDineIn?: string | null;
+    salesPaymentAtTakeaway?: string | null;
+    salesPaymentAtDelivery?: string | null;
+  },
+  orderType: OrderTypeKey
+): SalesPaymentAt {
+  const legacy = device.salesPaymentAt === "cashier" ? "cashier" : "pos";
+  const byType =
+    orderType === "takeaway"
+      ? device.salesPaymentAtTakeaway
+      : orderType === "delivery"
+        ? device.salesPaymentAtDelivery
+        : device.salesPaymentAtDineIn;
+  if (byType == null || String(byType).trim() === "") return legacy;
+  return String(byType).trim().toLowerCase() === "cashier" ? "cashier" : "pos";
+}
+
+async function resolveDeviceSalesRouting(
+  deviceKey?: string | null,
+  orderType?: unknown
+) {
+  const type = normalizeOrderType(orderType);
   const key = String(deviceKey ?? "").trim();
   if (key) {
     const [device] = await db
       .select({
         salesPaymentAt: devicePrintersTable.salesPaymentAt,
+        salesPaymentAtDineIn: devicePrintersTable.salesPaymentAtDineIn,
+        salesPaymentAtTakeaway: devicePrintersTable.salesPaymentAtTakeaway,
+        salesPaymentAtDelivery: devicePrintersTable.salesPaymentAtDelivery,
         salesSendToKitchen: devicePrintersTable.salesSendToKitchen,
       })
       .from(devicePrintersTable)
@@ -29,7 +64,7 @@ async function resolveDeviceSalesRouting(deviceKey?: string | null) {
       .limit(1);
     if (device) {
       return {
-        paymentAt: (device.salesPaymentAt === "cashier" ? "cashier" : "pos") as SalesPaymentAt,
+        paymentAt: paymentAtFromDevice(device, type),
         sendToKitchen: device.salesSendToKitchen !== false,
       };
     }
@@ -73,6 +108,7 @@ async function getOrderWithDetails(orderId: number) {
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
       collectAtCashier: ordersTable.collectAtCashier,
+      posEditedAt: ordersTable.posEditedAt,
       notes: ordersTable.notes,
       deliveryAddress: ordersTable.deliveryAddress,
       deliveryPhone: ordersTable.deliveryPhone,
@@ -163,6 +199,7 @@ router.get("/", async (req, res) => {
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
       collectAtCashier: ordersTable.collectAtCashier,
+      posEditedAt: ordersTable.posEditedAt,
       notes: ordersTable.notes,
       deliveryAddress: ordersTable.deliveryAddress,
       deliveryPhone: ordersTable.deliveryPhone,
@@ -273,7 +310,7 @@ router.post("/", async (req, res) => {
   }
   const total = subtotal - discountAmt + tax + deliveryFeeAmt;
 
-  const routing = await resolveDeviceSalesRouting(deviceKey);
+  const routing = await resolveDeviceSalesRouting(deviceKey, type);
   const validPay =
     paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer"
       ? paymentMethod
@@ -379,6 +416,7 @@ router.put("/:id", async (req, res) => {
       deliveryFeeAmt = 0;
     }
     const total = subtotal - discountAmt + deliveryFeeAmt;
+    const editedAt = new Date();
     await db.update(ordersTable)
       .set({
         subtotal: subtotal.toString(),
@@ -386,7 +424,8 @@ router.put("/:id", async (req, res) => {
         deliveryFee: deliveryFeeAmt.toString(),
         total: total.toString(),
         notes,
-        updatedAt: new Date(),
+        posEditedAt: editedAt,
+        updatedAt: editedAt,
       })
       .where(eq(ordersTable.id, id));
   } else if (discount !== undefined || notes !== undefined || deliveryFee !== undefined) {
@@ -398,6 +437,7 @@ router.put("/:id", async (req, res) => {
     }
     const subtotal = parseFloat(existing.subtotal) || 0;
     const total = subtotal - discountAmt + deliveryFeeAmt;
+    const editedAt = new Date();
     await db
       .update(ordersTable)
       .set({
@@ -405,7 +445,8 @@ router.put("/:id", async (req, res) => {
         deliveryFee: deliveryFeeAmt.toString(),
         total: total.toString(),
         notes: notes !== undefined ? notes : existing.notes,
-        updatedAt: new Date(),
+        posEditedAt: editedAt,
+        updatedAt: editedAt,
       })
       .where(eq(ordersTable.id, id));
   }

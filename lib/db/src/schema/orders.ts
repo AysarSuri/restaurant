@@ -29,6 +29,8 @@ export const ordersTable = pgTable("orders", {
   paymentMethod: text("payment_method", { enum: ["cash", "card", "transfer"] }),
   /** Saved from POS without payment — awaiting cashier collection */
   collectAtCashier: boolean("collect_at_cashier").default(false).notNull(),
+  /** Last time this invoice was edited from the POS form (null = never edited) */
+  posEditedAt: timestamp("pos_edited_at"),
   notes: text("notes"),
   deliveryAddress: text("delivery_address"),
   deliveryPhone: text("delivery_phone"),

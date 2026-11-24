@@ -63,8 +63,14 @@ export interface DevicePrinter {
   paperSize: string;
   isActive: boolean;
   note?: string | null;
-  /** Collect payment on POS or save invoice for cashier */
+  /** Legacy / fallback collect payment on POS or cashier */
   salesPaymentAt?: DeviceSalesPaymentAt;
+  /** Table (dine-in) payment source */
+  salesPaymentAtDineIn?: DeviceSalesPaymentAt;
+  /** Takeaway payment source */
+  salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
+  /** Delivery payment source */
+  salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   /** Independent kitchen send for this device */
   salesSendToKitchen?: boolean;
   createdAt?: string;
@@ -79,6 +85,9 @@ export interface UpsertDevicePrinterBody {
   note?: string;
   isActive?: boolean;
   salesPaymentAt?: DeviceSalesPaymentAt;
+  salesPaymentAtDineIn?: DeviceSalesPaymentAt;
+  salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
+  salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   salesSendToKitchen?: boolean;
 }
 
@@ -89,6 +98,9 @@ export interface UpdateDevicePrinterBody {
   note?: string;
   isActive?: boolean;
   salesPaymentAt?: DeviceSalesPaymentAt;
+  salesPaymentAtDineIn?: DeviceSalesPaymentAt;
+  salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
+  salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   salesSendToKitchen?: boolean;
 }
 

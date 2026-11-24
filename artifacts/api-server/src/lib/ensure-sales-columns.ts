@@ -15,11 +15,39 @@ export async function ensureSalesDeviceColumns() {
         `);
         await db.execute(sql`
           ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS sales_payment_at_dine_in text NOT NULL DEFAULT 'pos'
+        `);
+        await db.execute(sql`
+          ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS sales_payment_at_takeaway text NOT NULL DEFAULT 'pos'
+        `);
+        await db.execute(sql`
+          ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS sales_payment_at_delivery text NOT NULL DEFAULT 'pos'
+        `);
+        // One-time-ish backfill from legacy sales_payment_at when still at default
+        await db.execute(sql`
+          UPDATE device_printers
+          SET
+            sales_payment_at_dine_in = sales_payment_at,
+            sales_payment_at_takeaway = sales_payment_at,
+            sales_payment_at_delivery = sales_payment_at
+          WHERE sales_payment_at = 'cashier'
+            AND sales_payment_at_dine_in = 'pos'
+            AND sales_payment_at_takeaway = 'pos'
+            AND sales_payment_at_delivery = 'pos'
+        `);
+        await db.execute(sql`
+          ALTER TABLE device_printers
           ADD COLUMN IF NOT EXISTS sales_send_to_kitchen boolean NOT NULL DEFAULT true
         `);
         await db.execute(sql`
           ALTER TABLE orders
           ADD COLUMN IF NOT EXISTS collect_at_cashier boolean NOT NULL DEFAULT false
+        `);
+        await db.execute(sql`
+          ALTER TABLE orders
+          ADD COLUMN IF NOT EXISTS pos_edited_at timestamp
         `);
         await db.execute(sql`
           ALTER TABLE app_settings
