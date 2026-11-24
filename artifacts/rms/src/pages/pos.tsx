@@ -193,14 +193,15 @@ export default function POS() {
   const { data: paymentCards } = useGetCards();
   const { data: branches } = useGetBranches();
   const { data: devicePrinters } = useGetDevicePrinters();
-  /** All active fleet drivers for delivery picker (not limited to current branch scope). */
+  /** Drivers for the active POS branch (plus unassigned). */
+  const driversBranchParam =
+    selectedBranchId === "all" ? ("" as const) : selectedBranchId;
   const { data: driversData, isLoading: driversLoading } = useGetDrivers({
-    params: {},
-    request: {
-      headers: { "x-branch-id": "all" },
+    params: {
+      branchId: driversBranchParam,
     },
     query: {
-      queryKey: ["/api/drivers", { scope: "pos-fleet" }],
+      queryKey: ["/api/drivers", { scope: "pos-branch", branchId: driversBranchParam }],
     },
   });
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
@@ -581,8 +582,12 @@ export default function POS() {
   const activeDrivers = useMemo(() => {
     const list = (driversData?.drivers ?? []).filter((x) => x.isActive !== false);
     const branchId = selectedBranchId === "all" ? null : selectedBranchId;
-    return [...list].sort((a, b) => {
-      const rank = (d: (typeof list)[number]) => {
+    const forBranch =
+      branchId == null
+        ? list
+        : list.filter((d) => d.branchId == null || d.branchId === branchId);
+    return [...forBranch].sort((a, b) => {
+      const rank = (d: (typeof forBranch)[number]) => {
         if (branchId != null && d.branchId === branchId) return 0;
         if (d.branchId == null) return 1;
         return 2;
@@ -597,6 +602,13 @@ export default function POS() {
     () => activeDrivers.find((d) => d.id === selectedDriverId) ?? null,
     [activeDrivers, selectedDriverId]
   );
+
+  useEffect(() => {
+    if (selectedDriverId == null) return;
+    if (!activeDrivers.some((d) => d.id === selectedDriverId)) {
+      setSelectedDriverId(null);
+    }
+  }, [activeDrivers, selectedDriverId]);
 
   const branchPaymentCards = useMemo(() => {
     const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
@@ -902,67 +914,114 @@ export default function POS() {
       >
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-primary via-amber-400 to-transparent" />
         <div className={`border-b border-border/50 space-y-3 sm:space-y-4 ${isPortraitPos && !compact ? "p-5 xl:p-6" : "p-4 sm:p-5"}`}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-display tracking-[0.2em] uppercase text-primary mb-0.5">
-                {isPortraitPos && !compact ? "Order Screen" : "Current Order"}
-              </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className={`font-extrabold flex items-center min-w-0 ${isPortraitPos && !compact ? "text-2xl xl:text-3xl" : "text-lg sm:text-xl"}`}>
-                  <ShoppingCart className={`me-2 text-primary flex-shrink-0 ${isPortraitPos && !compact ? "w-6 h-6" : "w-5 h-5"}`} />
-                  <span className="truncate">{isPortraitPos && !compact ? t("pos.orderPane") : t("pos.currentOrder")}</span>
-                </h2>
-                <span
-                  className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-extrabold text-primary font-display tabular-nums"
-                  dir="ltr"
-                  title={t("pos.listNumber")}
-                >
-                  {invoiceNumber}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
+              <h2 className="font-extrabold flex items-center gap-1 shrink-0 text-sm sm:text-[0.95rem] leading-none">
+                <ShoppingCart className="w-4 h-4 text-primary flex-shrink-0" />
+                <span className="whitespace-nowrap">
+                  {isPortraitPos && !compact ? t("pos.orderPane") : t("pos.currentOrder")}
                 </span>
-                {editingOrderId != null && (
-                  <span className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-800 dark:text-amber-200">
-                    {t("pos.editLists")}
-                  </span>
-                )}
-                {isReturnMode && (
-                  <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2.5 py-1 text-[10px] font-extrabold text-rose-700 dark:text-rose-300">
-                    {t("pos.return")}
-                  </span>
-                )}
-                {orderType === "dine_in" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPickerEntityType(
-                        ((selectedTable?.type ?? "table") as SeatEntityType) || "table"
-                      );
-                      openSeatPicker("all");
-                    }}
-                    className={`inline-flex items-center gap-2 rounded-full border-2 px-3.5 py-2 text-sm font-extrabold transition-all max-w-[14rem] ${
-                      selectedTable
-                        ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
+              </h2>
+              <span
+                className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] sm:text-xs font-extrabold text-primary font-display tabular-nums shrink-0"
+                dir="ltr"
+                title={t("pos.listNumber")}
+              >
+                {invoiceNumber}
+              </span>
+              {editingOrderId != null && (
+                <span className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-800 dark:text-amber-200 shrink-0">
+                  {t("pos.editLists")}
+                </span>
+              )}
+              {isReturnMode && (
+                <span className="inline-flex items-center rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-extrabold text-rose-700 dark:text-rose-300 shrink-0">
+                  {t("pos.return")}
+                </span>
+              )}
+              {orderType === "dine_in" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickerEntityType(
+                      ((selectedTable?.type ?? "table") as SeatEntityType) || "table"
+                    );
+                    openSeatPicker("all");
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-full border-2 px-2.5 py-1 text-xs font-extrabold transition-all min-w-0 max-w-[11rem] shrink ${
+                    selectedTable
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
+                  }`}
+                  title={selectedTable ? selectedTable.location || undefined : t("tables.chooseNumber")}
+                >
+                  {(selectedTable?.type ?? "table") === "room" ? (
+                    <DoorOpen className="w-3.5 h-3.5 flex-shrink-0" />
+                  ) : (selectedTable?.type ?? "table") === "person" ? (
+                    <UserRound className="w-3.5 h-3.5 flex-shrink-0" />
+                  ) : (
+                    <Table2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  )}
+                  <span className="truncate">{seatLabel(selectedTable, t)}</span>
+                </button>
+              )}
+              {orderType === "delivery" && (
+                <button
+                  type="button"
+                  onClick={() => setIsDeliveryFormOpen(true)}
+                  className={`min-w-0 flex-1 inline-flex items-center gap-1.5 rounded-xl border-2 px-2 py-1 text-start transition-all touch-manipulation ${
+                    deliveryReady
+                      ? "border-cyan-500/45 bg-gradient-to-l from-cyan-500/15 via-sky-500/10 to-transparent hover:border-cyan-500/70"
+                      : "border-rose-500/50 bg-gradient-to-l from-rose-500/12 via-orange-500/8 to-transparent hover:border-rose-500/70"
+                  }`}
+                >
+                  <span
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      deliveryReady
+                        ? "bg-cyan-500 text-white shadow-sm shadow-cyan-500/30"
+                        : "bg-rose-500/15 text-rose-600"
                     }`}
-                    title={selectedTable ? selectedTable.location || undefined : t("tables.chooseNumber")}
                   >
-                    {(selectedTable?.type ?? "table") === "room" ? (
-                      <DoorOpen className="w-5 h-5 flex-shrink-0" />
-                    ) : (selectedTable?.type ?? "table") === "person" ? (
-                      <UserRound className="w-5 h-5 flex-shrink-0" />
-                    ) : (
-                      <Table2 className="w-5 h-5 flex-shrink-0" />
-                    )}
-                    <span className="truncate">{seatLabel(selectedTable, t)}</span>
-                  </button>
-                )}
-              </div>
+                    <Bike className="w-3.5 h-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] sm:text-[11px] leading-tight">
+                    <span className="font-extrabold me-1">{t("pos.deliveryDetails")}</span>
+                    <span className="text-muted-foreground font-bold">
+                      {t("drivers.name")}
+                      {requireDeliveryDriver ? "*" : ""}:
+                    </span>{" "}
+                    <span className="font-extrabold">
+                      {selectedDriver?.name || t("pos.selectDriver")}
+                    </span>
+                    <span className="text-muted-foreground mx-1">·</span>
+                    <span className="text-muted-foreground font-bold">
+                      {t("common.phoneNumber")}
+                      {requireDeliveryPhone ? "*" : ""}:
+                    </span>{" "}
+                    <span className="font-extrabold tabular-nums" dir="ltr">
+                      {deliveryPhone || t("keyboard.tapToEnter")}
+                    </span>
+                    <span className="text-muted-foreground mx-1">·</span>
+                    <span className="text-muted-foreground font-bold">
+                      {t("pos.deliveryAddress")}
+                      {requireDeliveryAddress ? "*" : ""}:
+                    </span>{" "}
+                    <span className="font-extrabold">
+                      {deliveryAddress.trim() || t("keyboard.tapToType")}
+                    </span>
+                  </span>
+                  <span className="text-[10px] font-extrabold text-primary shrink-0">
+                    {t("pos.editDeliveryDetails")}
+                  </span>
+                </button>
+              )}
             </div>
             {compact && (
               <button
                 onClick={() => setCartOpen(false)}
-                className="touch-target w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0"
+                className="touch-target w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -992,78 +1051,6 @@ export default function POS() {
               </button>
             ))}
           </div>
-
-          <AnimatePresence>
-            {orderType === "delivery" && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <button
-                  type="button"
-                  onClick={() => setIsDeliveryFormOpen(true)}
-                  className={`w-full text-start rounded-2xl border-2 px-3.5 py-3 transition-all touch-manipulation ${
-                    deliveryReady
-                      ? "border-cyan-500/45 bg-gradient-to-l from-cyan-500/15 via-sky-500/10 to-transparent hover:border-cyan-500/70"
-                      : "border-rose-500/50 bg-gradient-to-l from-rose-500/12 via-orange-500/8 to-transparent hover:border-rose-500/70"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                        deliveryReady
-                          ? "bg-cyan-500 text-white shadow-md shadow-cyan-500/30"
-                          : "bg-rose-500/15 text-rose-600"
-                      }`}
-                    >
-                      <Bike className="w-5 h-5" />
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-extrabold text-sm sm:text-base">
-                          {t("pos.deliveryDetails")}
-                        </p>
-                        <span className="text-[10px] font-extrabold text-primary shrink-0">
-                          {t("pos.editDeliveryDetails")}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-1 text-[11px] sm:text-xs">
-                        <p className="truncate">
-                          <span className="text-muted-foreground font-bold">
-                            {t("drivers.name")}
-                            {requireDeliveryDriver ? " *" : ""}:{" "}
-                          </span>
-                          <span className="font-extrabold">
-                            {selectedDriver?.name || t("pos.selectDriver")}
-                          </span>
-                        </p>
-                        <p className="truncate" dir="ltr">
-                          <span className="text-muted-foreground font-bold">
-                            {t("common.phoneNumber")}
-                            {requireDeliveryPhone ? " *" : ""}:{" "}
-                          </span>
-                          <span className="font-extrabold tabular-nums">
-                            {deliveryPhone || t("keyboard.tapToEnter")}
-                          </span>
-                        </p>
-                        <p className="truncate">
-                          <span className="text-muted-foreground font-bold">
-                            {t("pos.deliveryAddress")}
-                            {requireDeliveryAddress ? " *" : ""}:{" "}
-                          </span>
-                          <span className="font-extrabold">
-                            {deliveryAddress.trim() || t("keyboard.tapToType")}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Cart Items — single-row professional lines */}
