@@ -249,8 +249,8 @@ export default function POS() {
     if (byType == null) return legacy;
     return byType === "cashier" ? ("cashier" as const) : ("pos" as const);
   }, [devicePrinter, orderType]);
-  /** Classic pay-at-POS without kitchen */
-  const isDirectSave = salesPaymentAt === "pos" && !salesSendToKitchen;
+  /** Pay at POS — always show cash/card + received form (kitchen toggle is independent) */
+  const payAtPos = salesPaymentAt === "pos";
   /** Save invoice for cashier collection — no payment dialog */
   const saveForCashier = salesPaymentAt === "cashier";
   const [selectedTableId, setSelectedTableId] = useState<number | null>(null);
@@ -785,7 +785,7 @@ export default function POS() {
             ? t("pos.cardNamed", { name: opts.cardName })
             : t("pos.cardShort")
           : t("common.transfer");
-    const receiptData = isDirectSave ? buildDirectReceipt(paymentLabel) : null;
+    const receiptData = payAtPos ? buildDirectReceipt(paymentLabel) : null;
     const lineItems = cart.map((i) => ({
       menuItemId: i.id,
       quantity: cartLineSignedQty(i),
@@ -2062,7 +2062,7 @@ export default function POS() {
         isOpen={isCheckoutOpen}
         onClose={() => !orderSuccess && setIsCheckoutOpen(false)}
         title={orderSuccess ? t("tableOrder.success") : t("pos.choosePayment")}
-        maxWidth={isDirectSave && !orderSuccess ? "max-w-lg" : "max-w-lg"}
+        maxWidth="max-w-lg"
       >
         {orderSuccess ? (
           <div className="text-center py-4 space-y-4">
@@ -2088,7 +2088,7 @@ export default function POS() {
               {t("pos.newOrder")}
             </Button>
           </div>
-        ) : isDirectSave ? (
+        ) : (
           <div className="space-y-4">
             {orderType === "dine_in" && selectedTable && (
               <div className="px-4 py-2.5 bg-primary/10 rounded-xl text-primary text-sm font-semibold flex items-center gap-2">
@@ -2112,7 +2112,7 @@ export default function POS() {
                   setCheckoutReceived(total);
                   setCheckoutCardId(null);
                 }}
-                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all ${
+                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all touch-manipulation ${
                   checkoutPayMethod === "cash"
                     ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/70"
@@ -2127,7 +2127,7 @@ export default function POS() {
                   setCheckoutPayMethod("card");
                   setCheckoutReceived(total);
                 }}
-                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all ${
+                className={`h-14 sm:h-16 rounded-xl flex items-center justify-center gap-2.5 font-extrabold text-sm sm:text-base transition-all touch-manipulation ${
                   checkoutPayMethod === "card"
                     ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25"
                     : "text-muted-foreground hover:text-foreground hover:bg-background/70"
@@ -2158,7 +2158,7 @@ export default function POS() {
                   <button
                     type="button"
                     onClick={() => setIsReceivedPadOpen(true)}
-                    className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors"
+                    className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors touch-manipulation"
                     dir="ltr"
                   >
                     {formatMoneyAmount(checkoutReceived)}
@@ -2174,7 +2174,7 @@ export default function POS() {
                 )}
               </div>
 
-              {checkoutPayMethod === "cash" && (
+              {checkoutPayMethod === "cash" ? (
                 <div className="px-4 py-3 flex items-center justify-between gap-3 bg-secondary/25">
                   <span className="text-sm font-bold text-muted-foreground">{t("pos.change")}</span>
                   <span
@@ -2188,10 +2188,10 @@ export default function POS() {
                       : t("pos.shortage", { amount: formatMoneyAmount(total - checkoutReceived) })}
                   </span>
                 </div>
-              )}
+              ) : null}
             </div>
 
-            {checkoutPayMethod === "card" && (
+            {checkoutPayMethod === "card" ? (
               <div className="space-y-2.5">
                 <p className="text-sm font-extrabold flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-sky-500" />
@@ -2212,7 +2212,7 @@ export default function POS() {
                           key={card.id}
                           type="button"
                           onClick={() => setCheckoutCardId(card.id)}
-                          className={`text-start rounded-2xl border-2 px-3.5 py-3 transition-all ${
+                          className={`text-start rounded-2xl border-2 px-3.5 py-3 transition-all touch-manipulation ${
                             active
                               ? "border-sky-500 bg-sky-500/10 shadow-md shadow-sky-500/15"
                               : "border-border/60 bg-card/70 hover:border-sky-500/40"
@@ -2234,7 +2234,7 @@ export default function POS() {
                                 {formatMoneyAmount(Number(card.balance ?? 0))}
                               </p>
                             </div>
-                            {active && <CheckCircle2 className="w-5 h-5 text-sky-500 flex-shrink-0" />}
+                            {active ? <CheckCircle2 className="w-5 h-5 text-sky-500 flex-shrink-0" /> : null}
                           </div>
                         </button>
                       );
@@ -2242,7 +2242,7 @@ export default function POS() {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <Button
@@ -2283,57 +2283,6 @@ export default function POS() {
               </p>
             )}
           </div>
-        ) : (
-          <>
-            {orderType === "dine_in" && selectedTable && (
-              <div className="mb-4 px-4 py-2 bg-primary/10 rounded-xl text-primary text-sm font-semibold flex items-center gap-2">
-                {(selectedTable.type ?? "table") === "room" ? (
-                  <DoorOpen className="w-4 h-4" />
-                ) : (selectedTable.type ?? "table") === "person" ? (
-                  <UserRound className="w-4 h-4" />
-                ) : (
-                  <Table2 className="w-4 h-4" />
-                )}
-                {seatLabel(selectedTable, t)}
-                {selectedTable.location ? ` — ${selectedTable.location}` : ""}
-              </div>
-            )}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
-              <Button
-                variant="outline"
-                className="h-20 sm:h-24 flex flex-col gap-2 touch-target"
-                onClick={() => handleCheckout("cash")}
-                isLoading={isSavingOrder}
-              >
-                <Banknote className="w-7 h-7 sm:w-8 sm:h-8 text-green-500" />
-                <span>{t("pos.cash")}</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 sm:h-24 flex flex-col gap-2 touch-target"
-                onClick={() => handleCheckout("card")}
-                isLoading={isSavingOrder}
-              >
-                <CreditCard className="w-7 h-7 sm:w-8 sm:h-8 text-blue-500" />
-                <span>{t("common.card")}</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 sm:h-24 flex flex-col gap-2 touch-target"
-                onClick={() => handleCheckout("transfer")}
-                isLoading={isSavingOrder}
-              >
-                <Phone className="w-7 h-7 sm:w-8 sm:h-8 text-purple-500" />
-                <span>{t("common.transfer")}</span>
-              </Button>
-            </div>
-            <div className="bg-secondary/50 p-4 rounded-xl text-center">
-              <p className="text-sm text-muted-foreground mb-1">{t("pos.amountDue")}</p>
-              <p className="text-2xl sm:text-3xl font-bold text-primary font-display">
-                {formatMoneyAmount(total)}
-              </p>
-            </div>
-          </>
         )}
       </Dialog>
 
