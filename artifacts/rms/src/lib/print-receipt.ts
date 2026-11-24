@@ -421,9 +421,13 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
     })
     .join("");
 
-  const seat = data.seatLabel?.trim()
-    ? `<div class="chip">${esc(data.seatLabel.trim())}</div>`
-    : "";
+  const typeChip = data.orderTypeLabel?.trim() || "";
+  const seatRaw = data.seatLabel?.trim() || "";
+  // Avoid duplicate chips like «سفري» + «سفري» when seat equals order type
+  const seatChip =
+    seatRaw && seatRaw !== typeChip
+      ? `<div class="chip">${esc(seatRaw)}</div>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -584,21 +588,6 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
       border: 1.5px solid #111;
       border-radius: 2mm;
     }
-    .footer {
-      text-align: center;
-      font-size: 10px;
-      font-weight: 800;
-      margin-top: 3mm;
-      line-height: 1.45;
-      opacity: 0.9;
-    }
-    .printer-hint {
-      text-align: center;
-      font-size: 9px;
-      font-weight: 700;
-      margin: 1.5mm 0 0;
-      opacity: 0.65;
-    }
   </style>
 </head>
 <body>
@@ -609,9 +598,13 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
     <div class="banner">تذكرة مطبخ</div>
     <div class="order-no">#${esc(String(data.invoiceNumber || "").slice(-4) || data.invoiceNumber)}</div>
     <div class="meta">
-      <div class="chip">${esc(data.orderTypeLabel)}</div>
-      ${seat}
-      <div class="chip">${esc(data.kitchenStatusLabel)}</div>
+      ${typeChip ? `<div class="chip">${esc(typeChip)}</div>` : ""}
+      ${seatChip}
+      ${
+        data.kitchenStatusLabel?.trim()
+          ? `<div class="chip">${esc(data.kitchenStatusLabel.trim())}</div>`
+          : ""
+      }
     </div>
     <p class="when" dir="ltr">${esc(data.dateLabel)} · ${esc(data.timeLabel)}</p>
     <hr class="rule" />
@@ -626,12 +619,6 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
       data.orderNotes?.trim()
         ? `<div class="order-notes"><strong>ملاحظة الطلب:</strong> ${esc(data.orderNotes.trim())}</div>`
         : ""
-    }
-    <p class="footer">للمطبخ فقط · بدون أسعار<br/>Kitchen ticket · no prices</p>
-    ${
-      data.printerName?.trim()
-        ? `<p class="printer-hint">طابعة الجهاز: ${esc(data.printerName.trim())} · 80×80</p>`
-        : `<p class="printer-hint">تذكرة حرارية 80×80</p>`
     }
   </div>
 </body>

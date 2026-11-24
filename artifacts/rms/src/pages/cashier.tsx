@@ -410,63 +410,68 @@ function PaidListRow({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className={`w-full rounded-2xl border-2 px-3 sm:px-4 py-3 flex flex-col gap-2.5 ${
-        edited
-          ? "border-indigo-500/45 bg-gradient-to-l from-indigo-500/10 via-emerald-500/10 to-card"
-          : "border-emerald-500/40 bg-gradient-to-l from-emerald-500/12 via-card to-teal-500/8"
+      className={`w-full border-b border-border/40 last:border-b-0 ${
+        edited ? "bg-indigo-500/[0.06]" : "bg-transparent hover:bg-emerald-500/[0.04]"
       }`}
     >
-      {edited ? <PosEditedBanner order={card.order} t={t} compact /> : null}
-      <div className="flex items-center gap-3 w-full">
+      {edited ? (
+        <div className="px-3 sm:px-4 pt-2.5">
+          <PosEditedBanner order={card.order} t={t} compact />
+        </div>
+      ) : null}
+      <div className="px-3 sm:px-4 py-3 flex items-center gap-2.5 sm:gap-3 w-full min-h-[4.25rem]">
         <div
           className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl border bg-gradient-to-br flex items-center justify-center shrink-0 ${tone}`}
         >
           <Icon className="w-5 h-5" />
         </div>
+
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-[14px] sm:text-[15px] font-black truncate">{card.seatLabel}</p>
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <p className="text-[14px] sm:text-[15px] font-black truncate leading-tight">
+              {card.seatLabel}
+            </p>
             <span className="text-[11px] font-bold text-muted-foreground tabular-nums shrink-0">
               #{card.shortNo}
             </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/35 bg-emerald-500/12 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 shrink-0">
+              <CheckCircle2 className="w-3 h-3" />
+              {t("cashier.colPaid")}
+            </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5 text-[11px] font-semibold text-muted-foreground">
+          <div className="flex items-center gap-2 mt-1 text-[11px] font-semibold text-muted-foreground flex-wrap">
             <span className="inline-flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {elapsed(createdAt, t)}
             </span>
             <span className="text-border">·</span>
             <span>{pay}</span>
+            <span className="text-border">·</span>
+            <span className="font-display font-black text-primary tabular-nums text-[13px]">
+              {formatIQD(card.amount)}
+            </span>
           </div>
         </div>
-        <div className="shrink-0 text-end">
-          <p className="text-[15px] sm:text-[16px] font-black text-primary tabular-nums leading-none">
-            {formatIQD(card.amount)}
-          </p>
-          <span className="inline-flex items-center gap-1 mt-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
-            <CheckCircle2 className="w-3 h-3" />
-            {t("cashier.colPaid")}
-          </span>
+
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onPrint}
+            disabled={!onPrint}
+            className="h-11 min-h-11 min-w-[4.75rem] sm:min-w-[5.5rem] px-2.5 sm:px-3 rounded-xl border-2 border-border/70 bg-background/90 hover:bg-background font-extrabold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            <Printer className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t("common.print")}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onOpen}
+            className="h-11 min-h-11 min-w-[4.75rem] sm:min-w-[5.5rem] px-2.5 sm:px-3 rounded-xl border-2 border-sky-500/45 bg-sky-500/10 hover:bg-sky-500/15 text-sky-800 dark:text-sky-200 font-extrabold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all"
+          >
+            <FileText className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t("cashier.details")}</span>
+          </button>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={onPrint}
-          disabled={!onPrint}
-          className="h-11 min-h-11 rounded-xl border-2 border-border/70 bg-background/80 hover:bg-background font-extrabold text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all disabled:opacity-50"
-        >
-          <Printer className="w-4 h-4 shrink-0" />
-          {t("common.print")}
-        </button>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="h-11 min-h-11 rounded-xl border-2 border-sky-500/45 bg-sky-500/10 hover:bg-sky-500/15 text-sky-800 dark:text-sky-200 font-extrabold text-xs flex items-center justify-center gap-1.5 touch-manipulation active:scale-[0.98] transition-all"
-        >
-          <FileText className="w-4 h-4 shrink-0" />
-          {t("cashier.details")}
-        </button>
       </div>
     </motion.div>
   );
@@ -999,17 +1004,24 @@ export default function Cashier() {
                 </p>
               </div>
             ) : page === "paid" ? (
-              <div className="max-w-4xl mx-auto rounded-[1.5rem] border border-border/50 bg-card/40 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 border-b border-border/40 bg-emerald-500/8 flex items-center justify-between gap-2">
+              <div className="max-w-5xl mx-auto rounded-[1.5rem] border-2 border-emerald-500/30 bg-card/60 overflow-hidden shadow-sm">
+                <div className="px-4 py-3.5 border-b border-emerald-500/20 bg-gradient-to-l from-emerald-500/12 via-emerald-500/6 to-transparent flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
-                    <p className="text-sm font-extrabold truncate">{t("cashier.colPaid")}</p>
+                    <span className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold truncate">{t("cashier.colPaid")}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground truncate">
+                        {t("cashier.paidListHint")}
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-[11px] font-bold text-muted-foreground tabular-nums">
-                    {t("cashier.ordersCount", { n: paid.length })}
+                  <span className="min-w-8 h-8 px-2 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[12px] font-black tabular-nums flex items-center justify-center text-emerald-700 dark:text-emerald-300">
+                    {paid.length}
                   </span>
                 </div>
-                <div className="p-2 sm:p-2.5 space-y-1.5">
+                <div className="divide-y divide-border/30">
                   <AnimatePresence initial={false}>
                     {visible.map((card) => (
                       <PaidListRow
