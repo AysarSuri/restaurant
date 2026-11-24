@@ -623,11 +623,22 @@ export default function Cashier() {
       );
     });
 
+  // Show all POS order invoices on cashier — including kitchen-bound (preparing/ready)
+  // when «إلى شاشة المطبخ» is enabled in sales settings.
   const unpaid = useMemo(
     () =>
       sortCashierCards(
         allOrders
-          .filter((o) => !isOrderReceived(o) && o.status !== "cancelled")
+          .filter(
+            (o) =>
+              !isOrderReceived(o) &&
+              o.status !== "cancelled" &&
+              (o.status === "pending" ||
+                o.status === "confirmed" ||
+                o.status === "preparing" ||
+                o.status === "ready" ||
+                o.status === "served")
+          )
           .map((o) => toCard(o, t))
       ),
     [allOrders, t]
@@ -638,9 +649,14 @@ export default function Cashier() {
       sortCashierCards(
         allOrders
           .filter((o) => {
-            if (!isOrderReceived(o)) return false;
+            if (!isOrderReceived(o) || o.status === "cancelled") return false;
             const day = String(o.createdAt || "").slice(0, 10);
-            return day === today || o.status === "preparing" || o.status === "ready";
+            return (
+              day === today ||
+              o.status === "preparing" ||
+              o.status === "ready" ||
+              o.status === "served"
+            );
           })
           .map((o) => toCard(o, t))
       ),
@@ -1374,9 +1390,6 @@ export default function Cashier() {
               <CheckCircle2 className="w-5 h-5" />
               {t("cashier.collectPaid")}
             </Button>
-            <p className="text-[11px] text-center text-muted-foreground font-semibold">
-              {t("cashier.payWillSave")}
-            </p>
           </div>
         ) : null}
       </Dialog>
