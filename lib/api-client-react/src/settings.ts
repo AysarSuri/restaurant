@@ -34,6 +34,12 @@ export interface AppSettings {
   cashierSendToKitchen: boolean;
   /** Flat delivery fee for delivery orders */
   deliveryFee?: number;
+  /** Require driver on delivery orders */
+  deliveryRequireDriver?: boolean;
+  /** Require mobile phone on delivery orders */
+  deliveryRequirePhone?: boolean;
+  /** Require address on delivery orders */
+  deliveryRequireAddress?: boolean;
   updatedAt?: string;
 }
 
@@ -49,6 +55,9 @@ export interface UpdateAppSettingsBody {
   posSaveTarget?: PosSaveTarget;
   cashierSendToKitchen?: boolean;
   deliveryFee?: number;
+  deliveryRequireDriver?: boolean;
+  deliveryRequirePhone?: boolean;
+  deliveryRequireAddress?: boolean;
 }
 
 export type DeviceSalesPaymentAt = "pos" | "cashier";

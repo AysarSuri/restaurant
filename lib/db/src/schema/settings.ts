@@ -37,6 +37,12 @@ export const appSettingsTable = pgTable("app_settings", {
   cashierSendToKitchen: boolean("cashier_send_to_kitchen").default(true).notNull(),
   /** Flat delivery fee applied to delivery orders (currency units). */
   deliveryFee: numeric("delivery_fee", { precision: 12, scale: 2 }).default("0").notNull(),
+  /** When true, POS delivery orders require a driver */
+  deliveryRequireDriver: boolean("delivery_require_driver").default(true).notNull(),
+  /** When true, POS delivery orders require a mobile phone */
+  deliveryRequirePhone: boolean("delivery_require_phone").default(true).notNull(),
+  /** When true, POS delivery orders require a delivery address */
+  deliveryRequireAddress: boolean("delivery_require_address").default(true).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

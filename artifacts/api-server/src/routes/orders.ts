@@ -291,19 +291,23 @@ router.post("/", async (req, res) => {
   }
 
   if (type === "delivery") {
+    const [salesSettings] = await db.select().from(appSettingsTable).limit(1);
+    const requireDriver = salesSettings?.deliveryRequireDriver !== false;
+    const requirePhone = salesSettings?.deliveryRequirePhone !== false;
+    const requireAddress = salesSettings?.deliveryRequireAddress !== false;
     const phoneDigits = String(deliveryPhone ?? "").replace(/\D/g, "");
     const address = String(deliveryAddress ?? "").trim();
     const driverOk =
       driverId != null && Number.isFinite(Number(driverId)) && Number(driverId) > 0;
-    if (!driverOk) {
+    if (requireDriver && !driverOk) {
       res.status(400).json({ error: "اختر السائق لطلب التوصيل" });
       return;
     }
-    if (phoneDigits.length < 7) {
+    if (requirePhone && phoneDigits.length < 7) {
       res.status(400).json({ error: "رقم الموبايل مطلوب لطلب التوصيل" });
       return;
     }
-    if (!address) {
+    if (requireAddress && !address) {
       res.status(400).json({ error: "عنوان التوصيل مطلوب" });
       return;
     }

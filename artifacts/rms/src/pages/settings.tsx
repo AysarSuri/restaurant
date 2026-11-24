@@ -769,6 +769,93 @@ export default function SettingsPage() {
             </div>
           </Card>
 
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center flex-shrink-0">
+                <Bike className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">{t("settings.deliveryRequiredTitle")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("settings.deliveryRequiredHint")}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {(
+                [
+                  {
+                    key: "deliveryRequireDriver" as const,
+                    label: t("settings.deliveryRequireDriver"),
+                    on: settings?.deliveryRequireDriver !== false,
+                  },
+                  {
+                    key: "deliveryRequirePhone" as const,
+                    label: t("settings.deliveryRequirePhone"),
+                    on: settings?.deliveryRequirePhone !== false,
+                  },
+                  {
+                    key: "deliveryRequireAddress" as const,
+                    label: t("settings.deliveryRequireAddress"),
+                    on: settings?.deliveryRequireAddress !== false,
+                  },
+                ] as const
+              ).map((row) => (
+                <button
+                  key={row.key}
+                  type="button"
+                  disabled={savingSettings}
+                  onClick={() => {
+                    clearSaveFlash();
+                    saveSettings(
+                      { data: { [row.key]: !row.on } },
+                      {
+                        onSuccess: (res) => {
+                          syncSettings(res);
+                          notifySaveOk(t("settings.savedDeliveryRequired"));
+                        },
+                        onError: (err: any) =>
+                          notifySaveErr(
+                            err?.data?.message ||
+                              err?.message ||
+                              t("settings.saveDeliveryRequiredFailed")
+                          ),
+                      }
+                    );
+                  }}
+                  className={`w-full text-start rounded-2xl border-2 p-3.5 sm:p-4 transition-all touch-manipulation ${
+                    row.on
+                      ? "border-rose-500/55 bg-rose-500/10"
+                      : "border-border/70 bg-card/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-extrabold text-sm sm:text-base">{row.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {row.on
+                          ? t("settings.deliveryRequiredOn")
+                          : t("settings.deliveryRequiredOff")}
+                      </p>
+                    </div>
+                    <span
+                      className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full ${
+                        row.on ? "bg-rose-500" : "bg-secondary"
+                      }`}
+                      aria-hidden
+                    >
+                      <span
+                        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                          row.on ? "start-1" : "end-1"
+                        }`}
+                      />
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
           <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
             <div className="flex items-start gap-3">
               <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">

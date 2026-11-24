@@ -54,6 +54,18 @@ export async function ensureSalesDeviceColumns() {
           ADD COLUMN IF NOT EXISTS delivery_fee numeric(12, 2) NOT NULL DEFAULT 0
         `);
         await db.execute(sql`
+          ALTER TABLE app_settings
+          ADD COLUMN IF NOT EXISTS delivery_require_driver boolean NOT NULL DEFAULT true
+        `);
+        await db.execute(sql`
+          ALTER TABLE app_settings
+          ADD COLUMN IF NOT EXISTS delivery_require_phone boolean NOT NULL DEFAULT true
+        `);
+        await db.execute(sql`
+          ALTER TABLE app_settings
+          ADD COLUMN IF NOT EXISTS delivery_require_address boolean NOT NULL DEFAULT true
+        `);
+        await db.execute(sql`
           ALTER TABLE orders
           ADD COLUMN IF NOT EXISTS delivery_fee numeric(12, 2) NOT NULL DEFAULT 0
         `);

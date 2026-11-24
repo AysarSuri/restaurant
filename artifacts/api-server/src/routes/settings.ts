@@ -91,6 +91,9 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     posSaveTarget: target as "kitchen" | "none",
     cashierSendToKitchen: settings.cashierSendToKitchen !== false,
     deliveryFee,
+    deliveryRequireDriver: settings.deliveryRequireDriver !== false,
+    deliveryRequirePhone: settings.deliveryRequirePhone !== false,
+    deliveryRequireAddress: settings.deliveryRequireAddress !== false,
     updatedAt: settings.updatedAt,
   };
 }
@@ -116,6 +119,9 @@ router.put("/", async (req, res) => {
     posSaveTarget,
     cashierSendToKitchen,
     deliveryFee,
+    deliveryRequireDriver,
+    deliveryRequirePhone,
+    deliveryRequireAddress,
   } = req.body ?? {};
 
   const nextName =
@@ -221,6 +227,13 @@ router.put("/", async (req, res) => {
     nextDeliveryFee = n;
   }
 
+  let nextRequireDriver = settings.deliveryRequireDriver !== false;
+  if (deliveryRequireDriver != null) nextRequireDriver = Boolean(deliveryRequireDriver);
+  let nextRequirePhone = settings.deliveryRequirePhone !== false;
+  if (deliveryRequirePhone != null) nextRequirePhone = Boolean(deliveryRequirePhone);
+  let nextRequireAddress = settings.deliveryRequireAddress !== false;
+  if (deliveryRequireAddress != null) nextRequireAddress = Boolean(deliveryRequireAddress);
+
   const [updated] = await db
     .update(appSettingsTable)
     .set({
@@ -235,6 +248,9 @@ router.put("/", async (req, res) => {
       posSaveTarget: nextPosSaveTarget,
       cashierSendToKitchen: nextCashierSend,
       deliveryFee: nextDeliveryFee.toString(),
+      deliveryRequireDriver: nextRequireDriver,
+      deliveryRequirePhone: nextRequirePhone,
+      deliveryRequireAddress: nextRequireAddress,
       updatedAt: new Date(),
     })
     .where(eq(appSettingsTable.id, settings.id))
