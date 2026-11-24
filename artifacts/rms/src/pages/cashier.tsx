@@ -22,7 +22,6 @@ import {
   Bell,
   X,
   UserRound,
-  Bike,
   Wallet,
   Pencil,
   Printer,
@@ -38,6 +37,7 @@ import { useBranch } from "@/lib/branch-context";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { DiningTableIcon } from "@/components/dining-table-icon";
 import { RoomIcon } from "@/components/room-icon";
+import { DeliveryBikeIcon } from "@/components/delivery-bike-icon";
 import { useCurrency } from "@/hooks/use-currency";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
 import { printKitchenTicketThermal } from "@/lib/print-receipt";
@@ -130,8 +130,9 @@ function SeatKindVisual({
     return <RoomIcon className={`${cls} ${className}`} number={tableNumber ?? undefined} />;
   }
   if (kind === "delivery") {
-    const cls = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-6 h-6" : "w-5 h-5";
-    return <Bike className={`${cls} ${className}`} />;
+    const bikeCls =
+      size === "sm" ? "w-8 h-auto" : size === "lg" ? "w-11 h-auto" : "w-10 h-auto";
+    return <DeliveryBikeIcon className={`${bikeCls} ${className}`.trim()} />;
   }
   if (kind === "takeaway") {
     const cls = size === "sm" ? "w-4 h-4" : size === "lg" ? "w-6 h-6" : "w-5 h-5";
@@ -241,14 +242,20 @@ function PosEditedBanner({
   const recent = isRecentlyPosEdited(order);
   return (
     <div
-      className={`flex items-center gap-1.5 font-extrabold text-indigo-800 dark:text-indigo-200 border border-indigo-500/40 bg-gradient-to-l from-indigo-500/20 via-violet-500/15 to-fuchsia-500/10 ${
+      className={`inline-flex items-center gap-1.5 font-black tracking-wide text-rose-50 border border-rose-400/50 bg-gradient-to-l from-rose-600 via-red-500 to-rose-500 shadow-[0_6px_16px_-8px_rgba(225,29,72,0.65)] ${
         compact
-          ? "rounded-lg px-2 py-1 text-[10px]"
-          : "rounded-xl px-3 py-2 text-[11px] sm:text-xs"
-      } ${recent ? "animate-pulse shadow-[0_0_0_1px_rgba(99,102,241,0.35)]" : ""}`}
+          ? "rounded-lg px-2 py-1 text-[11px]"
+          : "rounded-xl px-3 py-1.5 text-[12px] sm:text-[13px]"
+      } ${recent ? "animate-pulse shadow-[0_0_0_2px_rgba(244,63,94,0.45)]" : ""}`}
     >
-      <Pencil className={compact ? "w-3 h-3 shrink-0" : "w-3.5 h-3.5 shrink-0"} />
-      <span className="leading-tight">{t("cashier.editedFromPos")}</span>
+      <span
+        className={`rounded-md bg-white/20 flex items-center justify-center shrink-0 ${
+          compact ? "w-4 h-4" : "w-5 h-5"
+        }`}
+      >
+        <Pencil className={compact ? "w-2.5 h-2.5" : "w-3 h-3"} />
+      </span>
+      <span className="leading-none">{t("cashier.editedFromPos")}</span>
     </div>
   );
 }
@@ -292,7 +299,7 @@ function OrderTicket({
         page === "unpaid"
           ? "border-2 border-amber-500/60 bg-gradient-to-b from-amber-500/18 via-card to-orange-500/8 hover:border-amber-500/80"
           : "border-2 border-emerald-500/55 bg-gradient-to-b from-emerald-500/15 via-card to-teal-500/8 hover:border-emerald-500/75"
-      } ${edited ? "ring-2 ring-indigo-500/35" : ""}`}
+      } ${edited ? "ring-2 ring-rose-500/40" : ""}`}
     >
       {edited ? (
         <div className="px-3 pt-3">
@@ -476,7 +483,7 @@ function PaidListRow({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       className={`w-full border-b border-border/40 last:border-b-0 ${
-        edited ? "bg-indigo-500/[0.06]" : "bg-transparent hover:bg-emerald-500/[0.04]"
+        edited ? "bg-rose-500/[0.06]" : "bg-transparent hover:bg-emerald-500/[0.04]"
       }`}
     >
       {edited ? (

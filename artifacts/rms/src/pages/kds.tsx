@@ -123,7 +123,7 @@ function KitchenTicket({
   const recentlyEdited = isRecentlyPosEdited(order);
 
   const shell = edited
-    ? "border-indigo-500/65 bg-gradient-to-b from-indigo-500/20 via-violet-500/10 to-fuchsia-500/8"
+    ? "border-rose-500/70 bg-gradient-to-b from-rose-500/18 via-red-500/8 to-card"
     : column === "preparing"
       ? "border-amber-500/55 bg-gradient-to-b from-amber-500/15 via-card to-orange-500/8"
       : column === "ready"
@@ -147,8 +147,8 @@ function KitchenTicket({
       className={`rounded-[1.35rem] border-2 overflow-hidden shadow-[0_10px_28px_-20px_rgba(0,0,0,0.45)] ${shell} ${
         edited
           ? recentlyEdited
-            ? "ring-2 ring-indigo-500/60"
-            : "ring-2 ring-indigo-500/40"
+            ? "ring-2 ring-rose-500/65"
+            : "ring-2 ring-rose-500/40"
           : urgent
             ? "ring-2 ring-rose-500/45"
             : warn
@@ -162,16 +162,11 @@ function KitchenTicket({
             recentlyEdited ? "animate-pulse" : ""
           }`}
         >
-          <div className="flex items-center gap-2 rounded-xl border border-indigo-500/45 bg-gradient-to-l from-indigo-500/25 via-violet-500/15 to-fuchsia-500/10 px-3 py-2 text-[11px] sm:text-xs font-extrabold text-indigo-900 dark:text-indigo-100 shadow-[0_0_0_1px_rgba(99,102,241,0.25)]">
-            <span className="w-7 h-7 rounded-lg bg-indigo-500 text-white flex items-center justify-center shrink-0">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-rose-400/50 bg-gradient-to-l from-rose-600 via-red-500 to-rose-500 px-3 py-2 text-[13px] sm:text-sm font-black tracking-wide text-rose-50 shadow-[0_8px_18px_-10px_rgba(225,29,72,0.75)]">
+            <span className="w-7 h-7 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
               <Pencil className="w-3.5 h-3.5" />
             </span>
-            <span className="leading-tight min-w-0">
-              <span className="block">{t("kds.editedFromPos")}</span>
-              <span className="block text-[10px] font-bold opacity-80 mt-0.5">
-                {t("kds.editedFromPosHint")}
-              </span>
-            </span>
+            <span className="leading-none">{t("kds.editedFromPos")}</span>
           </div>
         </div>
       ) : null}
@@ -195,7 +190,7 @@ function KitchenTicket({
             variant="outline"
             className={`mt-1.5 text-[10px] font-extrabold ${
               edited
-                ? "border-indigo-500/45 text-indigo-700 dark:text-indigo-300"
+                ? "border-rose-500/50 text-rose-700 dark:text-rose-300"
                 : column === "preparing"
                   ? "border-amber-500/40 text-amber-700 dark:text-amber-300"
                   : column === "ready"
