@@ -10,7 +10,7 @@ import {
   useGetCards,
   type Order,
 } from "@workspace/api-client-react";
-import { Button, Badge, Dialog } from "@/components/ui-elements";
+import { Button, Badge, Dialog, Input } from "@/components/ui-elements";
 import {
   Clock,
   CheckCircle2,
@@ -632,6 +632,9 @@ export default function Cashier() {
     );
   }, [devicePrinters, deviceKey]);
 
+  /** Settings → Numbers: on-screen amount pad */
+  const amountPadEnabled = devicePrinter?.virtualNumericKeypad === true;
+
   const branchPaymentCards = useMemo(() => {
     const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
     if (selectedBranchId === "all") return list;
@@ -648,6 +651,13 @@ export default function Cashier() {
   const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
   const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
   const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
+
+  useEffect(() => {
+    if (amountPadEnabled) return;
+    setIsDiscountPadOpen(false);
+    setIsReceivedPadOpen(false);
+  }, [amountPadEnabled]);
+
   const [dismissedTableNotifs, setDismissedTableNotifs] = useState<Set<number>>(
     () => new Set()
   );
@@ -1499,30 +1509,68 @@ export default function Cashier() {
               </div>
 
               <div className="px-4 py-3 border-b border-border/40">
-                <button
-                  type="button"
-                  onClick={() => setIsDiscountPadOpen(true)}
-                  className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 hover:border-amber-500/50 hover:bg-amber-500/5 px-3 py-2.5 transition-colors touch-manipulation"
-                >
-                  <span className="inline-flex items-center gap-2 font-extrabold text-sm">
-                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
-                      <Percent className="w-4 h-4" />
-                    </span>
-                    {t("pos.invoiceDiscount")}
-                  </span>
-                  <span
-                    className={`font-display text-lg sm:text-xl font-extrabold tabular-nums ${
-                      checkoutDiscount > 0
-                        ? "text-rose-600 dark:text-rose-400"
-                        : "text-muted-foreground"
-                    }`}
-                    dir="ltr"
+                {amountPadEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsDiscountPadOpen(true)}
+                    className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 hover:border-amber-500/50 hover:bg-amber-500/5 px-3 py-2.5 transition-colors touch-manipulation"
                   >
-                    {checkoutDiscount > 0
-                      ? `− ${formatMoneyAmount(checkoutDiscount)}`
-                      : formatMoneyAmount(0)}
-                  </span>
-                </button>
+                    <span className="inline-flex items-center gap-2 font-extrabold text-sm">
+                      <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                        <Percent className="w-4 h-4" />
+                      </span>
+                      {t("pos.invoiceDiscount")}
+                    </span>
+                    <span
+                      className={`font-display text-lg sm:text-xl font-extrabold tabular-nums ${
+                        checkoutDiscount > 0
+                          ? "text-rose-600 dark:text-rose-400"
+                          : "text-muted-foreground"
+                      }`}
+                      dir="ltr"
+                    >
+                      {checkoutDiscount > 0
+                        ? `− ${formatMoneyAmount(checkoutDiscount)}`
+                        : formatMoneyAmount(0)}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 px-3 py-2.5">
+                    <span className="inline-flex items-center gap-2 font-extrabold text-sm">
+                      <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                        <Percent className="w-4 h-4" />
+                      </span>
+                      {t("pos.invoiceDiscount")}
+                    </span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={decimalPlaces > 0 ? "0.01" : "1"}
+                      inputMode="decimal"
+                      amountPad
+                      className="h-10 w-[8.5rem] text-base font-extrabold tabular-nums"
+                      dir="ltr"
+                      value={checkoutDiscount > 0 ? checkoutDiscount : ""}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const v = Math.max(0, Number(e.target.value) || 0);
+                        const next = Math.min(
+                          v,
+                          paymentSubtotal > 0 ? paymentSubtotal : v
+                        );
+                        setCheckoutDiscount(next);
+                        if (paymentDialog) {
+                          setCheckoutReceived(
+                            orderPayableAmount({
+                              ...paymentDialog,
+                              discount: next,
+                            })
+                          );
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="px-4 py-3.5 flex items-center justify-between gap-3 border-b border-border/50">
@@ -1546,14 +1594,31 @@ export default function Cashier() {
                   </span>
                 </div>
                 {checkoutPayMethod === "cash" ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsReceivedPadOpen(true)}
-                    className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors touch-manipulation"
-                    dir="ltr"
-                  >
-                    {formatMoneyAmount(checkoutReceived)}
-                  </button>
+                  amountPadEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsReceivedPadOpen(true)}
+                      className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors touch-manipulation"
+                      dir="ltr"
+                    >
+                      {formatMoneyAmount(checkoutReceived)}
+                    </button>
+                  ) : (
+                    <Input
+                      type="number"
+                      min={0}
+                      step={decimalPlaces > 0 ? "0.01" : "1"}
+                      inputMode="decimal"
+                      amountPad
+                      className="min-w-[7.5rem] h-11 w-[8.5rem] border-2 border-emerald-500/40 bg-emerald-500/10 text-lg font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400"
+                      dir="ltr"
+                      value={checkoutReceived > 0 ? checkoutReceived : ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        setCheckoutReceived(Math.max(0, Number(e.target.value) || 0))
+                      }
+                    />
+                  )
                 ) : (
                   <span
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/50 bg-secondary/50 px-3 py-2 font-display text-lg sm:text-xl font-extrabold tabular-nums text-foreground"
@@ -1660,7 +1725,7 @@ export default function Cashier() {
       </Dialog>
 
       <Dialog
-        isOpen={isReceivedPadOpen}
+        isOpen={amountPadEnabled && isReceivedPadOpen}
         onClose={() => setIsReceivedPadOpen(false)}
         title={t("pos.receivedTotal")}
         maxWidth="max-w-sm"
@@ -1681,7 +1746,7 @@ export default function Cashier() {
       </Dialog>
 
       <Dialog
-        isOpen={isDiscountPadOpen}
+        isOpen={amountPadEnabled && isDiscountPadOpen}
         onClose={() => setIsDiscountPadOpen(false)}
         title={t("pos.invoiceDiscount")}
         maxWidth="max-w-sm"

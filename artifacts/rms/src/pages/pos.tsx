@@ -23,7 +23,7 @@ import {
   getGetDeliveryContactsQueryKey,
   type RestaurantTable,
 } from "@workspace/api-client-react";
-import { Button, Card, Badge, Dialog } from "@/components/ui-elements";
+import { Button, Card, Badge, Dialog, Input } from "@/components/ui-elements";
 import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
@@ -240,6 +240,11 @@ export default function POS() {
     );
   }, [devicePrinters, deviceKey]);
 
+  /** Settings → Numbers: amount/phone numeric pads */
+  const amountPadEnabled = devicePrinter?.virtualNumericKeypad === true;
+  /** Settings → Keyboard: multilingual text pads (search, address, person) */
+  const textKeyboardEnabled = devicePrinter?.virtualKeyboard === true;
+
   const salesSendToKitchen =
     devicePrinter != null
       ? devicePrinter.salesSendToKitchen !== false
@@ -296,12 +301,28 @@ export default function POS() {
   const [isDiscountPadOpen, setIsDiscountPadOpen] = useState(false);
   const [isPhonePadOpen, setIsPhonePadOpen] = useState(false);
   const [isAddressPadOpen, setIsAddressPadOpen] = useState(false);
+
   const [isDeliveryFormOpen, setIsDeliveryFormOpen] = useState(false);
   const [isSearchPadOpen, setIsSearchPadOpen] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => currentInvoiceNumber());
   const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (amountPadEnabled) return;
+    setIsDiscountPadOpen(false);
+    setIsReceivedPadOpen(false);
+    setIsPhonePadOpen(false);
+  }, [amountPadEnabled]);
+
+  useEffect(() => {
+    if (textKeyboardEnabled) return;
+    setIsSearchPadOpen(false);
+    setIsAddressPadOpen(false);
+    setIsPersonSearchPadOpen(false);
+  }, [textKeyboardEnabled]);
+
+  const [orderSuccess, setOrderSuccess] = useState(false);
   /** When set, POS is editing an existing stored order (load items + save via update). */
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   /** Invoice loaded from guest tablet «طلب طاولة» */
@@ -1312,24 +1333,53 @@ export default function POS() {
         <div className="p-5 bg-card border-t border-border/50 space-y-4">
           {/* Discount + subtotal on one line */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsDiscountPadOpen(true)}
-              className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
-            >
-              <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
-                <Percent className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{t("pos.discountShort")}</span>
-              <span
-                className={`ms-auto font-display text-xs sm:text-sm font-extrabold tabular-nums truncate ${
-                  discount > 0 ? "text-green-500" : "text-foreground"
-                }`}
-                dir="ltr"
+            {amountPadEnabled ? (
+              <button
+                type="button"
+                onClick={() => setIsDiscountPadOpen(true)}
+                className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border border-border/60 bg-background/60 hover:border-primary/40 hover:bg-primary/5 px-2.5 py-2 transition-colors text-start"
               >
-                {discount > 0 ? `- ${formatMoneyAmount(discount)}` : "0"}
-              </span>
-            </button>
+                <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                  <Percent className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                  {t("pos.discountShort")}
+                </span>
+                <span
+                  className={`ms-auto font-display text-xs sm:text-sm font-extrabold tabular-nums truncate ${
+                    discount > 0 ? "text-green-500" : "text-foreground"
+                  }`}
+                  dir="ltr"
+                >
+                  {discount > 0 ? `- ${formatMoneyAmount(discount)}` : "0"}
+                </span>
+              </button>
+            ) : (
+              <div className="min-w-0 flex-1 flex items-center gap-2 rounded-xl border border-border/60 bg-background/60 px-2.5 py-1.5">
+                <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                  <Percent className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                  {t("pos.discountShort")}
+                </span>
+                <Input
+                  type="number"
+                  min={0}
+                  step={decimalPlaces > 0 ? "0.01" : "1"}
+                  inputMode="decimal"
+                  amountPad
+                  className="ms-auto h-8 w-[6.5rem] px-2 text-xs font-extrabold tabular-nums"
+                  dir="ltr"
+                  value={discount > 0 ? discount : ""}
+                  placeholder="0"
+                  onChange={(e) => {
+                    const v = Math.max(0, Number(e.target.value) || 0);
+                    const next = Math.min(v, subtotal > 0 ? subtotal : v);
+                    setDiscount(next);
+                  }}
+                />
+              </div>
+            )}
 
             <div className="min-w-0 flex-1 flex items-center justify-between gap-2 rounded-xl border border-border/50 bg-secondary/40 px-2.5 py-2">
               <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{t("pos.sum")}</span>
@@ -1445,41 +1495,57 @@ export default function POS() {
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsSearchPadOpen(true)}
-            className={`relative w-full text-start ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"} h-11 xl:h-12 rounded-xl border border-border/50 bg-background/80 px-4 pe-11 flex items-center gap-2 hover:border-primary/40 transition-colors`}
-          >
-            <Search className="absolute end-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-            <span
-              className={`min-w-0 flex-1 truncate text-sm font-semibold ${
-                search ? "text-foreground" : "text-muted-foreground/70"
-              }`}
+          {textKeyboardEnabled ? (
+            <button
+              type="button"
+              onClick={() => setIsSearchPadOpen(true)}
+              className={`relative w-full text-start ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"} h-11 xl:h-12 rounded-xl border border-border/50 bg-background/80 px-4 pe-11 flex items-center gap-2 hover:border-primary/40 transition-colors`}
             >
-              {search || t("pos.searchItem")}
-            </span>
-            {search ? (
+              <Search className="absolute end-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSearch("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
+                className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                  search ? "text-foreground" : "text-muted-foreground/70"
+                }`}
+              >
+                {search || t("pos.searchItem")}
+              </span>
+              {search ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
                     e.stopPropagation();
                     setSearch("");
-                  }
-                }}
-                className="absolute end-10 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary"
-                aria-label={t("pos.clearSearch")}
-              >
-                <X className="w-3.5 h-3.5" />
-              </span>
-            ) : null}
-          </button>
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSearch("");
+                    }
+                  }}
+                  className="absolute end-10 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  aria-label={t("pos.clearSearch")}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </span>
+              ) : null}
+            </button>
+          ) : (
+            <div
+              className={`relative w-full ${isPortraitPos ? "max-w-none" : "sm:w-72 md:w-80 xl:w-96"}`}
+            >
+              <Search className="absolute end-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none z-10" />
+              <Input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("pos.searchItem")}
+                noTextKeyboard
+                className="h-11 xl:h-12 pe-11 text-sm font-semibold"
+              />
+            </div>
+          )}
         </header>
 
         <div className={`py-3 flex gap-2 sm:gap-3 overflow-x-auto relative z-10 scrollbar-hide ${isPortraitPos ? "px-4 xl:px-5" : "px-3 sm:px-5 xl:px-6"}`}>
@@ -2064,6 +2130,7 @@ export default function POS() {
           ) : pickerEntityType === "person" ? (
             <div className="space-y-3">
               <div className="relative rounded-2xl p-[1.5px] bg-gradient-to-l from-primary via-amber-400 to-primary/40 shadow-md shadow-primary/10">
+                {textKeyboardEnabled ? (
                 <button
                   type="button"
                   onClick={() => setIsPersonSearchPadOpen(true)}
@@ -2085,6 +2152,21 @@ export default function POS() {
                     </span>
                   </span>
                 </button>
+                ) : (
+                  <div className="w-full h-14 sm:h-[3.75rem] rounded-[0.9rem] bg-background/95 backdrop-blur-md px-3 pe-12 flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-amber-500/15 border border-primary/25 flex items-center justify-center flex-shrink-0">
+                      <Search className="w-5 h-5 text-primary" />
+                    </span>
+                    <Input
+                      type="search"
+                      value={personSearch}
+                      onChange={(e) => setPersonSearch(e.target.value)}
+                      placeholder={t("pos.searchPerson")}
+                      noTextKeyboard
+                      className="h-11 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 text-base font-extrabold"
+                    />
+                  </div>
+                )}
                 {personSearch ? (
                   <span
                     role="button"
@@ -2419,30 +2501,61 @@ export default function POS() {
               </div>
 
               <div className="px-4 py-3 border-b border-border/40">
-                <button
-                  type="button"
-                  onClick={() => setIsDiscountPadOpen(true)}
-                  className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 hover:border-amber-500/50 hover:bg-amber-500/5 px-3 py-2.5 transition-colors touch-manipulation"
-                >
-                  <span className="inline-flex items-center gap-2 font-extrabold text-sm">
-                    <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
-                      <Percent className="w-4 h-4" />
-                    </span>
-                    {t("pos.invoiceDiscount")}
-                  </span>
-                  <span
-                    className={`font-display text-lg sm:text-xl font-extrabold tabular-nums ${
-                      discount > 0
-                        ? "text-rose-600 dark:text-rose-400"
-                        : "text-muted-foreground"
-                    }`}
-                    dir="ltr"
+                {amountPadEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsDiscountPadOpen(true)}
+                    className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 hover:border-amber-500/50 hover:bg-amber-500/5 px-3 py-2.5 transition-colors touch-manipulation"
                   >
-                    {discount > 0
-                      ? `− ${formatMoneyAmount(discount)}`
-                      : formatMoneyAmount(0)}
-                  </span>
-                </button>
+                    <span className="inline-flex items-center gap-2 font-extrabold text-sm">
+                      <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                        <Percent className="w-4 h-4" />
+                      </span>
+                      {t("pos.invoiceDiscount")}
+                    </span>
+                    <span
+                      className={`font-display text-lg sm:text-xl font-extrabold tabular-nums ${
+                        discount > 0
+                          ? "text-rose-600 dark:text-rose-400"
+                          : "text-muted-foreground"
+                      }`}
+                      dir="ltr"
+                    >
+                      {discount > 0
+                        ? `− ${formatMoneyAmount(discount)}`
+                        : formatMoneyAmount(0)}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="w-full flex items-center justify-between gap-3 rounded-xl border-2 border-border/60 bg-background/70 px-3 py-2.5">
+                    <span className="inline-flex items-center gap-2 font-extrabold text-sm">
+                      <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+                        <Percent className="w-4 h-4" />
+                      </span>
+                      {t("pos.invoiceDiscount")}
+                    </span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={decimalPlaces > 0 ? "0.01" : "1"}
+                      inputMode="decimal"
+                      amountPad
+                      className="h-10 w-[8.5rem] text-base font-extrabold tabular-nums"
+                      dir="ltr"
+                      value={discount > 0 ? discount : ""}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const v = Math.max(0, Number(e.target.value) || 0);
+                        const next = Math.min(v, subtotal > 0 ? subtotal : v);
+                        setDiscount(next);
+                        const nextTotal = subtotal - next + deliveryFeeAmount;
+                        if (isCheckoutOpen && !orderSuccess) {
+                          setCheckoutReceived(Math.max(0, nextTotal));
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {deliveryFeeAmount > 0 ? (
@@ -2476,14 +2589,31 @@ export default function POS() {
                   <span className="text-sm font-bold text-foreground">{t("pos.receivedTotal")}</span>
                 </div>
                 {checkoutPayMethod === "cash" ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsReceivedPadOpen(true)}
-                    className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors touch-manipulation"
-                    dir="ltr"
-                  >
-                    {formatMoneyAmount(checkoutReceived)}
-                  </button>
+                  amountPadEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsReceivedPadOpen(true)}
+                      className="min-w-[7.5rem] rounded-xl border-2 border-emerald-500/40 bg-emerald-500/10 px-3 py-2 font-display text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums hover:border-emerald-500 transition-colors touch-manipulation"
+                      dir="ltr"
+                    >
+                      {formatMoneyAmount(checkoutReceived)}
+                    </button>
+                  ) : (
+                    <Input
+                      type="number"
+                      min={0}
+                      step={decimalPlaces > 0 ? "0.01" : "1"}
+                      inputMode="decimal"
+                      amountPad
+                      className="min-w-[7.5rem] h-11 w-[8.5rem] border-2 border-emerald-500/40 bg-emerald-500/10 text-lg font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400"
+                      dir="ltr"
+                      value={checkoutReceived > 0 ? checkoutReceived : ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        setCheckoutReceived(Math.max(0, Number(e.target.value) || 0))
+                      }
+                    />
+                  )
                 ) : (
                   <span
                     className="inline-flex items-center gap-1.5 rounded-xl border border-border/50 bg-secondary/50 px-3 py-2 font-display text-lg sm:text-xl font-extrabold tabular-nums text-foreground"
@@ -2608,7 +2738,7 @@ export default function POS() {
       </Dialog>
 
       <Dialog
-        isOpen={isReceivedPadOpen}
+        isOpen={amountPadEnabled && isReceivedPadOpen}
         onClose={() => setIsReceivedPadOpen(false)}
         title={t("pos.receivedTotal")}
         maxWidth="max-w-sm"
@@ -2629,7 +2759,7 @@ export default function POS() {
       </Dialog>
 
       <Dialog
-        isOpen={isDiscountPadOpen}
+        isOpen={amountPadEnabled && isDiscountPadOpen}
         onClose={() => setIsDiscountPadOpen(false)}
         title={t("pos.invoiceDiscount")}
         maxWidth="max-w-sm"
@@ -2754,92 +2884,159 @@ export default function POS() {
           </section>
 
           <section className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setIsPhonePadOpen(true)}
-              className={`w-full touch-manipulation text-start rounded-2xl border-2 px-3.5 py-3.5 transition-all ${
-                phoneKnown === true
-                  ? "border-success/55 bg-success/5"
-                  : requireDeliveryPhone && deliveryPhoneDigits.length < 7
-                    ? "border-rose-500/55 bg-rose-500/5 ring-1 ring-rose-500/15"
-                    : phoneKnown === false
-                      ? "border-destructive/55 bg-destructive/5"
-                      : "border-border/60 bg-background/50 hover:border-primary/40 hover:bg-primary/5"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                    phoneKnown === true
-                      ? "bg-success/15 text-success"
-                      : requireDeliveryPhone && deliveryPhoneDigits.length < 7
-                        ? "bg-rose-500/15 text-rose-600"
-                        : phoneKnown === false
-                          ? "bg-destructive/15 text-destructive"
-                          : "bg-primary/15 text-primary"
-                  }`}
-                >
-                  <Phone className="w-5 h-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold text-muted-foreground">
-                    {t("common.phoneNumber")}
-                    {requireDeliveryPhone ? " *" : ""}
-                  </p>
-                  <p
-                    className={`text-base font-extrabold tabular-nums truncate mt-0.5 ${
-                      deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
+            {amountPadEnabled ? (
+              <button
+                type="button"
+                onClick={() => setIsPhonePadOpen(true)}
+                className={`w-full touch-manipulation text-start rounded-2xl border-2 px-3.5 py-3.5 transition-all ${
+                  phoneKnown === true
+                    ? "border-success/55 bg-success/5"
+                    : requireDeliveryPhone && deliveryPhoneDigits.length < 7
+                      ? "border-rose-500/55 bg-rose-500/5 ring-1 ring-rose-500/15"
+                      : phoneKnown === false
+                        ? "border-destructive/55 bg-destructive/5"
+                        : "border-border/60 bg-background/50 hover:border-primary/40 hover:bg-primary/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                      phoneKnown === true
+                        ? "bg-success/15 text-success"
+                        : requireDeliveryPhone && deliveryPhoneDigits.length < 7
+                          ? "bg-rose-500/15 text-rose-600"
+                          : phoneKnown === false
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-primary/15 text-primary"
                     }`}
-                    dir="ltr"
                   >
-                    {deliveryPhone || t("keyboard.tapToEnter")}
-                  </p>
+                    <Phone className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-muted-foreground">
+                      {t("common.phoneNumber")}
+                      {requireDeliveryPhone ? " *" : ""}
+                    </p>
+                    <p
+                      className={`text-base font-extrabold tabular-nums truncate mt-0.5 ${
+                        deliveryPhone ? "text-foreground" : "text-muted-foreground/70"
+                      }`}
+                      dir="ltr"
+                    >
+                      {deliveryPhone || t("keyboard.tapToEnter")}
+                    </p>
+                  </div>
+                  {phoneKnown === true ? (
+                    <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
+                  ) : phoneKnown === false ? (
+                    <XCircle className="w-5 h-5 text-destructive shrink-0" />
+                  ) : (
+                    <PencilLine className="w-4 h-4 text-muted-foreground shrink-0" />
+                  )}
                 </div>
-                {phoneKnown === true ? (
-                  <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
-                ) : phoneKnown === false ? (
-                  <XCircle className="w-5 h-5 text-destructive shrink-0" />
-                ) : (
-                  <PencilLine className="w-4 h-4 text-muted-foreground shrink-0" />
-                )}
+              </button>
+            ) : (
+              <div
+                className={`w-full rounded-2xl border-2 px-3.5 py-3 transition-all ${
+                  phoneKnown === true
+                    ? "border-success/55 bg-success/5"
+                    : requireDeliveryPhone && deliveryPhoneDigits.length < 7
+                      ? "border-rose-500/55 bg-rose-500/5"
+                      : phoneKnown === false
+                        ? "border-destructive/55 bg-destructive/5"
+                        : "border-border/60 bg-background/50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-11 h-11 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                    <Phone className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-muted-foreground mb-1">
+                      {t("common.phoneNumber")}
+                      {requireDeliveryPhone ? " *" : ""}
+                    </p>
+                    <Input
+                      type="tel"
+                      inputMode="tel"
+                      noAmountPad
+                      noTextKeyboard
+                      value={deliveryPhone}
+                      onChange={(e) => setDeliveryPhone(e.target.value)}
+                      placeholder={t("keyboard.tapToEnter")}
+                      className="h-10 text-base font-extrabold tabular-nums"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
               </div>
-            </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setIsAddressPadOpen(true)}
-              className={`w-full touch-manipulation text-start rounded-2xl border-2 px-3.5 py-3.5 transition-all ${
-                !requireDeliveryAddress || deliveryAddress.trim()
-                  ? "border-border/60 bg-background/50 hover:border-amber-500/40 hover:bg-amber-500/5"
-                  : "border-rose-500/55 bg-rose-500/5 ring-1 ring-rose-500/15"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                    !requireDeliveryAddress || deliveryAddress.trim()
-                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                      : "bg-rose-500/15 text-rose-600"
-                  }`}
-                >
-                  <MapPin className="w-5 h-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold text-muted-foreground">
-                    {t("pos.deliveryAddress")}
-                    {requireDeliveryAddress ? " *" : ""}
-                  </p>
-                  <p
-                    className={`text-base font-extrabold truncate mt-0.5 ${
-                      deliveryAddress.trim() ? "text-foreground" : "text-muted-foreground/70"
+            {textKeyboardEnabled ? (
+              <button
+                type="button"
+                onClick={() => setIsAddressPadOpen(true)}
+                className={`w-full touch-manipulation text-start rounded-2xl border-2 px-3.5 py-3.5 transition-all ${
+                  !requireDeliveryAddress || deliveryAddress.trim()
+                    ? "border-border/60 bg-background/50 hover:border-amber-500/40 hover:bg-amber-500/5"
+                    : "border-rose-500/55 bg-rose-500/5 ring-1 ring-rose-500/15"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                      !requireDeliveryAddress || deliveryAddress.trim()
+                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        : "bg-rose-500/15 text-rose-600"
                     }`}
                   >
-                    {deliveryAddress.trim() || t("keyboard.tapToType")}
-                  </p>
+                    <MapPin className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-muted-foreground">
+                      {t("pos.deliveryAddress")}
+                      {requireDeliveryAddress ? " *" : ""}
+                    </p>
+                    <p
+                      className={`text-base font-extrabold truncate mt-0.5 ${
+                        deliveryAddress.trim() ? "text-foreground" : "text-muted-foreground/70"
+                      }`}
+                    >
+                      {deliveryAddress.trim() || t("keyboard.tapToType")}
+                    </p>
+                  </div>
+                  <PencilLine className="w-4 h-4 text-muted-foreground shrink-0" />
                 </div>
-                <PencilLine className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
+            ) : (
+              <div
+                className={`w-full rounded-2xl border-2 px-3.5 py-3 ${
+                  !requireDeliveryAddress || deliveryAddress.trim()
+                    ? "border-border/60 bg-background/50"
+                    : "border-rose-500/55 bg-rose-500/5"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-muted-foreground mb-1">
+                      {t("pos.deliveryAddress")}
+                      {requireDeliveryAddress ? " *" : ""}
+                    </p>
+                    <Input
+                      type="text"
+                      noTextKeyboard
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      placeholder={t("keyboard.tapToType")}
+                      className="h-10 text-base font-extrabold"
+                    />
+                  </div>
+                </div>
               </div>
-            </button>
+            )}
           </section>
 
           <Button
@@ -2861,7 +3058,7 @@ export default function POS() {
       </Dialog>
 
       <Dialog
-        isOpen={isPhonePadOpen}
+        isOpen={amountPadEnabled && isPhonePadOpen}
         onClose={() => setIsPhonePadOpen(false)}
         title={t("pos.deliveryPhoneTitle")}
         maxWidth="max-w-sm"
@@ -2882,7 +3079,7 @@ export default function POS() {
       </Dialog>
 
       <Dialog
-        isOpen={isAddressPadOpen}
+        isOpen={textKeyboardEnabled && isAddressPadOpen}
         onClose={() => setIsAddressPadOpen(false)}
         hideHeader
         maxWidth="max-w-5xl"
@@ -2900,7 +3097,7 @@ export default function POS() {
       </Dialog>
 
       <Dialog
-        isOpen={isSearchPadOpen}
+        isOpen={textKeyboardEnabled && isSearchPadOpen}
         onClose={() => setIsSearchPadOpen(false)}
         hideHeader
         maxWidth="max-w-5xl"
@@ -2918,7 +3115,7 @@ export default function POS() {
       </Dialog>
 
       <Dialog
-        isOpen={isPersonSearchPadOpen}
+        isOpen={textKeyboardEnabled && isPersonSearchPadOpen}
         onClose={() => setIsPersonSearchPadOpen(false)}
         hideHeader
         maxWidth={isPortrait ? "max-w-3xl" : "max-w-7xl"}
