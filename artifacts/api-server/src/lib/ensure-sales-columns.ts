@@ -2,12 +2,18 @@ import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { logger } from "./logger";
 
+/** Bump when new ALTER COLUMN blocks are added so they run after hot reload / redeploy. */
+const ENSURE_VERSION = 3;
+let ensuredVersion = 0;
 let ensurePromise: Promise<void> | null = null;
 
-/** Idempotent column adds for per-device sales routing (runs once). */
+/** Idempotent column adds for per-device sales routing. */
 export async function ensureSalesDeviceColumns() {
-  if (!ensurePromise) {
-    ensurePromise = (async () => {
+  if (ensuredVersion >= ENSURE_VERSION && ensurePromise) {
+    return ensurePromise;
+  }
+  ensuredVersion = ENSURE_VERSION;
+  ensurePromise = (async () => {
       try {
         await db.execute(sql`
           ALTER TABLE device_printers
@@ -116,10 +122,10 @@ export async function ensureSalesDeviceColumns() {
         `);
       } catch (err) {
         ensurePromise = null;
+        ensuredVersion = 0;
         logger.error({ err }, "Failed ensuring sales device columns");
         throw err;
       }
     })();
-  }
   return ensurePromise;
 }

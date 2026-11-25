@@ -16,29 +16,34 @@ type HostProps = {
 
 /**
  * When the device Keyboard setting is on, focusing any text field opens
- * the same MultilingualKeyboard used in POS — across every menu/form.
+ * MultilingualKeyboard across every menu/form.
  */
 export function VirtualKeyboardHost({ active = true }: HostProps) {
   const enabled = useDeviceVirtualKeyboard(active);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
   const { t, locale } = useI18n();
   const [session, setSession] = useState<PadSession | null>(null);
-  const openingRef = useRef(false);
+  const sessionRef = useRef<PadSession | null>(null);
+  sessionRef.current = session;
 
   const close = useCallback(() => {
     setSession(null);
-    openingRef.current = false;
+    sessionRef.current = null;
   }, []);
 
   const openFor = useCallback((el: HTMLInputElement | HTMLTextAreaElement) => {
-    if (openingRef.current) return;
-    openingRef.current = true;
+    if (!enabledRef.current) return;
+    if (sessionRef.current?.el === el) return;
     const original = el.value ?? "";
     try {
       el.blur();
     } catch {
       /* ignore */
     }
-    setSession({ el, original });
+    const next = { el, original };
+    sessionRef.current = next;
+    setSession(next);
   }, []);
 
   useEffect(() => {
@@ -47,39 +52,42 @@ export function VirtualKeyboardHost({ active = true }: HostProps) {
       return;
     }
 
-    const onFocusIn = (e: FocusEvent) => {
-      const target = e.target;
-      if (!isTextKeyboardField(target)) return;
-      if (session?.el === target) return;
-      e.preventDefault();
-      openFor(target);
-    };
-
     const onPointerDown = (e: PointerEvent) => {
+      if (!enabledRef.current) return;
       const target = e.target;
       if (!(target instanceof Element)) return;
+      if (target.closest("[data-global-text-keyboard],[data-global-amount-pad]")) return;
       const field =
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
           ? target
           : target.closest("input, textarea");
       if (!isTextKeyboardField(field)) return;
-      if (session?.el === field) return;
       e.preventDefault();
+      e.stopPropagation();
       openFor(field);
     };
 
-    document.addEventListener("focusin", onFocusIn, true);
-    document.addEventListener("pointerdown", onPointerDown, true);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn, true);
-      document.removeEventListener("pointerdown", onPointerDown, true);
+    const onFocusIn = (e: FocusEvent) => {
+      if (!enabledRef.current) return;
+      const target = e.target;
+      if (!isTextKeyboardField(target)) return;
+      if (sessionRef.current?.el === target) return;
+      e.preventDefault();
+      openFor(target);
     };
-  }, [enabled, openFor, close, session]);
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+    };
+  }, [enabled, openFor, close]);
 
   const defaultLang =
     locale === "en" || locale === "ku" || locale === "ar" ? locale : "ar";
 
-  if (!enabled) return null;
+  if (!active) return null;
 
   return (
     <Dialog
@@ -107,7 +115,6 @@ export function VirtualKeyboardHost({ active = true }: HostProps) {
               setNativeTextValue(session.el, v);
               close();
               try {
-                session.el.focus({ preventScroll: true });
                 session.el.blur();
               } catch {
                 /* ignore */

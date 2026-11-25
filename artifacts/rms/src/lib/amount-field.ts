@@ -1,10 +1,10 @@
-/** Detect money / price / amount fields (not plain text or capacity/qty seats). */
+/** Detect money / price / amount / numeric value fields. */
 
 const MONEY_RE =
   /amount|price|fee|cost|total|paid|pay|balance|salary|wage|expense|debt|money|discount|tax|unitPrice|unit_price|deliveryFee|delivery_fee|سعر|مبلغ|تكلفة|رسوم|دين|واصل|مدفوع|أجور|مصروف|خصم|ضريبة|أجرة|نقد|كاش|دفعة|رصيد|ثمن/i;
 
 const EXCLUDE_RE =
-  /capacity|quantity|\bqty\b|pin|year|month|day|phone|mobile|email|search|note|notes|address|person|count|seats|سع[ةه]|كمي[ةه]|شخص|هاتف|جوال|بحث|عنوان/i;
+  /capacity|quantity|\bqty\b|pin|year|month|day|phone|mobile|email|search|note|notes|address|person|count|seats|سع[ةه]|كمي[ةه]|شخص|هاتف|جوال|بحث|عنوان|رقم.?الطاول|رقم.?الغرف/i;
 
 function nearbyLabelText(el: HTMLInputElement): string {
   const fromLabels = Array.from(el.labels ?? [])
@@ -42,30 +42,34 @@ export function isAmountMoneyField(el: Element | null): el is HTMLInputElement {
   if (el.dataset.amountPad === "true") return true;
   if (el.closest("[data-global-amount-pad]")) return false;
   if (el.closest("[data-no-global-amount-pad]")) return false;
+  if (el.closest("[data-global-text-keyboard]")) return false;
 
   const type = (el.type || "text").toLowerCase();
-  if (type === "password" || type === "file" || type === "checkbox" || type === "radio") {
+  if (
+    type === "password" ||
+    type === "file" ||
+    type === "checkbox" ||
+    type === "radio" ||
+    type === "hidden" ||
+    type === "tel" ||
+    type === "email" ||
+    type === "search" ||
+    type === "url"
+  ) {
     return false;
   }
 
   const mode = (el.inputMode || "").toLowerCase();
   const isNumericType =
     type === "number" || mode === "decimal" || mode === "numeric";
-  if (!isNumericType && type !== "text") return false;
+  if (!isNumericType) return false;
 
   const hay = fieldHaystack(el);
-  if (EXCLUDE_RE.test(hay) && el.dataset.amountPad !== "true") return false;
+  if (EXCLUDE_RE.test(hay)) return false;
   if (MONEY_RE.test(hay)) return true;
 
-  // Decimal money fields often use step 0.01 without a money-ish name
-  if (type === "number") {
-    const step = el.step;
-    if (step && step !== "any" && step !== "1" && Number(step) > 0 && Number(step) < 1) {
-      return true;
-    }
-  }
-
-  return false;
+  // Any remaining number/decimal field is treated as amount/price input
+  return type === "number" || mode === "decimal" || mode === "numeric";
 }
 
 export function setNativeInputValue(el: HTMLInputElement, value: string) {

@@ -1,6 +1,10 @@
 import { useEffect, useMemo } from "react";
 import { useGetDevicePrinters } from "@workspace/api-client-react";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
+import {
+  DEVICE_PRINTERS_QUERY_KEY,
+  DEVICE_PRINTERS_REQUEST,
+} from "@/lib/device-printer-query";
 
 function isFullscreenActive() {
   return Boolean(document.fullscreenElement);
@@ -33,14 +37,12 @@ export function useDeviceFormsFullscreen(enabled: boolean) {
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
   const { data: printers } = useGetDevicePrinters({
     query: {
-      queryKey: ["/api/settings/printers", "forms-fullscreen", deviceKey],
+      queryKey: DEVICE_PRINTERS_QUERY_KEY,
       staleTime: 5_000,
       refetchInterval: 15_000,
       refetchOnWindowFocus: true,
     },
-    request: {
-      headers: { "x-branch-id": "all" },
-    },
+    request: DEVICE_PRINTERS_REQUEST,
   });
 
   const wantFullscreen = useMemo(() => {

@@ -13,6 +13,7 @@ import {
   type AppSettings,
   type DevicePrinter,
 } from "@workspace/api-client-react";
+import { DEVICE_PRINTERS_QUERY_KEY } from "@/lib/device-printer-query";
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { useBranch } from "@/lib/branch-context";
@@ -166,7 +167,7 @@ export default function SettingsPage() {
   // does not vanish when the header branch differs from the device branch.
   const { data: printers, isLoading: printersLoading } = useGetDevicePrinters({
     query: {
-      queryKey: [...getGetDevicePrintersQueryKey(), "all-devices"],
+      queryKey: DEVICE_PRINTERS_QUERY_KEY,
     },
     request: {
       headers: { "x-branch-id": "all" },
@@ -389,7 +390,7 @@ export default function SettingsPage() {
     );
   };
 
-  const printersQueryKey = [...getGetDevicePrintersQueryKey(), "all-devices"] as const;
+  const printersQueryKey = DEVICE_PRINTERS_QUERY_KEY;
 
   const syncPrinters = (updater: (list: DevicePrinter[]) => DevicePrinter[]) => {
     queryClient.setQueryData<DevicePrinter[]>(printersQueryKey, (prev) =>
