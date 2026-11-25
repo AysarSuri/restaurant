@@ -379,6 +379,23 @@ export default function Inventory() {
           </Card>
 
           <Card className="overflow-hidden border border-border/50">
+            <div className="px-4 py-3 border-b border-border/40 bg-gradient-to-l from-primary/5 via-background to-background flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 text-center sm:text-start">
+                <p className="text-sm font-extrabold">{t("inventory.printReport")}</p>
+                <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">
+                  {t("inventory.printReportHint")}
+                </p>
+              </div>
+              <Button
+                type="button"
+                className="h-11 rounded-full px-5 font-extrabold gap-2 shadow-md shadow-primary/20 mx-auto sm:mx-0"
+                onClick={() => setReportOpen(true)}
+                disabled={!filtered.length || isLoading}
+              >
+                <Printer className="w-4 h-4" />
+                {t("inventory.showAndPrintReport")}
+              </Button>
+            </div>
             {isLoading ? (
               <div className="py-16 text-center text-muted-foreground font-semibold">
                 <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin opacity-60" />

@@ -2140,13 +2140,13 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
   const rows = data.lines
     .map(
       (l, i) => `<tr>
-        <td class="num">${i + 1}</td>
-        <td class="num" dir="ltr">${esc(l.code)}</td>
-        <td>${esc(l.nameAr)}</td>
-        <td>${esc(l.categoryNameAr || "—")}</td>
-        <td>${esc(l.remainingLabel)}</td>
-        <td class="num amount" dir="ltr">${esc(data.formatMoney(l.costPerMinor))}</td>
-        <td class="num amount" dir="ltr">${esc(data.formatMoney(l.totalCost))}</td>
+        <td class="cell">${i + 1}</td>
+        <td class="cell" dir="ltr">${esc(l.code)}</td>
+        <td class="cell">${esc(l.nameAr)}</td>
+        <td class="cell">${esc(l.categoryNameAr || "—")}</td>
+        <td class="cell qty">${esc(l.remainingLabel)}</td>
+        <td class="cell amount" dir="ltr">${esc(data.formatMoney(l.costPerMinor))}</td>
+        <td class="cell amount total" dir="ltr">${esc(data.formatMoney(l.totalCost))}</td>
       </tr>`
     )
     .join("");
@@ -2157,52 +2157,70 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
   <meta charset="utf-8" />
   <title>تقرير الكمية المتبقية — المخزن</title>
   <style>
-    @page { size: A4 landscape; margin: 10mm 12mm 12mm; }
+    @page { size: A4 landscape; margin: 0.5cm; }
     @media print {
-      @page { size: A4 landscape; margin: 10mm 12mm 12mm; }
+      @page { size: A4 landscape; margin: 0.5cm; }
     }
     * { box-sizing: border-box; }
     html, body {
-      margin: 0; padding: 0; background: #fff; color: #0f172a;
+      margin: 0; padding: 0; background: #fff; color: #0b1220;
       font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
-      font-size: 13px; font-weight: 700;
+      font-size: 14px; font-weight: 700;
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
     body { width: 297mm; min-height: 210mm; margin: 0 auto; }
     .sheet { width: 100%; max-width: 297mm; padding: 0; }
     .header {
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      padding-bottom: 10px; border-bottom: 2.5px solid #0f172a; margin-bottom: 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 18px;
+      padding: 12px 14px; margin-bottom: 14px; border-radius: 14px;
+      background: linear-gradient(115deg, #0f172a 0%, #1e293b 55%, #0ea5e9 160%);
+      color: #fff;
     }
     .brand-block { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .logo {
-      width: 52px; height: 52px; object-fit: contain; border-radius: 10px;
-      border: 1px solid #e2e8f0; background: #f8fafc;
+      width: 56px; height: 56px; object-fit: contain; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.25); background: #fff;
     }
-    .brand-name { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.25; }
-    .brand-meta { margin: 2px 0 0; font-size: 12px; font-weight: 700; color: #64748b; }
-    .doc-title { margin: 0; font-size: 16px; font-weight: 800; text-align: left; }
-    .doc-sub { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #64748b; text-align: left; }
-    table { width: 100%; border-collapse: collapse; }
+    .brand-name { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.25; }
+    .brand-meta { margin: 3px 0 0; font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.82); }
+    .doc-side { text-align: left; }
+    .doc-badge {
+      display: inline-block; margin: 0 0 6px; padding: 3px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.16); font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
+    }
+    .doc-title { margin: 0; font-size: 17px; font-weight: 800; }
+    .doc-sub { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8); }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border-radius: 12px; }
     th, td {
-      border: 1px solid #cbd5e1; padding: 7px 8px; text-align: right;
-      font-size: 13px; font-weight: 700; vertical-align: middle;
+      border: 1px solid #dbe3ee; padding: 9px 10px; text-align: center;
+      font-size: 14px; font-weight: 700; vertical-align: middle;
     }
     th {
-      background: linear-gradient(90deg, #0f172a, #1e293b); color: #fff;
-      font-weight: 800; white-space: nowrap;
+      background: linear-gradient(90deg, #0f172a, #334155); color: #fff;
+      font-weight: 800; white-space: nowrap; border-color: #1e293b;
     }
+    th:first-child { border-top-right-radius: 12px; }
+    th:last-child { border-top-left-radius: 12px; }
     tr:nth-child(even) td { background: #f8fafc; }
-    .num { text-align: center; white-space: nowrap; }
+    tr:last-child td:first-child { border-bottom-right-radius: 12px; }
+    tr:last-child td:last-child { border-bottom-left-radius: 12px; }
+    .cell { white-space: nowrap; }
+    .qty { color: #047857; font-weight: 800; }
     .amount { font-variant-numeric: tabular-nums; }
+    .total { color: #0369a1; font-weight: 800; }
     .totals {
-      margin-top: 12px; display: flex; justify-content: flex-start; gap: 16px;
-      padding: 10px 14px; border: 2px solid #0f172a; border-radius: 12px;
-      background: #f1f5f9; font-size: 13px; font-weight: 800;
+      margin-top: 14px; display: flex; justify-content: center; gap: 22px; flex-wrap: wrap;
+      padding: 12px 16px; border-radius: 14px; border: 1.5px solid #cbd5e1;
+      background: linear-gradient(180deg, #f8fafc, #eef2ff); font-size: 14px; font-weight: 800;
+      text-align: center;
+    }
+    .totals span {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid #e2e8f0;
     }
     .footer {
       margin-top: 14px; display: flex; justify-content: space-between; gap: 12px;
-      font-size: 11px; font-weight: 700; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px;
+      font-size: 12px; font-weight: 700; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 9px;
     }
   </style>
 </head>
@@ -2216,9 +2234,10 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
           <p class="brand-meta">${esc(data.branchName || "كل الفروع")}${phone ? ` · ${esc(phone)}` : ""}</p>
         </div>
       </div>
-      <div>
+      <div class="doc-side">
+        <span class="doc-badge">A4 Landscape · 14 Bold</span>
         <p class="doc-title">تقرير الكمية المتبقية حسب الصنف</p>
-        <p class="doc-sub">A4 أفقي · خط 13 Bold · ${esc(data.printedAtLabel)}</p>
+        <p class="doc-sub">${esc(data.printedAtLabel)}</p>
       </div>
     </div>
     <table>
@@ -2233,7 +2252,7 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
           <th>المجموع</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="7" style="text-align:center">لا توجد أصناف</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="7" class="cell">لا توجد أصناف</td></tr>`}</tbody>
     </table>
     <div class="totals">
       <span>عدد الأصناف: ${data.lines.length}</span>
@@ -2241,14 +2260,14 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
     </div>
     <div class="footer">
       <span>تم إنشاء التقرير تلقائياً من نظام إدارة المطاعم</span>
-      <span>خط التقرير: 13 Bold · تصميم احترافي</span>
+      <span>تصميم احترافي حديث · خط 14 Bold</span>
     </div>
   </div>
 </body>
 </html>`;
 }
 
-/** Professional A4 landscape warehouse remaining-qty report (13px bold). */
+/** Professional A4 landscape warehouse remaining-qty report (14px bold). */
 export function printWarehouseStockReportA4(data: WarehouseStockReportData) {
   openPrintHtmlDocument(
     buildWarehouseStockReportA4Html(data),
