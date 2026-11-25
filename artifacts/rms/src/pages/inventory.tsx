@@ -391,16 +391,16 @@ export default function Inventory() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm text-center">
                   <thead>
                     <tr className="border-b border-border/50 bg-secondary/40 text-muted-foreground">
-                      <th className="p-3 text-start font-extrabold">#</th>
-                      <th className="p-3 text-start font-extrabold">{t("inventory.itemCode")}</th>
-                      <th className="p-3 text-start font-extrabold">{t("inventory.itemName")}</th>
-                      <th className="p-3 text-start font-extrabold">{t("menu.category")}</th>
-                      <th className="p-3 text-start font-extrabold">{t("inventory.remainingQty")}</th>
-                      <th className="p-3 text-start font-extrabold">{t("inventory.costMinor")}</th>
-                      <th className="p-3 text-start font-extrabold">{t("common.total")}</th>
+                      <th className="p-3 text-center font-extrabold">#</th>
+                      <th className="p-3 text-center font-extrabold">{t("inventory.itemCode")}</th>
+                      <th className="p-3 text-center font-extrabold">{t("inventory.itemName")}</th>
+                      <th className="p-3 text-center font-extrabold">{t("menu.category")}</th>
+                      <th className="p-3 text-center font-extrabold">{t("inventory.remainingQty")}</th>
+                      <th className="p-3 text-center font-extrabold">{t("inventory.costMinor")}</th>
+                      <th className="p-3 text-center font-extrabold">{t("common.total")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -409,23 +409,23 @@ export default function Inventory() {
                         key={r.menuItemId}
                         className="border-t border-border/30 hover:bg-primary/5 transition-colors"
                       >
-                        <td className="p-3 font-bold tabular-nums text-muted-foreground">
+                        <td className="p-3 text-center font-bold tabular-nums text-muted-foreground">
                           {idx + 1}
                         </td>
-                        <td className="p-3 font-extrabold font-display tabular-nums" dir="ltr">
+                        <td className="p-3 text-center font-extrabold font-display tabular-nums" dir="ltr">
                           {r.code}
                         </td>
-                        <td className="p-3 font-extrabold">{r.nameAr}</td>
-                        <td className="p-3 font-semibold text-muted-foreground">
+                        <td className="p-3 text-center font-extrabold">{r.nameAr}</td>
+                        <td className="p-3 text-center font-semibold text-muted-foreground">
                           {r.categoryNameAr || "—"}
                         </td>
-                        <td className={`p-3 font-extrabold ${toneRemaining(r)}`}>
+                        <td className={`p-3 text-center font-extrabold ${toneRemaining(r)}`}>
                           {r.remainingLabel}
                         </td>
-                        <td className="p-3 font-extrabold font-display tabular-nums" dir="ltr">
+                        <td className="p-3 text-center font-extrabold font-display tabular-nums" dir="ltr">
                           {fmtMoney(r.costPerMinor)}
                         </td>
-                        <td className="p-3 font-extrabold font-display tabular-nums text-primary" dir="ltr">
+                        <td className="p-3 text-center font-extrabold font-display tabular-nums text-primary" dir="ltr">
                           {fmtMoney(r.totalCost)}
                         </td>
                       </tr>
