@@ -309,13 +309,23 @@ router.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
 
+  const [existing] = await db
+    .select()
+    .from(suppliersTable)
+    .where(eq(suppliersTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "المورد غير موجود" });
+
+  const blockMsg =
+    "لا يمكن حذف المورد لأن اسمه مستخدم في قائمة شراء أو مرجوعات أو حركة المورد أو عليه مبلغ في أسماء الموردين";
+
   const [purchase] = await db
     .select({ id: supplierPurchasesTable.id })
     .from(supplierPurchasesTable)
     .where(eq(supplierPurchasesTable.supplierId, id))
     .limit(1);
   if (purchase) {
-    return res.status(400).json({ message: "لا يمكن حذف مورد له فواتير شراء" });
+    return res.status(400).json({ message: blockMsg });
   }
   const [retRow] = await db
     .select({ id: supplierReturnsTable.id })
@@ -323,7 +333,7 @@ router.delete("/:id", async (req, res) => {
     .where(eq(supplierReturnsTable.supplierId, id))
     .limit(1);
   if (retRow) {
-    return res.status(400).json({ message: "لا يمكن حذف مورد له فواتير مرجوع" });
+    return res.status(400).json({ message: blockMsg });
   }
   const [movement] = await db
     .select({ id: supplierMovementsTable.id })
@@ -331,7 +341,18 @@ router.delete("/:id", async (req, res) => {
     .where(eq(supplierMovementsTable.supplierId, id))
     .limit(1);
   if (movement) {
-    return res.status(400).json({ message: "لا يمكن حذف مورد له حركات" });
+    return res.status(400).json({ message: blockMsg });
+  }
+
+  const opening = Math.abs(num(existing.openingBalance));
+  if (opening > 0.009) {
+    return res.status(400).json({ message: blockMsg });
+  }
+
+  const balances = await computeBalances([id]);
+  const balance = Math.abs(balances.get(id) ?? 0);
+  if (balance > 0.009) {
+    return res.status(400).json({ message: blockMsg });
   }
 
   const [row] = await db

@@ -14,10 +14,13 @@ import {
   useGetDevicePrinters,
   useGetOrders,
   useGetDrivers,
+  useGetShifts,
   getGetOrdersQueryKey,
   getGetTablesQueryKey,
+  getGetShiftsQueryKey,
   lookupDeliveryPhone,
   upsertDeliveryContact,
+  getGetDeliveryContactsQueryKey,
   type RestaurantTable,
 } from "@workspace/api-client-react";
 import { Button, Card, Badge, Dialog } from "@/components/ui-elements";
@@ -208,6 +211,14 @@ export default function POS() {
       queryKey: ["/api/drivers", { scope: "pos-branch", branchId: driversBranchParam }],
     },
   });
+  const { data: shiftsData, isLoading: shiftsLoading } = useGetShifts({
+      query: {
+        queryKey: [...getGetShiftsQueryKey(), selectedBranchId],
+        staleTime: 5_000,
+        refetchInterval: 15_000,
+        refetchOnWindowFocus: true,
+      },
+    });
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateOrder, isPending: isUpdatingOrder } = useUpdateOrder();
   const { mutate: updateTable, isPending: isUpdatingPerson } = useUpdateTable();
@@ -411,6 +422,27 @@ export default function POS() {
   const isWidePos = !isCompactPos && !isPortrait && width >= 1400;
   const needsBranchPick = selectedBranchId === "all";
 
+  const openShiftForBranch = useMemo(() => {
+    if (selectedBranchId === "all") return null;
+    const list = shiftsData ?? [];
+    return (
+      list.find(
+        (s) =>
+          s.branchId === selectedBranchId &&
+          s.isOpen === true &&
+          !s.closedAt
+      ) ?? null
+    );
+  }, [shiftsData, selectedBranchId]);
+
+  const shiftClosed =
+    !needsBranchPick &&
+    !(shiftsLoading && shiftsData == null) &&
+    openShiftForBranch == null;
+
+  const shiftClosedReason = () =>
+    shiftClosed ? t("pos.shiftClosedBlock") : null;
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
@@ -591,6 +623,10 @@ export default function POS() {
 
   const addToCart = (item: MenuItem) => {
     if (needsBranchPick) return;
+    if (shiftClosed) {
+      toast({ title: t("pos.shiftClosedBlock"), variant: "destructive" });
+      return;
+    }
     const asReturn = isReturnMode;
     setCart((prev) => {
       const existing = prev.find(
@@ -697,6 +733,14 @@ export default function POS() {
       setIsDeliveryFormOpen(true);
       return;
     }
+    /** New lists only — editing an existing invoice stays allowed */
+    if (editingOrderId == null) {
+      const shiftBlocked = shiftClosedReason();
+      if (shiftBlocked) {
+        toast({ title: shiftBlocked, variant: "destructive" });
+        return;
+      }
+    }
     setCartOpen(false);
     setCheckoutPayMethod("cash");
     setCheckoutReceived(total);
@@ -708,6 +752,7 @@ export default function POS() {
         quantity: cartLineSignedQty(i),
       }));
       const afterCashierSave = () => {
+        void persistDeliveryContactIfNeeded({ notify: false });
         invalidateOrdersQueries();
         setOrderSuccess(true);
         setIsCheckoutOpen(true);
@@ -802,6 +847,49 @@ export default function POS() {
     return () => window.clearTimeout(timer);
   }, [deliveryPhone, orderType]);
 
+  /**
+   * If phone is not in «أرقام التوصيل», save phone + address there after
+   * delivery details are confirmed / order is saved.
+   */
+  const persistDeliveryContactIfNeeded = async (opts?: { notify?: boolean }) => {
+    if (orderType !== "delivery") return false;
+    const digits = deliveryPhone.replace(/\D/g, "");
+    const address = deliveryAddress.trim();
+    if (digits.length < 7 || !address) return false;
+
+    let known = phoneKnown;
+    if (known == null) {
+      try {
+        const res = await lookupDeliveryPhone(deliveryPhone);
+        known = Boolean(res.found);
+        setPhoneKnown(known);
+      } catch {
+        known = false;
+      }
+    }
+
+    /** Always upsert so address stays current; toast only for brand-new numbers */
+    const wasNew = known === false;
+    try {
+      await upsertDeliveryContact({
+        phone: deliveryPhone,
+        address,
+        branchId: selectedBranchId === "all" ? undefined : selectedBranchId,
+      });
+      setPhoneKnown(true);
+      void queryClient.invalidateQueries({ queryKey: getGetDeliveryContactsQueryKey() });
+      if (wasNew && opts?.notify !== false) {
+        toast({
+          title: t("pos.deliveryContactSaved"),
+          description: t("pos.deliveryContactSavedDesc"),
+        });
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const orderTypeLabels: Record<OrderType, string> = {
     dine_in: t("order.dineIn"),
     takeaway: t("order.takeaway"),
@@ -849,6 +937,13 @@ export default function POS() {
       toast({ title: blocked, variant: "destructive" });
       return;
     }
+    if (editingOrderId == null) {
+      const shiftBlocked = shiftClosedReason();
+      if (shiftBlocked) {
+        toast({ title: shiftBlocked, variant: "destructive" });
+        return;
+      }
+    }
     const cardNote =
       paymentMethod === "card" && opts?.cardName
         ? t("pos.cardLine", { name: opts.cardName })
@@ -868,14 +963,7 @@ export default function POS() {
     }));
 
     const afterSaveSuccess = () => {
-      if (orderType === "delivery" && deliveryPhone.replace(/\D/g, "").length >= 7) {
-        upsertDeliveryContact({
-          phone: deliveryPhone,
-          address: deliveryAddress.trim(),
-        }).catch(() => {
-          /* non-blocking */
-        });
-      }
+      void persistDeliveryContactIfNeeded({ notify: false });
       invalidateOrdersQueries();
       setOrderSuccess(true);
       if (opts?.print && receiptData) {
@@ -1444,6 +1532,11 @@ export default function POS() {
           {needsBranchPick && (
             <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
               {t("pos.allBranchesBlock")}
+            </div>
+          )}
+          {shiftClosed && (
+            <div className="mb-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-700 dark:text-rose-300">
+              {t("pos.shiftClosedBlock")}
             </div>
           )}
           <div
@@ -2754,6 +2847,7 @@ export default function POS() {
                 toast({ title: blocked, variant: "destructive" });
                 return;
               }
+              void persistDeliveryContactIfNeeded({ notify: true });
               setIsDeliveryFormOpen(false);
             }}
           >

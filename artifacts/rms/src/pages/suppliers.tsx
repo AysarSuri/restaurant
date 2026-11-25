@@ -6,6 +6,7 @@ import {
   useUpdateSupplier,
   useDeleteSupplier,
   useGetSupplierPurchases,
+  useGetSupplierReturns,
   useCreateSupplierPurchase,
   useUpdateSupplierPurchase,
   useDeleteSupplierPurchase,
@@ -190,6 +191,24 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return stripped || fallback;
 }
 
+const SUPPLIER_IN_USE_MSG =
+  "لا يمكن حذف المورد لأن اسمه مستخدم في قائمة شراء أو مرجوعات أو حركة المورد أو عليه مبلغ في أسماء الموردين";
+
+function supplierDeleteBlockReason(
+  supplier: Supplier,
+  purchases: { supplierId: number }[] | undefined,
+  returnsList: { supplierId: number }[] | undefined,
+  movements: { supplierId: number }[] | undefined
+): string | null {
+  const opening = Math.abs(Number(supplier.openingBalance) || 0);
+  const balance = Math.abs(Number(supplier.balance) || 0);
+  if (opening > 0.009 || balance > 0.009) return SUPPLIER_IN_USE_MSG;
+  if ((purchases ?? []).some((p) => p.supplierId === supplier.id)) return SUPPLIER_IN_USE_MSG;
+  if ((returnsList ?? []).some((r) => r.supplierId === supplier.id)) return SUPPLIER_IN_USE_MSG;
+  if ((movements ?? []).some((m) => m.supplierId === supplier.id)) return SUPPLIER_IN_USE_MSG;
+  return null;
+}
+
 export default function SuppliersPage() {
   const queryClient = useQueryClient();
   const { formatDate } = useI18n();
@@ -197,8 +216,10 @@ export default function SuppliersPage() {
 
   const { data: suppliers, isLoading: loadingSuppliers } = useGetSuppliers();
   const { data: purchases, isLoading: loadingPurchases } = useGetSupplierPurchases();
+  const { data: supplierReturns } = useGetSupplierReturns();
   const { data: movements, isLoading: loadingMovements } = useGetSupplierMovements();
   const { data: debts, isLoading: loadingDebts, refetch: refetchDebts } = useGetSupplierDebts();
+  const [deleteBlockMessage, setDeleteBlockMessage] = useState("");
   const { data: menuItems } = useGetMenuItems();
   const { data: branches } = useGetBranches();
   const { data: cards } = useGetCards();
@@ -1351,12 +1372,25 @@ export default function SuppliersPage() {
                             size="icon"
                             className="h-10 w-10 text-destructive"
                             onClick={() => {
-                              if (!confirm("حذف هذا المورد؟")) return;
+                              const blocked = supplierDeleteBlockReason(
+                                s,
+                                purchases,
+                                supplierReturns,
+                                movements
+                              );
+                              if (blocked) {
+                                setDeleteBlockMessage(blocked);
+                                return;
+                              }
+                              if (!confirm(`حذف المورد «${s.name}»؟`)) return;
                               deleteSupplier(
                                 { id: s.id },
                                 {
                                   onSuccess: invalidateAll,
-                                  onError: (e: any) => alert(e?.message || "تعذر الحذف"),
+                                  onError: (e) =>
+                                    setDeleteBlockMessage(
+                                      apiErrorMessage(e, SUPPLIER_IN_USE_MSG)
+                                    ),
                                 }
                               );
                             }}
@@ -2594,6 +2628,28 @@ export default function SuppliersPage() {
           )}
         </Card>
       ) : null}
+
+      <Dialog
+        isOpen={Boolean(deleteBlockMessage)}
+        onClose={() => setDeleteBlockMessage("")}
+        title="لا يمكن الحذف"
+      >
+        <div className="space-y-4 text-center py-1">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-destructive/15 border border-destructive/25 flex items-center justify-center">
+            <Trash2 className="w-7 h-7 text-destructive" />
+          </div>
+          <p className="text-[15px] font-bold leading-relaxed text-foreground">
+            {deleteBlockMessage}
+          </p>
+          <Button
+            type="button"
+            className="w-full h-12 rounded-full text-[15px] font-bold"
+            onClick={() => setDeleteBlockMessage("")}
+          >
+            حسناً
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog
         isOpen={supplierFormOpen}

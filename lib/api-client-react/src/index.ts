@@ -11,5 +11,6 @@ export * from "./suppliers";
 export * from "./expenses-manage";
 export * from "./cash-movements";
 export * from "./system-reset";
+export * from "./warehouse-stock";
 export { setBaseUrl, setAuthTokenGetter, setBranchIdGetter } from "./custom-fetch";
 export type { AuthTokenGetter, BranchIdGetter } from "./custom-fetch";

@@ -2111,3 +2111,148 @@ export function printExpenseReportA4Landscape(data: ExpenseReportA4Data) {
     { landscape: true }
   );
 }
+
+export type WarehouseStockReportLine = {
+  code: string;
+  nameAr: string;
+  categoryNameAr: string;
+  remainingLabel: string;
+  costPerMinor: number;
+  totalCost: number;
+};
+
+export type WarehouseStockReportData = {
+  restaurantName: string;
+  branchName?: string | null;
+  logoUrl?: string | null;
+  mobile?: string | null;
+  printedAtLabel: string;
+  formatMoney: (n: number) => string;
+  lines: WarehouseStockReportLine[];
+  totalCostSum: number;
+};
+
+function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
+  const rawLogo = data.logoUrl?.trim() || "";
+  const logoSrc = rawLogo.replace(/"/g, "");
+  const logo = logoSrc ? `<img class="logo" src="${logoSrc}" alt="" />` : "";
+  const phone = data.mobile?.trim() || "";
+  const rows = data.lines
+    .map(
+      (l, i) => `<tr>
+        <td class="num">${i + 1}</td>
+        <td class="num" dir="ltr">${esc(l.code)}</td>
+        <td>${esc(l.nameAr)}</td>
+        <td>${esc(l.categoryNameAr || "—")}</td>
+        <td>${esc(l.remainingLabel)}</td>
+        <td class="num amount" dir="ltr">${esc(data.formatMoney(l.costPerMinor))}</td>
+        <td class="num amount" dir="ltr">${esc(data.formatMoney(l.totalCost))}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>تقرير الكمية المتبقية — المخزن</title>
+  <style>
+    @page { size: A4 landscape; margin: 10mm 12mm 12mm; }
+    @media print {
+      @page { size: A4 landscape; margin: 10mm 12mm 12mm; }
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; background: #fff; color: #0f172a;
+      font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
+      font-size: 13px; font-weight: 700;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    body { width: 297mm; min-height: 210mm; margin: 0 auto; }
+    .sheet { width: 100%; max-width: 297mm; padding: 0; }
+    .header {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding-bottom: 10px; border-bottom: 2.5px solid #0f172a; margin-bottom: 12px;
+    }
+    .brand-block { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .logo {
+      width: 52px; height: 52px; object-fit: contain; border-radius: 10px;
+      border: 1px solid #e2e8f0; background: #f8fafc;
+    }
+    .brand-name { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.25; }
+    .brand-meta { margin: 2px 0 0; font-size: 12px; font-weight: 700; color: #64748b; }
+    .doc-title { margin: 0; font-size: 16px; font-weight: 800; text-align: left; }
+    .doc-sub { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #64748b; text-align: left; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      border: 1px solid #cbd5e1; padding: 7px 8px; text-align: right;
+      font-size: 13px; font-weight: 700; vertical-align: middle;
+    }
+    th {
+      background: linear-gradient(90deg, #0f172a, #1e293b); color: #fff;
+      font-weight: 800; white-space: nowrap;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .num { text-align: center; white-space: nowrap; }
+    .amount { font-variant-numeric: tabular-nums; }
+    .totals {
+      margin-top: 12px; display: flex; justify-content: flex-start; gap: 16px;
+      padding: 10px 14px; border: 2px solid #0f172a; border-radius: 12px;
+      background: #f1f5f9; font-size: 13px; font-weight: 800;
+    }
+    .footer {
+      margin-top: 14px; display: flex; justify-content: space-between; gap: 12px;
+      font-size: 11px; font-weight: 700; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="header">
+      <div class="brand-block">
+        ${logo}
+        <div>
+          <p class="brand-name">${esc(data.restaurantName || "المطعم")}</p>
+          <p class="brand-meta">${esc(data.branchName || "كل الفروع")}${phone ? ` · ${esc(phone)}` : ""}</p>
+        </div>
+      </div>
+      <div>
+        <p class="doc-title">تقرير الكمية المتبقية حسب الصنف</p>
+        <p class="doc-sub">A4 أفقي · خط 13 Bold · ${esc(data.printedAtLabel)}</p>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>كود الصنف</th>
+          <th>اسم الصنف</th>
+          <th>الفئة</th>
+          <th>الكمية المتبقية</th>
+          <th>سعر التكلفة (وحدة صغرى)</th>
+          <th>المجموع</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr><td colspan="7" style="text-align:center">لا توجد أصناف</td></tr>`}</tbody>
+    </table>
+    <div class="totals">
+      <span>عدد الأصناف: ${data.lines.length}</span>
+      <span>إجمالي قيمة المخزون: ${esc(data.formatMoney(data.totalCostSum))}</span>
+    </div>
+    <div class="footer">
+      <span>تم إنشاء التقرير تلقائياً من نظام إدارة المطاعم</span>
+      <span>خط التقرير: 13 Bold · تصميم احترافي</span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/** Professional A4 landscape warehouse remaining-qty report (13px bold). */
+export function printWarehouseStockReportA4(data: WarehouseStockReportData) {
+  openPrintHtmlDocument(
+    buildWarehouseStockReportA4Html(data),
+    "rms-warehouse-stock-a4",
+    { landscape: true }
+  );
+}

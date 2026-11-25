@@ -3,8 +3,37 @@ import { db } from "@workspace/db";
 import { inventoryTable } from "@workspace/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
+import {
+  getWarehouseItemMovements,
+  listWarehouseStock,
+} from "../lib/warehouse-stock";
 
 const router: IRouter = Router();
+
+/** Menu-item warehouse stock = purchases − returns − sales (minor units). */
+router.get("/stock", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const rows = await listWarehouseStock(scope);
+  res.json(rows);
+});
+
+/** Item movement detail: purchases / returns / sales for a date range. */
+router.get("/stock/:menuItemId", async (req, res) => {
+  const menuItemId = Number(req.params.menuItemId);
+  if (!Number.isFinite(menuItemId) || menuItemId <= 0) {
+    res.status(400).json({ message: "معرف صنف غير صالح" });
+    return;
+  }
+  const scope = parseBranchScope(req);
+  const from = typeof req.query.from === "string" ? req.query.from : null;
+  const to = typeof req.query.to === "string" ? req.query.to : null;
+  const detail = await getWarehouseItemMovements(menuItemId, scope, from, to);
+  if (!detail) {
+    res.status(404).json({ message: "الصنف غير موجود" });
+    return;
+  }
+  res.json(detail);
+});
 
 router.get("/", async (req, res) => {
   const scope = parseBranchScope(req);
