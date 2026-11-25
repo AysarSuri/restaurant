@@ -283,6 +283,7 @@ function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
     salesSendToKitchen: row.salesSendToKitchen !== false,
     formsFullscreen: row.formsFullscreen === true,
     virtualNumericKeypad: row.virtualNumericKeypad === true,
+    virtualKeyboard: row.virtualKeyboard === true,
   };
 }
 
@@ -351,6 +352,7 @@ router.get("/printers", async (_req, res) => {
       salesSendToKitchen: devicePrintersTable.salesSendToKitchen,
       formsFullscreen: devicePrintersTable.formsFullscreen,
       virtualNumericKeypad: devicePrintersTable.virtualNumericKeypad,
+      virtualKeyboard: devicePrintersTable.virtualKeyboard,
       createdAt: devicePrintersTable.createdAt,
       updatedAt: devicePrintersTable.updatedAt,
       branchName: branchesTable.name,
@@ -392,6 +394,7 @@ router.post("/printers", async (req, res) => {
     salesSendToKitchen,
     formsFullscreen,
     virtualNumericKeypad,
+    virtualKeyboard,
   } = body;
 
   const key = String(deviceKey ?? "").trim();
@@ -438,6 +441,10 @@ router.post("/printers", async (req, res) => {
           virtualNumericKeypad != null
             ? Boolean(virtualNumericKeypad)
             : existing.virtualNumericKeypad === true,
+        virtualKeyboard:
+          virtualKeyboard != null
+            ? Boolean(virtualKeyboard)
+            : existing.virtualKeyboard === true,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, existing.id))
@@ -472,6 +479,7 @@ router.post("/printers", async (req, res) => {
         formsFullscreen: formsFullscreen != null ? Boolean(formsFullscreen) : false,
         virtualNumericKeypad:
           virtualNumericKeypad != null ? Boolean(virtualNumericKeypad) : false,
+        virtualKeyboard: virtualKeyboard != null ? Boolean(virtualKeyboard) : false,
       })
       .returning();
 
@@ -509,6 +517,7 @@ router.post("/printers", async (req, res) => {
         formsFullscreen: formsFullscreen != null ? Boolean(formsFullscreen) : false,
         virtualNumericKeypad:
           virtualNumericKeypad != null ? Boolean(virtualNumericKeypad) : false,
+        virtualKeyboard: virtualKeyboard != null ? Boolean(virtualKeyboard) : false,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, fallbackId))
@@ -538,6 +547,7 @@ router.put("/printers/:id", async (req, res) => {
     salesSendToKitchen,
     formsFullscreen,
     virtualNumericKeypad,
+    virtualKeyboard,
   } = body;
 
   const [existing] = await db
@@ -584,6 +594,10 @@ router.put("/printers/:id", async (req, res) => {
         virtualNumericKeypad != null
           ? Boolean(virtualNumericKeypad)
           : existing.virtualNumericKeypad === true,
+      virtualKeyboard:
+        virtualKeyboard != null
+          ? Boolean(virtualKeyboard)
+          : existing.virtualKeyboard === true,
       updatedAt: new Date(),
     })
     .where(eq(devicePrintersTable.id, id))

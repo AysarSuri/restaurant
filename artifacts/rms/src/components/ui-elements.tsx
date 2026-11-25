@@ -68,10 +68,14 @@ export type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
   amountPad?: boolean;
   /** Never open amount keypad (capacity, seats, etc.) */
   noAmountPad?: boolean;
+  /** Force multilingual text keyboard when device setting is on */
+  textKeyboard?: boolean;
+  /** Never open text keyboard (PIN, etc.) */
+  noTextKeyboard?: boolean;
 };
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, amountPad, noAmountPad, ...props }, ref) => {
+  ({ className, amountPad, noAmountPad, textKeyboard, noTextKeyboard, ...props }, ref) => {
     return (
       <input
         className={cn(
@@ -81,6 +85,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         ref={ref}
         data-amount-pad={amountPad ? "true" : undefined}
         data-no-amount-pad={noAmountPad ? "true" : undefined}
+        data-text-keyboard={textKeyboard ? "true" : undefined}
+        data-no-text-keyboard={noTextKeyboard ? "true" : undefined}
         {...props}
       />
     );

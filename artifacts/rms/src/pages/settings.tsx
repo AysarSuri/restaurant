@@ -62,6 +62,7 @@ import {
   MoreHorizontal,
   Maximize2,
   Calculator,
+  Keyboard,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 
@@ -71,6 +72,7 @@ type TabId =
   | "printers"
   | "themes"
   | "currency"
+  | "keyboard"
   | "numbers"
   | "other";
 type DeviceSalesPaymentAt = "pos" | "cashier";
@@ -138,6 +140,7 @@ const TABS: { id: TabId; labelKey: string; icon: typeof Store; hintKey: string }
   { id: "printers", labelKey: "settings.printers", icon: Printer, hintKey: "settings.printer80" },
   { id: "currency", labelKey: "settings.currency", icon: Coins, hintKey: "settings.currencyHint" },
   { id: "themes", labelKey: "settings.themes", icon: Palette, hintKey: "settings.themeHint" },
+  { id: "keyboard", labelKey: "settings.keyboard", icon: Keyboard, hintKey: "settings.keyboardHint" },
   { id: "numbers", labelKey: "settings.numbers", icon: Calculator, hintKey: "settings.numbersHint" },
   { id: "other", labelKey: "settings.other", icon: MoreHorizontal, hintKey: "settings.otherHint" },
 ];
@@ -470,6 +473,7 @@ export default function SettingsPage() {
       salesSendToKitchen?: boolean;
       formsFullscreen?: boolean;
       virtualNumericKeypad?: boolean;
+      virtualKeyboard?: boolean;
     },
     opts?: { successKey?: string; errorKey?: string }
   ) => {
@@ -488,6 +492,8 @@ export default function SettingsPage() {
       patch.formsFullscreen ?? row.formsFullscreen === true;
     const nextNumericKeypad =
       patch.virtualNumericKeypad ?? row.virtualNumericKeypad === true;
+    const nextVirtualKeyboard =
+      patch.virtualKeyboard ?? row.virtualKeyboard === true;
 
     const optimistic: DevicePrinter = {
       ...row,
@@ -498,6 +504,7 @@ export default function SettingsPage() {
       salesSendToKitchen: nextKitchen,
       formsFullscreen: nextFullscreen,
       virtualNumericKeypad: nextNumericKeypad,
+      virtualKeyboard: nextVirtualKeyboard,
     };
 
     // Optimistic UI so choices stick immediately
@@ -518,6 +525,7 @@ export default function SettingsPage() {
           salesSendToKitchen: nextKitchen,
           formsFullscreen: nextFullscreen,
           virtualNumericKeypad: nextNumericKeypad,
+          virtualKeyboard: nextVirtualKeyboard,
         },
       },
       {
@@ -564,6 +572,10 @@ export default function SettingsPage() {
                       updated.virtualNumericKeypad != null
                         ? updated.virtualNumericKeypad === true
                         : nextNumericKeypad,
+                    virtualKeyboard:
+                      updated.virtualKeyboard != null
+                        ? updated.virtualKeyboard === true
+                        : nextVirtualKeyboard,
                   }
                 : p
             )
@@ -1649,6 +1661,115 @@ export default function SettingsPage() {
               <Save className="w-4 h-4" /> {t("settings.saveCurrency")}
             </Button>
           </Card>
+        </div>
+      )}
+
+      {tab === "keyboard" && (
+        <div className="space-y-5 max-w-4xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center flex-shrink-0">
+                <Keyboard className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">{t("settings.virtualKeyboardTitle")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("settings.virtualKeyboardHint")}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {(printers ?? []).length === 0 ? (
+            <Card className="p-8 border border-dashed border-border/60 text-center space-y-2">
+              <Monitor className="w-10 h-10 mx-auto text-muted-foreground" />
+              <p className="font-extrabold">{t("settings.noDevices")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.registerAbove")}</p>
+              <Button variant="outline" className="mt-2" onClick={() => setTab("printers")}>
+                {t("settings.printers")}
+              </Button>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {(printers ?? []).map((row) => {
+                const keyboardOn = row.virtualKeyboard === true;
+                const isMine = row.deviceKey === deviceKey;
+                return (
+                  <Card
+                    key={row.id}
+                    className={`p-4 sm:p-5 border space-y-3 ${
+                      isMine ? "border-primary/40 bg-primary/5" : "border-border/60"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-extrabold text-base truncate">{row.deviceName}</p>
+                          {isMine ? (
+                            <Badge variant="default">{t("settings.thisDevice")}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground font-semibold mt-1">
+                          {row.branchName?.trim() || t("branch.noneSpecified")}
+                          {row.printerName?.trim() ? ` · ${row.printerName}` : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={updatingPrinter}
+                      onClick={() =>
+                        handleSaveDeviceSales(
+                          row,
+                          { virtualKeyboard: !keyboardOn },
+                          {
+                            successKey: "settings.savedVirtualKeyboard",
+                            errorKey: "settings.saveVirtualKeyboardFailed",
+                          }
+                        )
+                      }
+                      className={`w-full text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
+                        keyboardOn
+                          ? "border-sky-500/60 bg-sky-500/10"
+                          : "border-border/70 bg-card/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            keyboardOn ? "bg-sky-500 text-white" : "bg-secondary"
+                          }`}
+                        >
+                          <Keyboard className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold">{t("settings.virtualKeyboard")}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {keyboardOn
+                              ? t("settings.virtualKeyboardOn")
+                              : t("settings.virtualKeyboardOff")}
+                          </p>
+                        </div>
+                        <span
+                          className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors ${
+                            keyboardOn ? "bg-sky-500" : "bg-secondary"
+                          }`}
+                          aria-hidden
+                        >
+                          <span
+                            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                              keyboardOn ? "start-1" : "end-1"
+                            }`}
+                          />
+                        </span>
+                      </div>
+                    </button>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

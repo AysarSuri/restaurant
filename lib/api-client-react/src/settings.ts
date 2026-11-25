@@ -86,6 +86,8 @@ export interface DevicePrinter {
   formsFullscreen?: boolean;
   /** On-screen numeric keypad for amount/price fields on this device */
   virtualNumericKeypad?: boolean;
+  /** Multilingual on-screen keyboard for text fields on this device */
+  virtualKeyboard?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -104,6 +106,7 @@ export interface UpsertDevicePrinterBody {
   salesSendToKitchen?: boolean;
   formsFullscreen?: boolean;
   virtualNumericKeypad?: boolean;
+  virtualKeyboard?: boolean;
 }
 
 export interface UpdateDevicePrinterBody {
@@ -119,6 +122,7 @@ export interface UpdateDevicePrinterBody {
   salesSendToKitchen?: boolean;
   formsFullscreen?: boolean;
   virtualNumericKeypad?: boolean;
+  virtualKeyboard?: boolean;
 }
 
 export const getGetSettingsUrl = () => `/api/settings`;

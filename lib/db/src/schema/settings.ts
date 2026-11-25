@@ -79,6 +79,8 @@ export const devicePrintersTable = pgTable("device_printers", {
   formsFullscreen: boolean("forms_fullscreen").default(false).notNull(),
   /** When true, amount/price fields open the on-screen numeric keypad on this device */
   virtualNumericKeypad: boolean("virtual_numeric_keypad").default(false).notNull(),
+  /** When true, text fields open the multilingual on-screen keyboard on this device */
+  virtualKeyboard: boolean("virtual_keyboard").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

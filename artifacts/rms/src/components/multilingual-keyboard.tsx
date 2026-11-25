@@ -144,7 +144,7 @@ export function MultilingualKeyboard({
   };
 
   return (
-    <div className="select-none">
+    <div className="select-none" data-global-text-keyboard>
       <div className="relative overflow-hidden rounded-3xl border border-border/50 bg-gradient-to-br from-card via-card to-secondary/35 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.6)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_hsla(var(--primary),0.12),_transparent_58%)]" />
 
@@ -196,6 +196,7 @@ export function MultilingualKeyboard({
               <input
                 ref={inputRef}
                 type="text"
+                data-no-text-keyboard="true"
                 value={text}
                 onChange={(e) => commitText(e.target.value)}
                 onKeyDown={(e) => {
@@ -221,6 +222,7 @@ export function MultilingualKeyboard({
             <input
               ref={inputRef}
               type="text"
+              data-no-text-keyboard="true"
               value={text}
               onChange={(e) => commitText(e.target.value)}
               onKeyDown={(e) => {
