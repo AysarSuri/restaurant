@@ -25,6 +25,6 @@ export function useDeviceVirtualKeyboard(enabled: boolean) {
       (printers ?? []).find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
       (printers ?? []).find((p) => p.deviceKey === deviceKey) ??
       null;
-    return mine?.virtualKeyboard === true;
+    return Boolean(mine?.virtualKeyboard);
   }, [enabled, printers, deviceKey]);
 }

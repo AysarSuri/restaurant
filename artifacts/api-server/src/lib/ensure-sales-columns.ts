@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { logger } from "./logger";
 
 /** Bump when new ALTER COLUMN blocks are added so they run after hot reload / redeploy. */
-const ENSURE_VERSION = 3;
+const ENSURE_VERSION = 4;
 let ensuredVersion = 0;
 let ensurePromise: Promise<void> | null = null;
 

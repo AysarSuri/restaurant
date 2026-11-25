@@ -25,6 +25,6 @@ export function useDeviceVirtualNumericKeypad(enabled: boolean) {
       (printers ?? []).find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
       (printers ?? []).find((p) => p.deviceKey === deviceKey) ??
       null;
-    return mine?.virtualNumericKeypad === true;
+    return Boolean(mine?.virtualNumericKeypad);
   }, [enabled, printers, deviceKey]);
 }

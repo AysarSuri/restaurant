@@ -490,11 +490,17 @@ export default function SettingsPage() {
     const nextKitchen =
       patch.salesSendToKitchen ?? row.salesSendToKitchen !== false;
     const nextFullscreen =
-      patch.formsFullscreen ?? row.formsFullscreen === true;
+      "formsFullscreen" in patch
+        ? Boolean(patch.formsFullscreen)
+        : Boolean(row.formsFullscreen);
     const nextNumericKeypad =
-      patch.virtualNumericKeypad ?? row.virtualNumericKeypad === true;
+      "virtualNumericKeypad" in patch
+        ? Boolean(patch.virtualNumericKeypad)
+        : Boolean(row.virtualNumericKeypad);
     const nextVirtualKeyboard =
-      patch.virtualKeyboard ?? row.virtualKeyboard === true;
+      "virtualKeyboard" in patch
+        ? Boolean(patch.virtualKeyboard)
+        : Boolean(row.virtualKeyboard);
 
     const optimistic: DevicePrinter = {
       ...row,
@@ -531,9 +537,10 @@ export default function SettingsPage() {
       },
       {
         onSuccess: (updated) => {
+          // Always keep the values we just saved — avoid response/refetch flipping toggles off
           syncPrinters((list) =>
             list.map((p) =>
-              p.id === updated.id
+              p.id === updated.id || p.id === row.id
                 ? {
                     ...p,
                     ...updated,
@@ -565,18 +572,9 @@ export default function SettingsPage() {
                       updated.salesSendToKitchen != null
                         ? updated.salesSendToKitchen !== false
                         : nextKitchen,
-                    formsFullscreen:
-                      updated.formsFullscreen != null
-                        ? updated.formsFullscreen === true
-                        : nextFullscreen,
-                    virtualNumericKeypad:
-                      updated.virtualNumericKeypad != null
-                        ? updated.virtualNumericKeypad === true
-                        : nextNumericKeypad,
-                    virtualKeyboard:
-                      updated.virtualKeyboard != null
-                        ? updated.virtualKeyboard === true
-                        : nextVirtualKeyboard,
+                    formsFullscreen: nextFullscreen,
+                    virtualNumericKeypad: nextNumericKeypad,
+                    virtualKeyboard: nextVirtualKeyboard,
                   }
                 : p
             )
@@ -1693,7 +1691,7 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {(printers ?? []).map((row) => {
-                const keyboardOn = row.virtualKeyboard === true;
+                const keyboardOn = Boolean(row.virtualKeyboard);
                 const isMine = row.deviceKey === deviceKey;
                 return (
                   <Card
@@ -1802,7 +1800,7 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {(printers ?? []).map((row) => {
-                const keypadOn = row.virtualNumericKeypad === true;
+                const keypadOn = Boolean(row.virtualNumericKeypad);
                 const isMine = row.deviceKey === deviceKey;
                 return (
                   <Card

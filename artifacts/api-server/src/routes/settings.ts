@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { appSettingsTable, devicePrintersTable, branchesTable } from "@workspace/db/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, sql } from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
@@ -281,9 +281,10 @@ function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
     salesPaymentAtTakeaway: takeaway,
     salesPaymentAtDelivery: delivery,
     salesSendToKitchen: row.salesSendToKitchen !== false,
-    formsFullscreen: row.formsFullscreen === true,
-    virtualNumericKeypad: row.virtualNumericKeypad === true,
-    virtualKeyboard: row.virtualKeyboard === true,
+    // Coerce DB/driver truthy values so toggles don't flip back to off
+    formsFullscreen: Boolean(row.formsFullscreen),
+    virtualNumericKeypad: Boolean(row.virtualNumericKeypad),
+    virtualKeyboard: Boolean(row.virtualKeyboard),
   };
 }
 
@@ -567,6 +568,19 @@ router.put("/printers/:id", async (req, res) => {
   }
 
   const paymentFields = pickPaymentFields(body, existing);
+  const nextFullscreen =
+    formsFullscreen != null
+      ? Boolean(formsFullscreen)
+      : Boolean(existing.formsFullscreen);
+  const nextNumericKeypad =
+    virtualNumericKeypad != null
+      ? Boolean(virtualNumericKeypad)
+      : Boolean(existing.virtualNumericKeypad);
+  const nextVirtualKeyboard =
+    virtualKeyboard != null
+      ? Boolean(virtualKeyboard)
+      : Boolean(existing.virtualKeyboard);
+
   const [updated] = await db
     .update(devicePrintersTable)
     .set({
@@ -586,22 +600,24 @@ router.put("/printers/:id", async (req, res) => {
         salesSendToKitchen != null
           ? Boolean(salesSendToKitchen)
           : existing.salesSendToKitchen !== false,
-      formsFullscreen:
-        formsFullscreen != null
-          ? Boolean(formsFullscreen)
-          : existing.formsFullscreen === true,
-      virtualNumericKeypad:
-        virtualNumericKeypad != null
-          ? Boolean(virtualNumericKeypad)
-          : existing.virtualNumericKeypad === true,
-      virtualKeyboard:
-        virtualKeyboard != null
-          ? Boolean(virtualKeyboard)
-          : existing.virtualKeyboard === true,
+      formsFullscreen: nextFullscreen,
+      virtualNumericKeypad: nextNumericKeypad,
+      virtualKeyboard: nextVirtualKeyboard,
       updatedAt: new Date(),
     })
     .where(eq(devicePrintersTable.id, id))
     .returning();
+
+  // Belt-and-suspenders: force keyboard flags via SQL so toggles never silently reset
+  await db.execute(sql`
+    UPDATE device_printers
+    SET
+      forms_fullscreen = ${nextFullscreen},
+      virtual_numeric_keypad = ${nextNumericKeypad},
+      virtual_keyboard = ${nextVirtualKeyboard},
+      updated_at = NOW()
+    WHERE id = ${id}
+  `);
 
   let branchName: string | null = null;
   if (updated.branchId) {
@@ -612,7 +628,15 @@ router.put("/printers/:id", async (req, res) => {
     branchName = b?.name ?? null;
   }
 
-  res.json(withSalesDefaults({ ...updated, branchName }));
+  res.json(
+    withSalesDefaults({
+      ...updated,
+      formsFullscreen: nextFullscreen,
+      virtualNumericKeypad: nextNumericKeypad,
+      virtualKeyboard: nextVirtualKeyboard,
+      branchName,
+    })
+  );
 });
 
 router.delete("/printers/:id", async (req, res) => {

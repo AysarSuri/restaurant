@@ -241,9 +241,9 @@ export default function POS() {
   }, [devicePrinters, deviceKey]);
 
   /** Settings → Numbers: amount/phone numeric pads */
-  const amountPadEnabled = devicePrinter?.virtualNumericKeypad === true;
+  const amountPadEnabled = Boolean(devicePrinter?.virtualNumericKeypad);
   /** Settings → Keyboard: multilingual text pads (search, address, person) */
-  const textKeyboardEnabled = devicePrinter?.virtualKeyboard === true;
+  const textKeyboardEnabled = Boolean(devicePrinter?.virtualKeyboard);
 
   const salesSendToKitchen =
     devicePrinter != null

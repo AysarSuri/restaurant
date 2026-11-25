@@ -633,7 +633,7 @@ export default function Cashier() {
   }, [devicePrinters, deviceKey]);
 
   /** Settings → Numbers: on-screen amount pad */
-  const amountPadEnabled = devicePrinter?.virtualNumericKeypad === true;
+  const amountPadEnabled = Boolean(devicePrinter?.virtualNumericKeypad);
 
   const branchPaymentCards = useMemo(() => {
     const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
