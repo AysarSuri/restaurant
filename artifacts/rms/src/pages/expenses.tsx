@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListExpenses,
@@ -20,11 +20,13 @@ import {
 import { CrudTable } from "@/components/crud-table";
 import { Button, Input, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
 import { YmdDateInput } from "@/components/ymd-date-input";
 import {
   printExpenseThermal,
   printExpenseReportA4Landscape,
 } from "@/lib/print-receipt";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useI18n } from "@/i18n";
 import {
   AlertCircle,
@@ -82,6 +84,7 @@ const emptyExpenseForm = (): ExpenseFormState => ({
 export default function Expenses() {
   const { t, formatDate } = useI18n();
   const queryClient = useQueryClient();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
 
   const [filterInvoice, setFilterInvoice] = useState("");
   const [filterFrom, setFilterFrom] = useState(todayDate);
@@ -96,6 +99,18 @@ export default function Expenses() {
     expenseTypeId: 0,
     filterBranchId: 0,
   }));
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    const id = String(forcedBranchId);
+    setFilterBranchId(id);
+    setApplied((prev) =>
+      prev.filterBranchId === forcedBranchId
+        ? prev
+        : { ...prev, filterBranchId: forcedBranchId }
+    );
+    setForm((f) => (f.branchId === id ? f : { ...f, branchId: id }));
+  }, [locked, forcedBranchId]);
 
   const listParams = useMemo(
     () => ({
@@ -158,11 +173,11 @@ export default function Expenses() {
 
   const branchOptions: ComboboxOption[] = useMemo(
     () =>
-      (branches ?? []).map((b) => ({
+      filterOptions(branches).map((b) => ({
         value: String(b.id),
         label: b.name,
       })),
-    [branches]
+    [branches, filterOptions]
   );
 
   const filterTypeOptions: ComboboxOption[] = useMemo(
@@ -171,8 +186,11 @@ export default function Expenses() {
   );
 
   const filterBranchOptions: ComboboxOption[] = useMemo(
-    () => [{ value: "", label: t("expenses.allBranches") }, ...branchOptions],
-    [branchOptions, t]
+    () =>
+      locked
+        ? branchOptions
+        : [{ value: "", label: t("expenses.allBranches") }, ...branchOptions],
+    [branchOptions, locked, t]
   );
 
   const nextInvoicePreview = useMemo(() => {
@@ -193,7 +211,10 @@ export default function Expenses() {
 
   const openAdd = () => {
     setEditing(null);
-    setForm(emptyExpenseForm());
+    setForm({
+      ...emptyExpenseForm(),
+      branchId: forcedBranchId != null ? String(forcedBranchId) : "",
+    });
     setFormError("");
     setFormErrorKind("");
     setFormOpen(true);
@@ -205,7 +226,12 @@ export default function Expenses() {
       invoiceNo: item.invoiceNo || "",
       expenseDate: item.expenseDate || item.date || todayDate(),
       expenseTypeId: item.expenseTypeId ? String(item.expenseTypeId) : "",
-      branchId: item.branchId ? String(item.branchId) : "",
+      branchId:
+        forcedBranchId != null
+          ? String(forcedBranchId)
+          : item.branchId
+            ? String(item.branchId)
+            : "",
       amount: item.amount,
       notes: item.notes || "",
     });
@@ -217,7 +243,10 @@ export default function Expenses() {
   const saveExpense = () => {
     const expenseTypeId = Number(form.expenseTypeId);
     const amount = Number(form.amount);
-    const branchId = Number(form.branchId) || null;
+    const branchId =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : Number(form.branchId) || null;
 
     if (!branchId) {
       setFormErrorKind("branch");
@@ -558,17 +587,21 @@ export default function Expenses() {
               labelClassName="text-[14px] font-bold text-muted-foreground"
               valueClassName="text-[16px] font-bold"
             />
-            <ModernCombobox
-              value={filterBranchId}
-              onChange={setFilterBranchId}
-              options={filterBranchOptions}
-              label={t("common.branch")}
-              placeholder={t("expenses.allBranches")}
-              icon={Building2}
-              searchable
-              labelClassName="text-[14px] font-bold text-muted-foreground"
-              valueClassName="text-[16px] font-bold"
-            />
+            {locked ? (
+              <LockedBranchField label={t("common.branch")} />
+            ) : (
+              <ModernCombobox
+                value={filterBranchId}
+                onChange={setFilterBranchId}
+                options={filterBranchOptions}
+                label={t("common.branch")}
+                placeholder={t("expenses.allBranches")}
+                icon={Building2}
+                searchable
+                labelClassName="text-[14px] font-bold text-muted-foreground"
+                valueClassName="text-[16px] font-bold"
+              />
+            )}
             <Button
               type="button"
               className="min-h-14 h-14 rounded-2xl text-[16px] font-bold touch-manipulation"
@@ -643,19 +676,23 @@ export default function Expenses() {
                   : undefined
               }
             >
-              <ModernCombobox
-                value={form.branchId}
-                onChange={(branchId) => {
-                  setForm((f) => ({ ...f, branchId }));
-                  clearFormError();
-                }}
-                options={branchOptions}
-                label={`${t("common.branch")} *`}
-                placeholder={t("expenses.pickBranch")}
-                icon={Building2}
-                labelClassName="text-[17px] font-bold text-foreground mb-0.5"
-                valueClassName="text-[17px] font-bold"
-              />
+              {locked ? (
+                <LockedBranchField label={`${t("common.branch")} *`} />
+              ) : (
+                <ModernCombobox
+                  value={form.branchId}
+                  onChange={(branchId) => {
+                    setForm((f) => ({ ...f, branchId }));
+                    clearFormError();
+                  }}
+                  options={branchOptions}
+                  label={`${t("common.branch")} *`}
+                  placeholder={t("expenses.pickBranch")}
+                  icon={Building2}
+                  labelClassName="text-[17px] font-bold text-foreground mb-0.5"
+                  valueClassName="text-[17px] font-bold"
+                />
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="text-[17px] font-bold text-foreground mb-2 block">

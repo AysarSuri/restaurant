@@ -37,6 +37,8 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { YmdDateInput } from "@/components/ymd-date-input";
 import {
   printSupplierPurchaseThermal,
@@ -222,6 +224,7 @@ export default function SuppliersPage() {
   const queryClient = useQueryClient();
   const { formatDate } = useI18n();
   const { selectedBranchId, branchLabel } = useBranch();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const [section, setSection] = useState<Section>("hub");
 
   const { data: suppliers, isLoading: loadingSuppliers } = useGetSuppliers({
@@ -380,13 +383,26 @@ export default function SuppliersPage() {
 
   const branchOptions = useMemo<ComboboxOption[]>(
     () =>
-      (branches ?? []).map((b) => ({
+      filterOptions(branches ?? []).map((b) => ({
         value: String(b.id),
         label: b.name,
         icon: Building2,
       })),
-    [branches]
+    [branches, filterOptions]
   );
+
+  const forcedBranchStr =
+    forcedBranchId != null ? String(forcedBranchId) : "";
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    const id = forcedBranchStr;
+    setPurchaseListBranchId(id);
+    setMovementListBranchId(id);
+    setSupplierForm((f) => (f.branchId === id ? f : { ...f, branchId: id }));
+    setPurchaseForm((f) => (f.branchId === id ? f : { ...f, branchId: id }));
+    setMovementForm((f) => (f.branchId === id ? f : { ...f, branchId: id }));
+  }, [locked, forcedBranchId, forcedBranchStr]);
 
   const purchaseBranchCardOptions = useMemo<ComboboxOption[]>(() => {
     const branchId = Number(purchaseForm.branchId) || 0;
@@ -450,16 +466,19 @@ export default function SuppliersPage() {
   }, [suppliers, supplierNameFilterId]);
 
   const branchSearchOptions = useMemo<ComboboxOption[]>(
-    () => [
-      {
-        value: "",
-        label: "كل الفروع",
-        subtitle: "عرض بدون فلتر",
-        icon: Building2,
-      },
-      ...branchOptions,
-    ],
-    [branchOptions]
+    () =>
+      locked
+        ? branchOptions
+        : [
+            {
+              value: "",
+              label: "كل الفروع",
+              subtitle: "عرض بدون فلتر",
+              icon: Building2,
+            },
+            ...branchOptions,
+          ],
+    [branchOptions, locked]
   );
 
   const filteredPurchases = useMemo(() => {
@@ -599,7 +618,11 @@ export default function SuppliersPage() {
       ...EMPTY_SUPPLIER,
       code: nextSupplierCode(suppliers),
       branchId:
-        selectedBranchId === "all" ? "" : String(selectedBranchId),
+        forcedBranchId != null
+          ? String(forcedBranchId)
+          : selectedBranchId === "all"
+            ? ""
+            : String(selectedBranchId),
     });
     setSupplierError("");
     setSupplierFormOpen(true);
@@ -610,7 +633,12 @@ export default function SuppliersPage() {
     setSupplierForm({
       code: s.code,
       name: s.name,
-      branchId: s.branchId != null ? String(s.branchId) : "",
+      branchId:
+        forcedBranchId != null
+          ? String(forcedBranchId)
+          : s.branchId != null
+            ? String(s.branchId)
+            : "",
       openingBalance: Number(s.openingBalance) || 0,
       notes: s.notes || "",
     });
@@ -621,7 +649,10 @@ export default function SuppliersPage() {
   const saveSupplier = () => {
     const code = supplierForm.code.trim();
     const name = supplierForm.name.trim();
-    const branchIdNum = Number(supplierForm.branchId);
+    const branchIdNum =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : Number(supplierForm.branchId);
     if (!name) return setSupplierError("اسم المورد مطلوب");
     if (!Number.isFinite(branchIdNum) || branchIdNum <= 0) {
       return setSupplierError("اختر الفرع قبل حفظ اسم المورد");
@@ -702,7 +733,7 @@ export default function SuppliersPage() {
       notes: "",
       paidAmount: 0,
       discountAmount: 0,
-      branchId: "",
+      branchId: forcedBranchStr,
       paymentMethod: "cash",
       cardId: "",
     });
@@ -719,7 +750,12 @@ export default function SuppliersPage() {
       notes: p.notes || "",
       paidAmount: Number(p.paidAmount) || 0,
       discountAmount: Number(p.discountAmount) || 0,
-      branchId: p.branchId ? String(p.branchId) : "",
+      branchId:
+        forcedBranchId != null
+          ? forcedBranchStr
+          : p.branchId
+            ? String(p.branchId)
+            : "",
       paymentMethod: p.paymentMethod === "card" ? "card" : "cash",
       cardId: p.cardId ? String(p.cardId) : "",
     });
@@ -772,7 +808,10 @@ export default function SuppliersPage() {
       notes: purchaseForm.notes.trim(),
       paidAmount: purchaseTotals.paidAmount,
       discountAmount: purchaseTotals.discountAmount,
-      branchId: Number(purchaseForm.branchId) || null,
+      branchId:
+        locked && forcedBranchId != null
+          ? forcedBranchId
+          : Number(purchaseForm.branchId) || null,
       paymentMethod: purchaseForm.paymentMethod,
       cardId:
         purchaseForm.paymentMethod === "card"
@@ -859,7 +898,7 @@ export default function SuppliersPage() {
       amountType: "paid",
       amount: "",
       notes: "",
-      branchId: "",
+      branchId: forcedBranchStr,
       paymentMethod: "cash",
       cardId: "",
     });
@@ -881,7 +920,12 @@ export default function SuppliersPage() {
       amountType: m.amountType,
       amount: Number(m.amount) || "",
       notes: m.notes?.trim() || "",
-      branchId: m.branchId ? String(m.branchId) : "",
+      branchId:
+        forcedBranchId != null
+          ? forcedBranchStr
+          : m.branchId
+            ? String(m.branchId)
+            : "",
       paymentMethod: m.paymentMethod === "card" ? "card" : "cash",
       cardId: m.cardId ? String(m.cardId) : "",
     });
@@ -946,7 +990,10 @@ export default function SuppliersPage() {
       amountType: movementForm.amountType,
       amount: Number(movementForm.amount),
       notes: movementForm.notes.trim(),
-      branchId: Number(movementForm.branchId) || null,
+      branchId:
+        locked && forcedBranchId != null
+          ? forcedBranchId
+          : Number(movementForm.branchId) || null,
       paymentMethod: needsPayment ? movementForm.paymentMethod : ("cash" as const),
       cardId:
         needsPayment && movementForm.paymentMethod === "card"
@@ -1486,27 +1533,31 @@ export default function SuppliersPage() {
                 />
               </div>
               <div className="min-w-0">
-                <ModernCombobox
-                  value={purchaseForm.branchId}
-                  onChange={(branchId) =>
-                    setPurchaseForm((f) => ({
-                      ...f,
-                      branchId,
-                      cardId: "",
-                    }))
-                  }
-                  options={branchOptions}
-                  label="الفرع *"
-                  placeholder="اختر الفرع"
-                  icon={Building2}
-                  searchable
-                  searchPlaceholder="ابحث عن الفرع..."
-                  emptyText="لا يوجد فرع"
-                  size="sm"
-                  labelClassName="text-[14px] font-bold text-foreground !mb-0"
-                  valueClassName="text-[14px] font-bold"
-                  className="[&>div:first-child]:mb-0.5"
-                />
+                {locked ? (
+                  <LockedBranchField label="الفرع *" />
+                ) : (
+                  <ModernCombobox
+                    value={purchaseForm.branchId}
+                    onChange={(branchId) =>
+                      setPurchaseForm((f) => ({
+                        ...f,
+                        branchId,
+                        cardId: "",
+                      }))
+                    }
+                    options={branchOptions}
+                    label="الفرع *"
+                    placeholder="اختر الفرع"
+                    icon={Building2}
+                    searchable
+                    searchPlaceholder="ابحث عن الفرع..."
+                    emptyText="لا يوجد فرع"
+                    size="sm"
+                    labelClassName="text-[14px] font-bold text-foreground !mb-0"
+                    valueClassName="text-[14px] font-bold"
+                    className="[&>div:first-child]:mb-0.5"
+                  />
+                )}
               </div>
               <div className="min-w-0">
                 <label className="text-[14px] font-bold text-foreground mb-0.5 block leading-none">
@@ -1963,21 +2014,25 @@ export default function SuppliersPage() {
                 </div>
               </div>
               <div className="min-w-0">
-                <ModernCombobox
-                  value={purchaseListBranchId}
-                  onChange={setPurchaseListBranchId}
-                  options={branchSearchOptions}
-                  label="الفرع"
-                  placeholder="كل الفروع"
-                  icon={Building2}
-                  searchable
-                  size="sm"
-                  searchPlaceholder="ابحث عن فرع..."
-                  emptyText="لا يوجد فرع مطابق"
-                  labelClassName="text-[14px] font-bold text-foreground"
-                  valueClassName="text-[14px] font-bold"
-                  className="[&>div:first-child]:mb-0.5"
-                />
+                {locked ? (
+                  <LockedBranchField label="الفرع" />
+                ) : (
+                  <ModernCombobox
+                    value={purchaseListBranchId}
+                    onChange={setPurchaseListBranchId}
+                    options={branchSearchOptions}
+                    label="الفرع"
+                    placeholder="كل الفروع"
+                    icon={Building2}
+                    searchable
+                    size="sm"
+                    searchPlaceholder="ابحث عن فرع..."
+                    emptyText="لا يوجد فرع مطابق"
+                    labelClassName="text-[14px] font-bold text-foreground"
+                    valueClassName="text-[14px] font-bold"
+                    className="[&>div:first-child]:mb-0.5"
+                  />
+                )}
               </div>
               <div className="min-w-0 col-span-2 lg:col-span-1">
                 <ModernCombobox
@@ -2241,21 +2296,25 @@ export default function SuppliersPage() {
                 </div>
               </div>
               <div className="min-w-0">
-                <ModernCombobox
-                  value={movementListBranchId}
-                  onChange={setMovementListBranchId}
-                  options={branchSearchOptions}
-                  label="الفرع"
-                  placeholder="كل الفروع"
-                  icon={Building2}
-                  searchable
-                  size="sm"
-                  searchPlaceholder="ابحث عن فرع..."
-                  emptyText="لا يوجد فرع مطابق"
-                  labelClassName="text-[14px] font-bold text-foreground"
-                  valueClassName="text-[14px] font-bold"
-                  className="[&>div:first-child]:mb-0.5"
-                />
+                {locked ? (
+                  <LockedBranchField label="الفرع" />
+                ) : (
+                  <ModernCombobox
+                    value={movementListBranchId}
+                    onChange={setMovementListBranchId}
+                    options={branchSearchOptions}
+                    label="الفرع"
+                    placeholder="كل الفروع"
+                    icon={Building2}
+                    searchable
+                    size="sm"
+                    searchPlaceholder="ابحث عن فرع..."
+                    emptyText="لا يوجد فرع مطابق"
+                    labelClassName="text-[14px] font-bold text-foreground"
+                    valueClassName="text-[14px] font-bold"
+                    className="[&>div:first-child]:mb-0.5"
+                  />
+                )}
               </div>
               <div className="min-w-0">
                 <ModernCombobox
@@ -2733,22 +2792,26 @@ export default function SuppliersPage() {
             />
           </div>
           <div>
-            <ModernCombobox
-              value={supplierForm.branchId}
-              onChange={(v) => {
-                setSupplierForm((f) => ({ ...f, branchId: v }));
-                if (supplierError) setSupplierError("");
-              }}
-              options={branchOptions}
-              label="الفرع *"
-              placeholder="اختر الفرع"
-              icon={Building2}
-              searchable
-              searchPlaceholder="ابحث عن فرع..."
-              emptyText="لا يوجد فرع"
-              labelClassName="text-[15px] font-bold text-foreground"
-              valueClassName="text-[15px] font-bold"
-            />
+            {locked ? (
+              <LockedBranchField label="الفرع *" />
+            ) : (
+              <ModernCombobox
+                value={supplierForm.branchId}
+                onChange={(v) => {
+                  setSupplierForm((f) => ({ ...f, branchId: v }));
+                  if (supplierError) setSupplierError("");
+                }}
+                options={branchOptions}
+                label="الفرع *"
+                placeholder="اختر الفرع"
+                icon={Building2}
+                searchable
+                searchPlaceholder="ابحث عن فرع..."
+                emptyText="لا يوجد فرع"
+                labelClassName="text-[15px] font-bold text-foreground"
+                valueClassName="text-[15px] font-bold"
+              />
+            )}
             <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
               يُحفظ اسم المورد تابعاً لهذا الفرع — نفس الاسم مسموح في فرع آخر
             </p>
@@ -2875,22 +2938,26 @@ export default function SuppliersPage() {
               labelClassName="text-[16px] font-bold text-foreground"
               valueClassName="text-[16px] font-bold"
             />
-            <ModernCombobox
-              value={movementForm.branchId}
-              onChange={(branchId) =>
-                setMovementForm((f) => ({
-                  ...f,
-                  branchId,
-                  cardId: "",
-                }))
-              }
-              options={branchOptions}
-              label="الفرع *"
-              placeholder="اختر الفرع"
-              icon={Building2}
-              labelClassName="text-[16px] font-bold text-foreground"
-              valueClassName="text-[16px] font-bold"
-            />
+            {locked ? (
+              <LockedBranchField label="الفرع *" />
+            ) : (
+              <ModernCombobox
+                value={movementForm.branchId}
+                onChange={(branchId) =>
+                  setMovementForm((f) => ({
+                    ...f,
+                    branchId,
+                    cardId: "",
+                  }))
+                }
+                options={branchOptions}
+                label="الفرع *"
+                placeholder="اختر الفرع"
+                icon={Building2}
+                labelClassName="text-[16px] font-bold text-foreground"
+                valueClassName="text-[16px] font-bold"
+              />
+            )}
             <ModernCombobox
               value={movementForm.amountType}
               onChange={(v) => {

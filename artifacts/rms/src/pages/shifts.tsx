@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetShifts,
@@ -12,7 +12,9 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
 import { YmdDateInput } from "@/components/ymd-date-input";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import {
@@ -81,6 +83,7 @@ export default function ShiftsPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { data: shifts, isLoading } = useGetShifts();
   const { data: branches } = useGetBranches();
   const { mutate: createShift, isPending: isCreating } = useCreateShift();
@@ -98,9 +101,14 @@ export default function ShiftsPage() {
   const [submitError, setSubmitError] = useState("");
 
   const activeBranches = useMemo(
-    () => (branches ?? []).filter((b) => b.isActive !== false),
-    [branches]
+    () => filterOptions((branches ?? []).filter((b) => b.isActive !== false)),
+    [branches, filterOptions]
   );
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    setBranchId(forcedBranchId);
+  }, [locked, forcedBranchId]);
 
   const branchOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -148,11 +156,12 @@ export default function ShiftsPage() {
 
   const openAdd = () => {
     const defaultBranch =
-      selectedBranchId !== "all"
+      forcedBranchId ??
+      (selectedBranchId !== "all"
         ? selectedBranchId
         : activeBranches.length === 1
           ? activeBranches[0].id
-          : "";
+          : "");
     setKind("morning");
     setBranchId(defaultBranch);
     setOpenDate(todayYmd());
@@ -174,7 +183,9 @@ export default function ShiftsPage() {
       setSubmitError(t("shifts.errKind"));
       return;
     }
-    if (branchId === "" || !Number(branchId)) {
+    const writeBranchId =
+      locked && forcedBranchId != null ? forcedBranchId : Number(branchId);
+    if (!writeBranchId || !Number.isFinite(writeBranchId)) {
       setSubmitError(t("shifts.errBranch"));
       return;
     }
@@ -194,7 +205,7 @@ export default function ShiftsPage() {
       {
         data: {
           kind,
-          branchId: Number(branchId),
+          branchId: writeBranchId,
           openedAt: openDate,
           notes: notes.trim() || null,
         },
@@ -487,7 +498,9 @@ export default function ShiftsPage() {
 
           <div>
             <p className="text-sm font-extrabold mb-2.5">{t("common.branch")}</p>
-            {activeBranches.length > 0 && activeBranches.length <= 6 ? (
+            {locked ? (
+              <LockedBranchField />
+            ) : activeBranches.length > 0 && activeBranches.length <= 6 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {activeBranches.map((b) => {
                   const selected = branchId === b.id;

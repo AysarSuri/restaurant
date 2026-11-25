@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, X } from "lucide-react";
+import { GripHorizontal, Loader2, X } from "lucide-react";
+import { usePanelDrag } from "@/hooks/use-panel-drag";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -138,6 +139,14 @@ interface DialogProps {
   layer?: "base" | "overlay";
   /** Hide title + close header (e.g. custom chrome inside children) */
   hideHeader?: boolean;
+  /** Drag the panel by a grip / title bar (keyboard & numbers pads) */
+  movable?: boolean;
+  /**
+   * Backdrop behind the dialog.
+   * - dim: default translucent blur
+   * - none: no visible overlay (used for movable keyboard / numbers pads)
+   */
+  backdrop?: "dim" | "none";
 }
 
 export function Dialog({
@@ -148,9 +157,13 @@ export function Dialog({
   maxWidth = "max-w-lg",
   layer = "base",
   hideHeader = false,
+  movable = false,
+  backdrop,
 }: DialogProps) {
   const backdropZ = layer === "overlay" ? "z-[70]" : "z-50";
   const panelZ = layer === "overlay" ? "z-[80]" : "z-[60]";
+  const { offset, handleProps } = usePanelDrag(isOpen && movable);
+  const backdropMode = backdrop ?? (movable ? "none" : "dim");
 
   if (typeof document === "undefined") return null;
 
@@ -158,13 +171,15 @@ export function Dialog({
     <AnimatePresence>
       {isOpen && (
         <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className={cn("fixed inset-0 bg-black/80 backdrop-blur-sm", backdropZ)}
-          />
+          {backdropMode === "dim" ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+              className={cn("fixed inset-0 bg-black/80 backdrop-blur-sm", backdropZ)}
+            />
+          ) : null}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -176,18 +191,44 @@ export function Dialog({
           >
             <div
               className={cn(
-                "w-full glass-panel rounded-2xl p-4 sm:p-5 max-h-[min(92vh,880px)] overflow-y-auto overscroll-contain pointer-events-auto shadow-2xl",
+                "w-full rounded-2xl p-4 sm:p-5 max-h-[min(92vh,880px)] overflow-y-auto overscroll-contain pointer-events-auto shadow-2xl",
+                movable
+                  ? "bg-card border border-border"
+                  : "glass-panel",
                 maxWidth
               )}
+              style={
+                movable
+                  ? { transform: `translate(${offset.x}px, ${offset.y}px)` }
+                  : undefined
+              }
               onClick={(e) => e.stopPropagation()}
             >
+              {movable && hideHeader ? (
+                <div
+                  {...handleProps}
+                  className="flex items-center justify-center gap-2 py-1.5 mb-2 -mt-1 cursor-grab active:cursor-grabbing touch-none select-none text-muted-foreground/70 hover:text-muted-foreground"
+                  aria-label="Move"
+                >
+                  <span className="h-1.5 w-10 rounded-full bg-muted-foreground/35" />
+                  <GripHorizontal className="w-4 h-4 opacity-70" />
+                  <span className="h-1.5 w-10 rounded-full bg-muted-foreground/35" />
+                </div>
+              ) : null}
               {!hideHeader && (
-                <div className="flex justify-between items-center gap-3 mb-3 sm:mb-4">
+                <div
+                  className={cn(
+                    "flex justify-between items-center gap-3 mb-3 sm:mb-4",
+                    movable && "cursor-grab active:cursor-grabbing touch-none select-none"
+                  )}
+                  {...(movable ? handleProps : {})}
+                >
                   <h2 className="text-lg sm:text-xl font-bold leading-tight tracking-tight">{title}</h2>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-full min-h-11 min-w-11 p-2.5 hover:bg-secondary transition-colors flex-shrink-0 touch-manipulation inline-flex items-center justify-center"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="rounded-full min-h-11 min-w-11 p-2.5 hover:bg-secondary transition-colors flex-shrink-0 touch-manipulation inline-flex items-center justify-center cursor-pointer"
                   >
                     <X className="h-5 w-5" />
                   </button>

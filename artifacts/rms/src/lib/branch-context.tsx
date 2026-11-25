@@ -62,24 +62,47 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     ? "all"
     : user?.branchIds ?? [];
 
-  const [selectedBranchId, setSelectedState] = useState<BranchSelection>(() => {
-    if (!user) return "all";
-    return user.selectedBranchId ?? (canViewAllBranches ? "all" : user.branchIds?.[0] ?? "all");
-  });
+  const forcedBranchForUser = (u: AuthUser | null | undefined): BranchSelection => {
+    if (!u) return "all";
+    const all =
+      u.role === "admin" || u.role === "manager" || Boolean(u.allBranches);
+    if (all) return u.selectedBranchId ?? "all";
+    const ids = u.branchIds ?? [];
+    if (typeof u.selectedBranchId === "number" && ids.includes(u.selectedBranchId)) {
+      return u.selectedBranchId;
+    }
+    return ids[0] ?? "all";
+  };
 
-  // Sync when user logs in/out
+  const [selectedBranchId, setSelectedState] = useState<BranchSelection>(() =>
+    forcedBranchForUser(user)
+  );
+
+  // Sync when user logs in/out — non-admin/manager always locked to their branch
   useEffect(() => {
     if (!user) {
       setSelectedState("all");
       return;
     }
-    const next =
-      user.selectedBranchId ??
-      (user.role === "admin" || user.role === "manager" || user.allBranches
-        ? "all"
-        : user.branchIds?.[0] ?? "all");
-    setSelectedState(next);
-  }, [user?.name, user?.role, user?.selectedBranchId, user?.allBranches, user?.branchIds?.join(",")]);
+    const next = forcedBranchForUser(user);
+    setSelectedState((prev) => (prev === next ? prev : next));
+    if (
+      !(user.role === "admin" || user.role === "manager" || user.allBranches) &&
+      typeof next === "number" &&
+      user.selectedBranchId !== next
+    ) {
+      const name = branches?.find((b) => b.id === next)?.name ?? user.branchName;
+      login(persistUserBranch(user, next, name));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync on identity/assignment only
+  }, [
+    user?.name,
+    user?.role,
+    user?.selectedBranchId,
+    user?.allBranches,
+    user?.branchIds?.join(","),
+    branches,
+  ]);
 
   useEffect(() => {
     setBranchIdGetter(() => {
@@ -92,10 +115,10 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
   const setSelectedBranchId = useCallback(
     (id: BranchSelection) => {
       if (!user) return;
+      // Only system admin / manager may change branch
+      if (!canViewAllBranches) return;
       if (id !== "all") {
         if (allowedBranchIds !== "all" && !allowedBranchIds.includes(id)) return;
-      } else if (!canViewAllBranches) {
-        return;
       }
       setSelectedState(id);
       const name =
@@ -108,10 +131,8 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     [user, allowedBranchIds, canViewAllBranches, branches, login, queryClient, t]
   );
 
-  const canSwitchBranch =
-    Boolean(user) &&
-    (canViewAllBranches ||
-      (Array.isArray(allowedBranchIds) && allowedBranchIds.length > 1));
+  /** Non-admin / non-manager never switch — their menus stay on their branch. */
+  const canSwitchBranch = Boolean(user) && canViewAllBranches;
 
   const branchLabel = useMemo(() => {
     if (selectedBranchId === "all") return t("auth.allBranches");

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDrivers,
@@ -12,8 +12,9 @@ import {
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
 import { YmdDateInput } from "@/components/ymd-date-input";
-import { useBranch } from "@/lib/branch-context";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useI18n } from "@/i18n";
 import { formatMoney } from "@/lib/currency";
 import {
@@ -53,18 +54,22 @@ type FormData = typeof EMPTY_FORM;
 export default function DriversPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const { selectedBranchId } = useBranch();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { data: settings } = useGetSettings();
   const { data: branches } = useGetBranches();
   const { data: shifts } = useGetShifts();
 
   const [date, setDate] = useState(todayYmd);
-  const [filterBranchId, setFilterBranchId] = useState<number | "">(
-    selectedBranchId === "all" ? "" : selectedBranchId
-  );
+  const [filterBranchId, setFilterBranchId] = useState<number | "">(forcedBranchId ?? "");
   const [filterShiftId, setFilterShiftId] = useState<number | "">("");
   const [filterDriverId, setFilterDriverId] = useState<number | "">("");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    setFilterBranchId(forcedBranchId);
+    setForm((f) => (f.branchId === forcedBranchId ? f : { ...f, branchId: forcedBranchId }));
+  }, [locked, forcedBranchId]);
 
   const params = useMemo(
     () => ({
@@ -96,11 +101,18 @@ export default function DriversPage() {
     });
 
   const activeBranches = useMemo(
-    () => (branches ?? []).filter((b) => b.isActive !== false),
-    [branches]
+    () => filterOptions((branches ?? []).filter((b) => b.isActive !== false)),
+    [branches, filterOptions]
   );
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
+    if (locked) {
+      return activeBranches.map((b) => ({
+        value: String(b.id),
+        label: b.name,
+        icon: Building2,
+      }));
+    }
     const opts: ComboboxOption[] = [
       { value: "", label: t("drivers.allBranches"), icon: Building2 },
     ];
@@ -108,17 +120,17 @@ export default function DriversPage() {
       opts.push({ value: String(b.id), label: b.name, icon: Building2 });
     }
     return opts;
-  }, [activeBranches, t]);
+  }, [activeBranches, locked, t]);
 
   const formBranchOptions = useMemo<ComboboxOption[]>(() => {
-    const opts: ComboboxOption[] = [
-      { value: "", label: t("branch.noneSpecified"), icon: Building2 },
-    ];
+    const opts: ComboboxOption[] = locked
+      ? []
+      : [{ value: "", label: t("branch.noneSpecified"), icon: Building2 }];
     for (const b of activeBranches) {
       opts.push({ value: String(b.id), label: b.name, icon: Building2 });
     }
     return opts;
-  }, [activeBranches, t]);
+  }, [activeBranches, locked, t]);
 
   const shiftOptions = useMemo<ComboboxOption[]>(() => {
     const opts: ComboboxOption[] = [
@@ -166,12 +178,7 @@ export default function DriversPage() {
     setEditTarget(null);
     setForm({
       ...EMPTY_FORM,
-      branchId:
-        filterBranchId !== ""
-          ? filterBranchId
-          : selectedBranchId === "all"
-            ? ""
-            : selectedBranchId,
+      branchId: forcedBranchId ?? (filterBranchId !== "" ? filterBranchId : ""),
     });
     setError("");
     setFormOpen(true);
@@ -183,7 +190,7 @@ export default function DriversPage() {
       name: row.name,
       phone: row.phone ?? "",
       vehicleInfo: row.vehicleInfo ?? "",
-      branchId: row.branchId ?? "",
+      branchId: forcedBranchId ?? row.branchId ?? "",
       notes: row.notes ?? "",
       isActive: row.isActive !== false,
     });
@@ -201,7 +208,12 @@ export default function DriversPage() {
       name,
       phone: form.phone.trim() || null,
       vehicleInfo: form.vehicleInfo.trim() || null,
-      branchId: form.branchId === "" ? null : Number(form.branchId),
+      branchId:
+        locked && forcedBranchId != null
+          ? forcedBranchId
+          : form.branchId === ""
+            ? null
+            : Number(form.branchId),
       notes: form.notes.trim() || null,
       isActive: form.isActive,
     };
@@ -324,18 +336,22 @@ export default function DriversPage() {
             </label>
             <YmdDateInput value={date} onChange={setDate} />
           </div>
-          <ModernCombobox
-            label={t("common.branch")}
-            icon={Building2}
-            value={filterBranchId === "" ? "" : String(filterBranchId)}
-            onChange={(v) => {
-              setFilterBranchId(v ? Number(v) : "");
-              setFilterShiftId("");
-            }}
-            options={branchOptions}
-            placeholder={t("drivers.allBranches")}
-            searchPlaceholder={t("branch.search")}
-          />
+          {locked ? (
+            <LockedBranchField label={t("common.branch")} />
+          ) : (
+            <ModernCombobox
+              label={t("common.branch")}
+              icon={Building2}
+              value={filterBranchId === "" ? "" : String(filterBranchId)}
+              onChange={(v) => {
+                setFilterBranchId(v ? Number(v) : "");
+                setFilterShiftId("");
+              }}
+              options={branchOptions}
+              placeholder={t("drivers.allBranches")}
+              searchPlaceholder={t("branch.search")}
+            />
+          )}
           <ModernCombobox
             label={t("nav.shifts")}
             icon={Clock3}
@@ -551,15 +567,19 @@ export default function DriversPage() {
                 />
               </div>
             </div>
-            <ModernCombobox
-              label={t("common.branch")}
-              icon={Building2}
-              value={form.branchId === "" ? "" : String(form.branchId)}
-              onChange={(v) => setForm((p) => ({ ...p, branchId: v ? Number(v) : "" }))}
-              options={formBranchOptions}
-              placeholder={t("auth.selectBranch")}
-              searchPlaceholder={t("branch.search")}
-            />
+            {locked ? (
+              <LockedBranchField label={t("common.branch")} />
+            ) : (
+              <ModernCombobox
+                label={t("common.branch")}
+                icon={Building2}
+                value={form.branchId === "" ? "" : String(form.branchId)}
+                onChange={(v) => setForm((p) => ({ ...p, branchId: v ? Number(v) : "" }))}
+                options={formBranchOptions}
+                placeholder={t("auth.selectBranch")}
+                searchPlaceholder={t("branch.search")}
+              />
+            )}
             <div>
               <label className="block text-sm font-semibold mb-1.5">{t("common.notes")}</label>
               <Input

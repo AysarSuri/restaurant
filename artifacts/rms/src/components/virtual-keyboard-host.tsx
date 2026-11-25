@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/ui-elements";
 import { MultilingualKeyboard } from "@/components/multilingual-keyboard";
 import { useDeviceVirtualKeyboard } from "@/hooks/use-device-virtual-keyboard";
+import { useKeyboardDefaultLang } from "@/hooks/use-keyboard-default-lang";
 import { isTextKeyboardField, setNativeTextValue } from "@/lib/text-field";
 import { useI18n } from "@/i18n";
 
@@ -22,7 +23,8 @@ export function VirtualKeyboardHost({ active = true }: HostProps) {
   const enabled = useDeviceVirtualKeyboard(active);
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const defaultLang = useKeyboardDefaultLang();
   const [session, setSession] = useState<PadSession | null>(null);
   const sessionRef = useRef<PadSession | null>(null);
   sessionRef.current = session;
@@ -84,9 +86,6 @@ export function VirtualKeyboardHost({ active = true }: HostProps) {
     };
   }, [enabled, openFor, close]);
 
-  const defaultLang =
-    locale === "en" || locale === "ku" || locale === "ar" ? locale : "ar";
-
   if (!active) return null;
 
   return (
@@ -97,6 +96,7 @@ export function VirtualKeyboardHost({ active = true }: HostProps) {
         close();
       }}
       hideHeader
+      movable
       maxWidth="max-w-5xl"
       layer="overlay"
     >

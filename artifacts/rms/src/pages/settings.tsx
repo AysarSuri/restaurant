@@ -14,9 +14,17 @@ import {
   type DevicePrinter,
 } from "@workspace/api-client-react";
 import { DEVICE_PRINTERS_QUERY_KEY } from "@/lib/device-printer-query";
-import { resolvePadEnabled, setLocalPadPrefs } from "@/lib/device-pad-prefs";
+import {
+  getKeyboardDefaultLang,
+  resolvePadEnabled,
+  setKeyboardDefaultLang,
+  setLocalPadPrefs,
+  type KeyboardDefaultLang,
+} from "@/lib/device-pad-prefs";
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useBranch } from "@/lib/branch-context";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -163,6 +171,7 @@ export default function SettingsPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { data: settings } = useGetSettings();
   // Always load the full device list (ignore branch header) so a saved printer
   // does not vanish when the header branch differs from the device branch.
@@ -280,11 +289,17 @@ export default function SettingsPage() {
     if (myDevicePrinter) {
       setDeviceName(myDevicePrinter.deviceName);
       setPrinterName(myDevicePrinter.printerName || "");
-      setDeviceBranchId(myDevicePrinter.branchId ?? "");
+      setDeviceBranchId(
+        locked && forcedBranchId != null
+          ? forcedBranchId
+          : (myDevicePrinter.branchId ?? "")
+      );
+    } else if (forcedBranchId != null) {
+      setDeviceBranchId(forcedBranchId);
     } else if (selectedBranchId !== "all") {
       setDeviceBranchId(selectedBranchId);
     }
-  }, [myDevicePrinter, selectedBranchId]);
+  }, [myDevicePrinter, selectedBranchId, locked, forcedBranchId]);
 
   const activeBranches = useMemo(
     () => (branches ?? []).filter((b) => b.isActive !== false),
@@ -300,7 +315,7 @@ export default function SettingsPage() {
         icon: Monitor,
       },
     ];
-    for (const b of activeBranches) {
+    for (const b of filterOptions(activeBranches)) {
       opts.push({
         value: String(b.id),
         label: b.name,
@@ -309,7 +324,7 @@ export default function SettingsPage() {
       });
     }
     return opts;
-  }, [activeBranches, t]);
+  }, [activeBranches, filterOptions, t]);
 
   const printerOptions = useMemo<ComboboxOption[]>(() => {
     const seen = new Set<string>();
@@ -675,7 +690,12 @@ export default function SettingsPage() {
           deviceKey,
           deviceName: name,
           printerName: printerName.trim(),
-          branchId: deviceBranchId === "" ? null : Number(deviceBranchId),
+          branchId:
+            locked && forcedBranchId != null
+              ? forcedBranchId
+              : deviceBranchId === ""
+                ? null
+                : Number(deviceBranchId),
         },
       },
       {
@@ -697,13 +717,19 @@ export default function SettingsPage() {
   };
 
   const handleUpdateRow = (row: DevicePrinter, patch: Partial<DevicePrinter>) => {
+    const branchId =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : patch.branchId !== undefined
+          ? patch.branchId
+          : row.branchId;
     updatePrinter(
       {
         id: row.id,
         data: {
           deviceName: patch.deviceName ?? row.deviceName,
           printerName: patch.printerName ?? row.printerName,
-          branchId: patch.branchId !== undefined ? patch.branchId : row.branchId,
+          branchId,
           isActive: patch.isActive ?? row.isActive,
         },
       },
@@ -1401,16 +1427,20 @@ export default function SettingsPage() {
                   placeholder={t("settings.deviceNameExample")}
                 />
               </div>
-              <ModernCombobox
-                label={t("common.branch")}
-                hint={t("settings.linkBranch")}
-                icon={Building2}
-                value={deviceBranchId === "" ? "" : String(deviceBranchId)}
-                onChange={(v) => setDeviceBranchId(v ? Number(v) : "")}
-                options={branchOptions}
-                placeholder={t("auth.selectBranch")}
-                searchPlaceholder={t("branch.search")}
-              />
+              {locked ? (
+                <LockedBranchField label={t("common.branch")} />
+              ) : (
+                <ModernCombobox
+                  label={t("common.branch")}
+                  hint={t("settings.linkBranch")}
+                  icon={Building2}
+                  value={deviceBranchId === "" ? "" : String(deviceBranchId)}
+                  onChange={(v) => setDeviceBranchId(v ? Number(v) : "")}
+                  options={branchOptions}
+                  placeholder={t("auth.selectBranch")}
+                  searchPlaceholder={t("branch.search")}
+                />
+              )}
               <div className="md:col-span-2">
                 <ModernCombobox
                   label={t("settings.printerName")}
@@ -1549,20 +1579,24 @@ export default function SettingsPage() {
                         disabled={updatingPrinter}
                         dir="ltr"
                       />
-                      <ModernCombobox
-                        label={t("common.branch")}
-                        icon={Building2}
-                        value={row.branchId ? String(row.branchId) : ""}
-                        onChange={(v) =>
-                          handleUpdateRow(row, {
-                            branchId: v ? Number(v) : null,
-                          })
-                        }
-                        options={branchOptions}
-                        placeholder={t("auth.selectBranch")}
-                        searchPlaceholder={t("branch.search")}
-                        disabled={updatingPrinter}
-                      />
+                      {locked ? (
+                        <LockedBranchField label={t("common.branch")} />
+                      ) : (
+                        <ModernCombobox
+                          label={t("common.branch")}
+                          icon={Building2}
+                          value={row.branchId ? String(row.branchId) : ""}
+                          onChange={(v) =>
+                            handleUpdateRow(row, {
+                              branchId: v ? Number(v) : null,
+                            })
+                          }
+                          options={branchOptions}
+                          placeholder={t("auth.selectBranch")}
+                          searchPlaceholder={t("branch.search")}
+                          disabled={updatingPrinter}
+                        />
+                      )}
                     </Card>
                   );
                 })}
@@ -1718,6 +1752,53 @@ export default function SettingsPage() {
                   {t("settings.virtualKeyboardHint")}
                 </p>
               </div>
+            </div>
+          </Card>
+
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
+            <div>
+              <h3 className="font-extrabold text-base">
+                {t("settings.keyboardDefaultLang")}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {t("settings.keyboardDefaultLangHint")}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {(
+                [
+                  { id: "ar" as const, short: "ع", labelKey: "lang.ar" },
+                  { id: "en" as const, short: "EN", labelKey: "lang.en" },
+                  { id: "ku" as const, short: "KU", labelKey: "lang.ku" },
+                ] as const
+              ).map((opt) => {
+                void padPrefsTick;
+                const active = getKeyboardDefaultLang("ar") === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setKeyboardDefaultLang(opt.id as KeyboardDefaultLang);
+                      notifySaveOk(t("settings.savedKeyboardDefaultLang"));
+                    }}
+                    className={`rounded-2xl border-2 p-3.5 sm:p-4 transition-all touch-manipulation text-center ${
+                      active
+                        ? "border-sky-500/60 bg-sky-500/10"
+                        : "border-border/70 bg-card/50 hover:border-border"
+                    }`}
+                  >
+                    <span
+                      className={`mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-sm font-extrabold ${
+                        active ? "bg-sky-500 text-white" : "bg-secondary text-foreground"
+                      }`}
+                    >
+                      {opt.short}
+                    </span>
+                    <p className="font-extrabold text-sm leading-tight">{t(opt.labelKey)}</p>
+                  </button>
+                );
+              })}
             </div>
           </Card>
 

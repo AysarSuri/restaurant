@@ -134,6 +134,7 @@ const ar: Messages = {
 
   "branch.choose": "اختيار الفرع",
   "branch.current": "الفرع الحالي",
+  "branch.lockedToUser": "مقفل على فرع المستخدم — لا يمكن تغييره",
   "branch.allSubtitle": "عرض موحّد لكل المواقع",
   "branch.available": "الفروع المتاحة",
   "branch.filterHint": "اختر الفرع لتصفية البيانات والعمليات",
@@ -190,6 +191,10 @@ const ar: Messages = {
   "settings.virtualKeyboard": "كيبورد للنصوص",
   "settings.virtualKeyboardOn": "مفعّل — الكيبورد يظهر لحقول النص",
   "settings.virtualKeyboardOff": "معطّل — إدخال النص من لوحة المفاتيح العادية",
+  "settings.keyboardDefaultLang": "اللغة الافتراضية عند فتح الكيبورد",
+  "settings.keyboardDefaultLangHint":
+    "تُختار هذه اللغة تلقائياً كلما فُتح كيبورد الشاشة على هذا الجهاز",
+  "settings.savedKeyboardDefaultLang": "تم حفظ اللغة الافتراضية للكيبورد",
   "settings.savedVirtualKeyboard": "تم حفظ خيار الكيبورد",
   "settings.saveVirtualKeyboardFailed": "تعذر حفظ خيار الكيبورد",
   "settings.numbers": "فورم أرقام",
@@ -1282,6 +1287,7 @@ const en: Messages = {
 
   "branch.choose": "Choose branch",
   "branch.current": "Current branch",
+  "branch.lockedToUser": "Locked to your branch — cannot be changed",
   "branch.allSubtitle": "Unified view of all locations",
   "branch.available": "Available branches",
   "branch.filterHint": "Choose a branch to filter data and actions",
@@ -1338,6 +1344,10 @@ const en: Messages = {
   "settings.virtualKeyboard": "Keyboard for text",
   "settings.virtualKeyboardOn": "On — keyboard opens for text fields",
   "settings.virtualKeyboardOff": "Off — type text with the normal keyboard",
+  "settings.keyboardDefaultLang": "Default language when keyboard opens",
+  "settings.keyboardDefaultLangHint":
+    "This language is selected automatically whenever the on-screen keyboard opens on this device",
+  "settings.savedKeyboardDefaultLang": "Keyboard default language saved",
   "settings.savedVirtualKeyboard": "Keyboard option saved",
   "settings.saveVirtualKeyboardFailed": "Could not save keyboard option",
   "settings.numbers": "Numbers pad",
@@ -2430,6 +2440,7 @@ const ku: Messages = {
 
   "branch.choose": "Hilbijartina şaxê",
   "branch.current": "Şaxê niha",
+  "branch.lockedToUser": "Li ser şaxê bikarhênerê qefilandî ye — nayê guhertin",
   "branch.allSubtitle": "Dîtina yekgirtî ya hemû cihan",
   "branch.available": "Şaxên berdest",
   "branch.filterHint": "Şaxê hilbijêre da daneyan û karan fîltre bikî",
@@ -2486,6 +2497,10 @@ const ku: Messages = {
   "settings.virtualKeyboard": "Klavye bo nivîsê",
   "settings.virtualKeyboardOn": "Çalak — klavye ji bo qadên nivîsê derdikeve",
   "settings.virtualKeyboardOff": "Neçalak — nivîs bi klavyeya asayî tê nivîsandin",
+  "settings.keyboardDefaultLang": "Zimanê standard dema klavye vebû",
+  "settings.keyboardDefaultLangHint":
+    "Ev ziman bixweber tê hilbijartin her ku klavyeya dîmenderê li ser vê amûrê vedibe",
+  "settings.savedKeyboardDefaultLang": "Zimanê standard ê klavyeyê hate tomarkirin",
   "settings.savedVirtualKeyboard": "Vebijêrka klavyeyê hate tomarkirin",
   "settings.saveVirtualKeyboardFailed": "Nikare vebijêrka klavyeyê tomar bike",
   "settings.numbers": "Forma hejmaran",

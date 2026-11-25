@@ -104,6 +104,7 @@ export function VirtualNumericKeypadHost({ active = true }: HostProps) {
         close();
       }}
       hideHeader
+      movable
       maxWidth="max-w-sm"
       layer="overlay"
     >

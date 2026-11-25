@@ -347,19 +347,49 @@ export default function Login() {
     selectedRole && selection.trim() && branchReady
   );
 
+  const employeeBranchLocked =
+    !isTableRole && Boolean(selectedEmployee) && !employeeCanAllBranches;
+
   useEffect(() => {
-    if (branchOptions.length === 1) {
-      setSelectedBranchId(branchOptions[0].id);
+    if (isTableRole) {
+      if (branchOptions.length === 1) {
+        setSelectedBranchId(branchOptions[0].id);
+        return;
+      }
+      if (
+        selectedBranchId != null &&
+        !branchOptions.some((o) => o.id === selectedBranchId)
+      ) {
+        setSelectedBranchId(null);
+      }
       return;
     }
-    if (
-      selectedBranchId != null &&
-      !branchOptions.some((o) => o.id === selectedBranchId)
-    ) {
+    if (!selectedEmployee) {
+      setSelectedBranchId(null);
+      return;
+    }
+    if (employeeCanAllBranches) {
+      if (
+        selectedBranchId != null &&
+        !branchOptions.some((o) => o.id === selectedBranchId)
+      ) {
+        setSelectedBranchId(null);
+      }
+      return;
+    }
+    if (branchOptions.length > 0) {
+      setSelectedBranchId(branchOptions[0].id);
+    } else {
       setSelectedBranchId(null);
     }
-    return;
-  }, [branchOptions.map((o) => String(o.id)).join("|"), selection, selectedRole]);
+  }, [
+    branchOptions.map((o) => String(o.id)).join("|"),
+    selection,
+    selectedRole,
+    isTableRole,
+    employeeCanAllBranches,
+    selectedEmployee?.id,
+  ]);
 
   const focusPinInput = () => {
     if (!pinReady) return;
@@ -456,52 +486,88 @@ export default function Login() {
     navigate(roleConfig!.redirect);
   };
 
-  const branchPicker = (
-    <div>
-      <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
-        {t("common.branch")} {!isTableRole && !selectedEmployee ? "" : <span className="text-destructive">*</span>}
-      </label>
-      <div
-        className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all
+  const branchPicker = (() => {
+    const showPicker = isTableRole ? Boolean(selectedRole) : Boolean(selectedEmployee);
+    const lockedBranchLabel =
+      branchOptions.find((o) => o.id === selectedBranchId)?.label ??
+      branchOptions[0]?.label ??
+      "";
+
+    if (employeeBranchLocked && showPicker && lockedBranchLabel) {
+      return (
+        <div>
+          <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
+            {t("common.branch")} <span className="text-destructive">*</span>
+          </label>
+          <div
+            className="flex items-center gap-2.5 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-3 pointer-events-none select-none"
+            title={t("branch.lockedToUser")}
+          >
+            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-md shadow-primary/20">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm sm:text-base font-extrabold text-foreground">
+                {lockedBranchLabel}
+              </p>
+              <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1 mt-0.5">
+                <Lock className="h-3 w-3" />
+                {t("branch.lockedToUser")}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
+          {t("common.branch")}{" "}
+          {!isTableRole && !selectedEmployee ? "" : <span className="text-destructive">*</span>}
+        </label>
+        <div
+          className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all
           ${
-            (isTableRole ? !selectedRole : !selectedEmployee)
+            !showPicker
               ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
               : selectedBranchId != null
                 ? "border-primary bg-primary/5"
                 : "border-border bg-secondary/40"
           }`}
-      >
-        <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-        <select
-          className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground disabled:cursor-not-allowed"
-          disabled={isTableRole ? !selectedRole : !selectedEmployee}
-          value={selectedBranchId == null ? "" : String(selectedBranchId)}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSelectedBranchId(v === "" ? null : v === "all" ? "all" : Number(v));
-            if (isTableRole) setSelection("");
-            setPin("");
-            setError("");
-          }}
         >
-          <option value="">
-            {isTableRole
-              ? selectedRole
-                ? t("auth.selectBranchDots")
-                : t("auth.selectRoleFirstDots")
-              : selectedEmployee
-                ? t("auth.selectBranchOrAll")
-                : t("auth.selectEmployeeFirst")}
-          </option>
-          {branchOptions.map((o) => (
-            <option key={String(o.id)} value={String(o.id)}>
-              {o.label}
+          <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <select
+            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground disabled:cursor-not-allowed"
+            disabled={!showPicker}
+            value={selectedBranchId == null ? "" : String(selectedBranchId)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSelectedBranchId(v === "" ? null : v === "all" ? "all" : Number(v));
+              if (isTableRole) setSelection("");
+              setPin("");
+              setError("");
+            }}
+          >
+            <option value="">
+              {isTableRole
+                ? selectedRole
+                  ? t("auth.selectBranchDots")
+                  : t("auth.selectRoleFirstDots")
+                : selectedEmployee
+                  ? t("auth.selectBranchOrAll")
+                  : t("auth.selectEmployeeFirst")}
             </option>
-          ))}
-        </select>
+            {branchOptions.map((o) => (
+              <option key={String(o.id)} value={String(o.id)}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-    </div>
-  );
+    );
+  })();
 
   return (
     <div className="min-h-app h-app bg-background text-foreground flex flex-col overflow-hidden page-shell">

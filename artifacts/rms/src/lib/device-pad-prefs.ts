@@ -2,11 +2,18 @@ import { getOrCreateDeviceKey } from "@/lib/device-id";
 
 const KEYBOARD_KEY = "rms-virtual-keyboard";
 const NUMERIC_KEY = "rms-virtual-numeric-keypad";
+const DEFAULT_LANG_KEY = "rms-keyboard-default-lang";
+
+export type KeyboardDefaultLang = "ar" | "en" | "ku";
 
 type PadPrefs = {
   virtualKeyboard: boolean;
   virtualNumericKeypad: boolean;
 };
+
+function isKeyboardLang(v: string | null): v is KeyboardDefaultLang {
+  return v === "ar" || v === "en" || v === "ku";
+}
 
 function readFlag(storageKey: string): boolean | null {
   try {
@@ -66,4 +73,30 @@ export function resolvePadEnabled(
     return getLocalPadPrefs(deviceKey)[which];
   }
   return Boolean(apiValue);
+}
+
+/** Default on-screen keyboard language when the pad opens (this device). */
+export function getKeyboardDefaultLang(
+  fallback: KeyboardDefaultLang = "ar"
+): KeyboardDefaultLang {
+  try {
+    const raw = localStorage.getItem(DEFAULT_LANG_KEY);
+    if (isKeyboardLang(raw)) return raw;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+export function setKeyboardDefaultLang(lang: KeyboardDefaultLang) {
+  try {
+    localStorage.setItem(DEFAULT_LANG_KEY, lang);
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("rms-pad-prefs-changed"));
+  } catch {
+    /* ignore */
+  }
 }

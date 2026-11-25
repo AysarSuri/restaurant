@@ -1738,6 +1738,7 @@ export default function Cashier() {
         title={t("pos.receivedTotal")}
         maxWidth="max-w-sm"
         layer="overlay"
+        movable
       >
         <NumericKeypad
           value={checkoutReceived}
@@ -1759,6 +1760,7 @@ export default function Cashier() {
         title={t("pos.invoiceDiscount")}
         maxWidth="max-w-sm"
         layer="overlay"
+        movable
       >
         <NumericKeypad
           value={checkoutDiscount}

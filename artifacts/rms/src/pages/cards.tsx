@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -11,6 +11,8 @@ import {
   type Card,
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog, Card as UiCard } from "@/components/ui-elements";
+import { LockedBranchField } from "@/components/locked-branch-field";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useBranch } from "@/lib/branch-context";
 import { useCurrency } from "@/hooks/use-currency";
 import {
@@ -43,6 +45,7 @@ type FormData = typeof EMPTY_FORM;
 export default function CardsPage() {
   const queryClient = useQueryClient();
   const { selectedBranchId, canViewAllBranches } = useBranch();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { format: formatMoney } = useCurrency();
   const { data: cards, isLoading } = useGetCards();
   const { data: branches } = useGetBranches();
@@ -64,9 +67,18 @@ export default function CardsPage() {
   };
 
   const activeBranches = useMemo(
-    () => (branches ?? []).filter((b) => b.isActive !== false),
-    [branches]
+    () => filterOptions((branches ?? []).filter((b) => b.isActive !== false)),
+    [branches, filterOptions]
   );
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    setForm((f) =>
+      f.branchIds.length === 1 && f.branchIds[0] === forcedBranchId
+        ? f
+        : { ...f, branchIds: [forcedBranchId] }
+    );
+  }, [locked, forcedBranchId]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -90,11 +102,13 @@ export default function CardsPage() {
 
   const openAdd = () => {
     const defaultBranches =
-      selectedBranchId !== "all"
-        ? [selectedBranchId]
-        : activeBranches.length === 1
-          ? [activeBranches[0].id]
-          : [];
+      forcedBranchId != null
+        ? [forcedBranchId]
+        : selectedBranchId !== "all"
+          ? [selectedBranchId]
+          : activeBranches.length === 1
+            ? [activeBranches[0].id]
+            : [];
     setEditTarget(null);
     setForm({ ...EMPTY_FORM, branchIds: defaultBranches });
     setErrors({});
@@ -109,7 +123,8 @@ export default function CardsPage() {
       openingBalance: String(card.openingBalance ?? 0),
       note: card.note ?? "",
       isActive: card.isActive ?? true,
-      branchIds: card.branchIds ?? [],
+      branchIds:
+        locked && forcedBranchId != null ? [forcedBranchId] : (card.branchIds ?? []),
     });
     setErrors({});
     setSubmitError("");
@@ -157,7 +172,8 @@ export default function CardsPage() {
       openingBalance: Number(form.openingBalance),
       note: form.note.trim() || undefined,
       isActive: form.isActive,
-      branchIds: form.branchIds,
+      branchIds:
+        locked && forcedBranchId != null ? [forcedBranchId] : form.branchIds,
     };
 
     if (editTarget) {
@@ -386,43 +402,53 @@ export default function CardsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <Building2 className="w-4 h-4 inline me-1 text-primary" />
-              الفروع المرتبطة *
-            </label>
-            {activeBranches.length === 0 ? (
-              <p className="text-xs text-muted-foreground rounded-xl border border-dashed border-border px-3 py-3">
-                لا توجد فروع — أضف فرعاً أولاً من صفحة الفروع
-              </p>
+            {locked ? (
+              <LockedBranchField label="الفرع المرتبط *" />
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {activeBranches.map((b) => {
-                  const selected = form.branchIds.includes(b.id);
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => toggleBranch(b.id)}
-                      className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
-                        selected
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
-                      }`}
-                    >
-                      <span
-                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                          selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                        }`}
-                      >
-                        {selected && <Check className="w-3.5 h-3.5" />}
-                      </span>
-                      <span className="truncate">{b.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <label className="block text-sm font-semibold mb-1.5">
+                  <Building2 className="w-4 h-4 inline me-1 text-primary" />
+                  الفروع المرتبطة *
+                </label>
+                {activeBranches.length === 0 ? (
+                  <p className="text-xs text-muted-foreground rounded-xl border border-dashed border-border px-3 py-3">
+                    لا توجد فروع — أضف فرعاً أولاً من صفحة الفروع
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {activeBranches.map((b) => {
+                      const selected = form.branchIds.includes(b.id);
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => toggleBranch(b.id)}
+                          className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
+                            selected
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                              selected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border"
+                            }`}
+                          >
+                            {selected && <Check className="w-3.5 h-3.5" />}
+                          </span>
+                          <span className="truncate">{b.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {errors.branches && (
+                  <p className="text-xs text-destructive mt-1">{errors.branches}</p>
+                )}
+              </>
             )}
-            {errors.branches && <p className="text-xs text-destructive mt-1">{errors.branches}</p>}
           </div>
 
           <div>

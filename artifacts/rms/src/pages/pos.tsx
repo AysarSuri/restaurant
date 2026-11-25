@@ -49,6 +49,7 @@ import {
 } from "@/lib/device-printer-query";
 import { useDeviceVirtualKeyboard } from "@/hooks/use-device-virtual-keyboard";
 import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
+import { useKeyboardDefaultLang } from "@/hooks/use-keyboard-default-lang";
 import { printThermalReceipt } from "@/lib/print-receipt";
 import { toast } from "@/hooks/use-toast";
 import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
@@ -253,6 +254,7 @@ export default function POS() {
   const amountPadEnabled = useDeviceVirtualNumericKeypad(true);
   /** Settings → Keyboard: multilingual text pads (search, address, person) */
   const textKeyboardEnabled = useDeviceVirtualKeyboard(true);
+  const keyboardDefaultLang = useKeyboardDefaultLang();
 
   const salesSendToKitchen =
     devicePrinter != null
@@ -2752,6 +2754,7 @@ export default function POS() {
         title={t("pos.receivedTotal")}
         maxWidth="max-w-sm"
         layer="overlay"
+        movable
       >
         <NumericKeypad
           value={checkoutReceived}
@@ -2773,6 +2776,7 @@ export default function POS() {
         title={t("pos.invoiceDiscount")}
         maxWidth="max-w-sm"
         layer="overlay"
+        movable
       >
         <NumericKeypad
           value={discount}
@@ -3072,6 +3076,7 @@ export default function POS() {
         title={t("pos.deliveryPhoneTitle")}
         maxWidth="max-w-sm"
         layer="overlay"
+        movable
       >
         <NumericKeypad
           mode="digits"
@@ -3091,12 +3096,13 @@ export default function POS() {
         isOpen={textKeyboardEnabled && isAddressPadOpen}
         onClose={() => setIsAddressPadOpen(false)}
         hideHeader
+        movable
         maxWidth="max-w-5xl"
         layer="overlay"
       >
         <MultilingualKeyboard
           value={deliveryAddress}
-          defaultLang="ar"
+          defaultLang={keyboardDefaultLang}
           onCancel={() => setIsAddressPadOpen(false)}
           onConfirm={(v) => {
             setDeliveryAddress(v);
@@ -3109,12 +3115,13 @@ export default function POS() {
         isOpen={textKeyboardEnabled && isSearchPadOpen}
         onClose={() => setIsSearchPadOpen(false)}
         hideHeader
+        movable
         maxWidth="max-w-5xl"
         layer="overlay"
       >
         <MultilingualKeyboard
           value={search}
-          defaultLang="ar"
+          defaultLang={keyboardDefaultLang}
           onCancel={() => setIsSearchPadOpen(false)}
           onConfirm={(v) => {
             setSearch(v);
@@ -3127,6 +3134,7 @@ export default function POS() {
         isOpen={textKeyboardEnabled && isPersonSearchPadOpen}
         onClose={() => setIsPersonSearchPadOpen(false)}
         hideHeader
+        movable
         maxWidth={isPortrait ? "max-w-3xl" : "max-w-7xl"}
         layer="overlay"
       >
@@ -3234,7 +3242,7 @@ export default function POS() {
                     <MultilingualKeyboard
                       value={personSearch}
                       label={t("pos.personSearch")}
-                      defaultLang="ar"
+                      defaultLang={keyboardDefaultLang}
                       showInput={false}
                       onChange={setPersonSearch}
                       onCancel={() => setIsPersonSearchPadOpen(false)}
@@ -3250,7 +3258,7 @@ export default function POS() {
                   <MultilingualKeyboard
                     value={personSearch}
                     label={t("pos.personSearch")}
-                    defaultLang="ar"
+                    defaultLang={keyboardDefaultLang}
                     showInput={false}
                     onChange={setPersonSearch}
                     onCancel={() => setIsPersonSearchPadOpen(false)}

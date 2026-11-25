@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   useGetTables,
@@ -15,7 +15,9 @@ import {
 type RestaurantTableType = (typeof TableTypeEnum)[keyof typeof TableTypeEnum];
 import { Button, Dialog, Input } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import {
   Users,
   MapPin,
@@ -113,6 +115,7 @@ function apiErrorMessage(err: any, fallback: string) {
 
 export default function Tables() {
   const { selectedBranchId, branchLabel } = useBranch();
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { data: branches } = useGetBranches();
   const { data: tables, isLoading, refetch } = useGetTables({
     query: {
@@ -126,13 +129,19 @@ export default function Tables() {
 
   const branchOptions = useMemo<ComboboxOption[]>(
     () =>
-      (branches ?? []).map((b) => ({
+      filterOptions(branches ?? []).map((b) => ({
         value: String(b.id),
         label: b.nameAr?.trim() || b.name || String(b.id),
         icon: Building2,
       })),
-    [branches]
+    [branches, filterOptions]
   );
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    const id = String(forcedBranchId);
+    setAddForm((f) => (f.branchId === id ? f : { ...f, branchId: id }));
+  }, [locked, forcedBranchId]);
   const [entityType, setEntityType] = useState<EntityType>("table");
   const [filter, setFilter] = useState<"all" | RestaurantTableStatus>("all");
   const [addOpen, setAddOpen] = useState(false);
@@ -249,7 +258,12 @@ export default function Tables() {
 
   const openAdd = () => {
     const isPerson = entityType === "person";
-    const branchId = selectedBranchId === "all" ? "" : String(selectedBranchId);
+    const branchId =
+      forcedBranchId != null
+        ? String(forcedBranchId)
+        : selectedBranchId === "all"
+          ? ""
+          : String(selectedBranchId);
     setAddForm({
       number: isPerson ? "" : nextNumberForType(entityType, branchId),
       capacity: isPerson ? "1" : "4",
@@ -277,7 +291,12 @@ export default function Tables() {
     setEditForm({
       number: String(table.number ?? ""),
       capacity: String(table.capacity ?? 1),
-      branchId: table.branchId != null ? String(table.branchId) : "",
+      branchId:
+        forcedBranchId != null
+          ? String(forcedBranchId)
+          : table.branchId != null
+            ? String(table.branchId)
+            : "",
       type: ((table.type as EntityType) || "table") as EntityType,
       status: (table.status as RestaurantTableStatus) || "available",
     });
@@ -296,7 +315,8 @@ export default function Tables() {
     const isPerson = type === "person";
     const number = addForm.number.trim().replace(/\s+/g, " ");
     const capacity = Number(addForm.capacity);
-    const branchIdNum = Number(addForm.branchId);
+    const branchIdNum =
+      locked && forcedBranchId != null ? forcedBranchId : Number(addForm.branchId);
     if (!Number.isFinite(branchIdNum) || branchIdNum <= 0) {
       setAddError("اختر الفرع التابع له");
       return;
@@ -777,26 +797,30 @@ export default function Tables() {
           </div>
 
           <div>
-            <ModernCombobox
-              value={addForm.branchId}
-              onChange={(v) => {
-                setAddForm((f) => ({
-                  ...f,
-                  branchId: v,
-                  number: f.type === "person" ? f.number : nextNumberForType(f.type, v),
-                }));
-                if (addError) setAddError("");
-              }}
-              options={branchOptions}
-              label="تابع فرع *"
-              placeholder="اختر الفرع"
-              icon={Building2}
-              searchable
-              searchPlaceholder="ابحث عن فرع..."
-              emptyText="لا يوجد فرع"
-              labelClassName="text-sm font-semibold"
-              valueClassName="text-sm font-bold"
-            />
+            {locked ? (
+              <LockedBranchField label="تابع فرع *" />
+            ) : (
+              <ModernCombobox
+                value={addForm.branchId}
+                onChange={(v) => {
+                  setAddForm((f) => ({
+                    ...f,
+                    branchId: v,
+                    number: f.type === "person" ? f.number : nextNumberForType(f.type, v),
+                  }));
+                  if (addError) setAddError("");
+                }}
+                options={branchOptions}
+                label="تابع فرع *"
+                placeholder="اختر الفرع"
+                icon={Building2}
+                searchable
+                searchPlaceholder="ابحث عن فرع..."
+                emptyText="لا يوجد فرع"
+                labelClassName="text-sm font-semibold"
+                valueClassName="text-sm font-bold"
+              />
+            )}
           </div>
 
           <div>

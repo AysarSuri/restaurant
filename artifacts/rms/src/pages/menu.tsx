@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetMenuItems,
   useCreateMenuItem,
@@ -20,6 +20,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CrudTable } from "@/components/crud-table";
 import { Dialog, Input, Button } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { LockedBranchField } from "@/components/locked-branch-field";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import {
   BadgeDollarSign,
   Building2,
@@ -99,6 +101,7 @@ function CategoryImageThumb({
 }
 
 export default function Menu() {
+  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { data: items, isLoading, refetch } = useGetMenuItems();
   const { data: categories, refetch: refetchCategories } = useGetMenuCategories();
   const { data: branches } = useGetBranches({
@@ -131,7 +134,22 @@ export default function Menu() {
   const [formError, setFormError] = useState("");
   const [filterItemId, setFilterItemId] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
-  const [filterBranchId, setFilterBranchId] = useState("");
+  const [filterBranchId, setFilterBranchId] = useState(
+    forcedBranchId != null ? String(forcedBranchId) : ""
+  );
+
+  useEffect(() => {
+    if (!locked || forcedBranchId == null) return;
+    const id = String(forcedBranchId);
+    setFilterBranchId(id);
+    setFormData((f) =>
+      f.allBranches === false &&
+      f.branchIds.length === 1 &&
+      f.branchIds[0] === forcedBranchId
+        ? f
+        : { ...f, allBranches: false, branchIds: [forcedBranchId] }
+    );
+  }, [locked, forcedBranchId]);
   const [filterVisibility, setFilterVisibility] = useState<"all" | "visible" | "hidden">("all");
   const [filterFavorite, setFilterFavorite] = useState<"all" | "favorite" | "normal">("all");
 
@@ -169,8 +187,17 @@ export default function Menu() {
     [categoryOptions]
   );
 
-  const filterBranchOptions = useMemo<ComboboxOption[]>(
-    () => [
+  const filterBranchOptions = useMemo<ComboboxOption[]>(() => {
+    const scoped = filterOptions(branches ?? []);
+    if (locked) {
+      return scoped.map((b) => ({
+        value: String(b.id),
+        label: b.name,
+        subtitle: "فرع محدد",
+        icon: Building2,
+      }));
+    }
+    return [
       { value: "", label: "كل الفروع", subtitle: "بدون فلتر", icon: Building2 },
       {
         value: "all",
@@ -178,14 +205,18 @@ export default function Menu() {
         subtitle: "أصناف متاحة لكل الفروع",
         icon: Building2,
       },
-      ...(branches ?? []).map((b) => ({
+      ...scoped.map((b) => ({
         value: String(b.id),
         label: b.name,
         subtitle: "فرع محدد",
         icon: Building2,
       })),
-    ],
-    [branches]
+    ];
+  }, [branches, filterOptions, locked]);
+
+  const scopedFormBranches = useMemo(
+    () => filterOptions(branches ?? []),
+    [branches, filterOptions]
   );
 
   const filterVisibilityOptions = useMemo<ComboboxOption[]>(
@@ -315,8 +346,14 @@ export default function Menu() {
         categoryId: item.categoryId,
         isAvailable: item.isAvailable,
         isFavorite: item.isFavorite === true,
-        allBranches: item.allBranches !== false || !(item.branchIds?.length),
-        branchIds: item.branchIds ?? [],
+        allBranches:
+          locked && forcedBranchId != null
+            ? false
+            : item.allBranches !== false || !(item.branchIds?.length),
+        branchIds:
+          locked && forcedBranchId != null
+            ? [forcedBranchId]
+            : (item.branchIds ?? []),
         imageUrl: item.imageUrl || "",
       });
     } else {
@@ -332,8 +369,8 @@ export default function Menu() {
         categoryId: categories?.[0]?.id || 0,
         isAvailable: true,
         isFavorite: false,
-        allBranches: true,
-        branchIds: [],
+        allBranches: locked ? false : true,
+        branchIds: locked && forcedBranchId != null ? [forcedBranchId] : [],
         imageUrl: "",
       });
     }
@@ -466,6 +503,13 @@ export default function Menu() {
     setFormError("");
 
     const withCost = formData.costMode === "with";
+    const writeAllBranches = locked ? false : formData.allBranches;
+    const writeBranchIds =
+      locked && forcedBranchId != null
+        ? [forcedBranchId]
+        : writeAllBranches
+          ? []
+          : formData.branchIds;
     const data = {
       nameAr: formData.nameAr.trim(),
       name: formData.name.trim(),
@@ -483,8 +527,8 @@ export default function Menu() {
       categoryId: formData.categoryId,
       isAvailable: formData.isAvailable,
       isFavorite: formData.isFavorite,
-      allBranches: formData.allBranches,
-      branchIds: formData.allBranches ? [] : formData.branchIds,
+      allBranches: writeAllBranches,
+      branchIds: writeBranchIds,
       imageUrl: formData.imageUrl || undefined,
       nameKu: "",
       description: "",
@@ -786,18 +830,22 @@ export default function Menu() {
               />
             </div>
             <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-1">
-              <ModernCombobox
-                value={filterBranchId}
-                onChange={setFilterBranchId}
-                options={filterBranchOptions}
-                label="حسب الفرع"
-                placeholder="كل الفروع"
-                icon={Building2}
-                searchable
-                labelClassName="text-[16px] font-bold text-foreground"
-                valueClassName="text-[16px] font-bold"
-                className="w-full min-w-0"
-              />
+              {locked ? (
+                <LockedBranchField label="حسب الفرع" />
+              ) : (
+                <ModernCombobox
+                  value={filterBranchId}
+                  onChange={setFilterBranchId}
+                  options={filterBranchOptions}
+                  label="حسب الفرع"
+                  placeholder="كل الفروع"
+                  icon={Building2}
+                  searchable
+                  labelClassName="text-[16px] font-bold text-foreground"
+                  valueClassName="text-[16px] font-bold"
+                  className="w-full min-w-0"
+                />
+              )}
             </div>
             <div className="min-w-0 w-full sm:w-[calc(50%-0.25rem)] xl:w-auto xl:flex-1">
               <ModernCombobox
@@ -1163,58 +1211,67 @@ export default function Menu() {
               الفروع <span className="text-destructive">*</span>
             </label>
             <div className="rounded-2xl border border-border/60 bg-secondary/20 p-3 sm:p-4 space-y-3">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  onClick={selectAllBranches}
-                  className={`sm:w-auto min-h-12 px-5 rounded-xl border-2 text-[16px] font-bold transition-all flex items-center justify-center gap-2 touch-manipulation active:scale-[0.98] ${
-                    formData.allBranches
-                      ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
-                      : "border-border bg-background/60 text-foreground hover:border-primary/40"
-                  }`}
-                >
-                  <Check className={`w-5 h-5 ${formData.allBranches ? "opacity-100" : "opacity-30"}`} />
-                  جميع الفروع
-                </button>
-                {(branches?.length ?? 0) > 0 && (
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {branches!.map((b) => {
-                      const selected = !formData.allBranches && formData.branchIds.includes(b.id);
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          onClick={() => toggleBranch(b.id)}
-                          className={`min-h-12 px-3 rounded-xl border-2 text-[16px] font-bold transition-all flex items-center gap-2 text-start touch-manipulation active:scale-[0.98] ${
-                            selected
-                              ? "border-primary bg-primary/15 text-primary"
-                              : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
-                          }`}
-                        >
-                          <span
-                            className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                              selected
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border"
-                            }`}
-                          >
-                            {selected && <Check className="w-4 h-4" />}
-                          </span>
-                          <span className="truncate">{b.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              {(branches?.length ?? 0) === 0 ? (
-                <p className="text-[16px] font-bold text-muted-foreground text-center py-1">
-                  لا توجد فروع مسجّلة — سيتم اعتبار الصنف لكل الفروع
-                </p>
+              {locked ? (
+                <LockedBranchField />
               ) : (
-                <p className="text-[13px] font-semibold text-muted-foreground">
-                  اختر «جميع الفروع» أو حدد فرعاً واحداً أو أكثر
-                </p>
+                <>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      onClick={selectAllBranches}
+                      className={`sm:w-auto min-h-12 px-5 rounded-xl border-2 text-[16px] font-bold transition-all flex items-center justify-center gap-2 touch-manipulation active:scale-[0.98] ${
+                        formData.allBranches
+                          ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                          : "border-border bg-background/60 text-foreground hover:border-primary/40"
+                      }`}
+                    >
+                      <Check
+                        className={`w-5 h-5 ${formData.allBranches ? "opacity-100" : "opacity-30"}`}
+                      />
+                      جميع الفروع
+                    </button>
+                    {scopedFormBranches.length > 0 && (
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {scopedFormBranches.map((b) => {
+                          const selected =
+                            !formData.allBranches && formData.branchIds.includes(b.id);
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => toggleBranch(b.id)}
+                              className={`min-h-12 px-3 rounded-xl border-2 text-[16px] font-bold transition-all flex items-center gap-2 text-start touch-manipulation active:scale-[0.98] ${
+                                selected
+                                  ? "border-primary bg-primary/15 text-primary"
+                                  : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                              }`}
+                            >
+                              <span
+                                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                                  selected
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-border"
+                                }`}
+                              >
+                                {selected && <Check className="w-4 h-4" />}
+                              </span>
+                              <span className="truncate">{b.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {scopedFormBranches.length === 0 ? (
+                    <p className="text-[16px] font-bold text-muted-foreground text-center py-1">
+                      لا توجد فروع مسجّلة — سيتم اعتبار الصنف لكل الفروع
+                    </p>
+                  ) : (
+                    <p className="text-[13px] font-semibold text-muted-foreground">
+                      اختر «جميع الفروع» أو حدد فرعاً واحداً أو أكثر
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
