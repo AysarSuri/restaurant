@@ -2140,13 +2140,13 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
   const rows = data.lines
     .map(
       (l, i) => `<tr>
-        <td class="cell">${i + 1}</td>
-        <td class="cell" dir="ltr">${esc(l.code)}</td>
-        <td class="cell">${esc(l.nameAr)}</td>
-        <td class="cell">${esc(l.categoryNameAr || "—")}</td>
-        <td class="cell qty">${esc(l.remainingLabel)}</td>
-        <td class="cell amount" dir="ltr">${esc(data.formatMoney(l.costPerMinor))}</td>
-        <td class="cell amount total" dir="ltr">${esc(data.formatMoney(l.totalCost))}</td>
+        <td>${i + 1}</td>
+        <td class="amount" dir="ltr">${esc(l.code)}</td>
+        <td>${esc(l.nameAr)}</td>
+        <td>${esc(l.categoryNameAr || "—")}</td>
+        <td class="qty">${esc(l.remainingLabel)}</td>
+        <td class="amount" dir="ltr">${esc(data.formatMoney(l.costPerMinor))}</td>
+        <td class="amount total" dir="ltr">${esc(data.formatMoney(l.totalCost))}</td>
       </tr>`
     )
     .join("");
@@ -2155,72 +2155,156 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <title>تقرير الكمية المتبقية — المخزن</title>
+  <title>تقرير الكمية المتبقية — A4 أفقي</title>
   <style>
-    @page { size: A4 landscape; margin: 0.5cm; }
+    /*
+      Page box = A4 landscape. Margins 0.6cm are ONLY on @page.
+      Content must be width:100% of the printable area — never 297mm —
+      otherwise the left/right edge is cut and a blank 2nd page appears.
+    */
+    @page {
+      size: A4 landscape;
+      size: 297mm 210mm;
+      margin: 0.6cm;
+    }
     @media print {
-      @page { size: A4 landscape; margin: 0.5cm; }
+      @page {
+        size: A4 landscape;
+        size: 297mm 210mm;
+        margin: 0.6cm;
+      }
+      html, body {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }
+      .sheet {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        page-break-after: avoid;
+        page-break-inside: avoid;
+      }
+      .header, .totals, .footer, table.stock, table.stock tr {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
     }
     * { box-sizing: border-box; }
     html, body {
-      margin: 0; padding: 0; background: #fff; color: #0b1220;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background: #fff;
+      color: #0b1220;
       font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
-      font-size: 14px; font-weight: 700;
-      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      font-size: 14px;
+      font-weight: 700;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    body { width: 297mm; min-height: 210mm; margin: 0 auto; }
-    .sheet { width: 100%; max-width: 297mm; padding: 0; }
+    .sheet {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
     .header {
-      display: flex; align-items: center; justify-content: space-between; gap: 18px;
-      padding: 12px 14px; margin-bottom: 14px; border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      margin: 0 0 8px;
+      border-radius: 10px;
       background: linear-gradient(115deg, #0f172a 0%, #1e293b 55%, #0ea5e9 160%);
       color: #fff;
     }
-    .brand-block { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand-block { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
     .logo {
-      width: 56px; height: 56px; object-fit: contain; border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.25); background: #fff;
+      width: 44px; height: 44px; object-fit: contain; border-radius: 9px;
+      border: 1px solid rgba(255,255,255,0.25); background: #fff; flex-shrink: 0;
     }
-    .brand-name { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.25; }
-    .brand-meta { margin: 3px 0 0; font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.82); }
-    .doc-side { text-align: left; }
+    .brand-name { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.2; }
+    .brand-meta { margin: 2px 0 0; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.82); }
+    .doc-side { text-align: left; flex-shrink: 0; max-width: 42%; }
     .doc-badge {
-      display: inline-block; margin: 0 0 6px; padding: 3px 10px; border-radius: 999px;
-      background: rgba(255,255,255,0.16); font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
+      display: inline-block; margin: 0 0 3px; padding: 2px 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.16); font-size: 10px; font-weight: 800;
     }
-    .doc-title { margin: 0; font-size: 17px; font-weight: 800; }
-    .doc-sub { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8); }
-    table { width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; border-radius: 12px; }
-    th, td {
-      border: 1px solid #dbe3ee; padding: 9px 10px; text-align: center;
-      font-size: 14px; font-weight: 700; vertical-align: middle;
+    .doc-title { margin: 0; font-size: 15px; font-weight: 800; }
+    .doc-sub { margin: 2px 0 0; font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.8); }
+    table.stock {
+      width: 100%;
+      max-width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      direction: rtl;
+      margin: 0;
     }
-    th {
-      background: linear-gradient(90deg, #0f172a, #334155); color: #fff;
-      font-weight: 800; white-space: nowrap; border-color: #1e293b;
+    table.stock thead { display: table-header-group; }
+    table.stock tbody { display: table-row-group; }
+    table.stock th, table.stock td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 4px;
+      text-align: center;
+      vertical-align: middle;
+      font-size: 14px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    th:first-child { border-top-right-radius: 12px; }
-    th:last-child { border-top-left-radius: 12px; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    tr:last-child td:first-child { border-bottom-right-radius: 12px; }
-    tr:last-child td:last-child { border-bottom-left-radius: 12px; }
-    .cell { white-space: nowrap; }
+    table.stock th {
+      background: #0f172a;
+      color: #fff;
+      font-weight: 800;
+      border-color: #0f172a;
+      line-height: 1.25;
+    }
+    table.stock col.c-idx { width: 5%; }
+    table.stock col.c-code { width: 12%; }
+    table.stock col.c-name { width: 18%; }
+    table.stock col.c-cat { width: 14%; }
+    table.stock col.c-qty { width: 16%; }
+    table.stock col.c-cost { width: 17%; }
+    table.stock col.c-total { width: 18%; }
+    table.stock tbody tr:nth-child(even) td { background: #f8fafc; }
     .qty { color: #047857; font-weight: 800; }
     .amount { font-variant-numeric: tabular-nums; }
     .total { color: #0369a1; font-weight: 800; }
     .totals {
-      margin-top: 14px; display: flex; justify-content: center; gap: 22px; flex-wrap: wrap;
-      padding: 12px 16px; border-radius: 14px; border: 1.5px solid #cbd5e1;
-      background: linear-gradient(180deg, #f8fafc, #eef2ff); font-size: 14px; font-weight: 800;
+      margin: 8px 0 0;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1.5px solid #cbd5e1;
+      background: #f1f5f9;
+      font-size: 14px;
+      font-weight: 800;
       text-align: center;
     }
     .totals span {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid #e2e8f0;
+      padding: 4px 10px; border-radius: 999px; background: #fff; border: 1px solid #e2e8f0;
     }
     .footer {
-      margin-top: 14px; display: flex; justify-content: space-between; gap: 12px;
-      font-size: 12px; font-weight: 700; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 9px;
+      margin: 8px 0 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
     }
   </style>
 </head>
@@ -2235,12 +2319,21 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
         </div>
       </div>
       <div class="doc-side">
-        <span class="doc-badge">A4 Landscape · 14 Bold</span>
+        <span class="doc-badge">A4 Landscape · هوامش 0.6 سم · 14 Bold</span>
         <p class="doc-title">تقرير الكمية المتبقية حسب الصنف</p>
         <p class="doc-sub">${esc(data.printedAtLabel)}</p>
       </div>
     </div>
-    <table>
+    <table class="stock">
+      <colgroup>
+        <col class="c-idx" />
+        <col class="c-code" />
+        <col class="c-name" />
+        <col class="c-cat" />
+        <col class="c-qty" />
+        <col class="c-cost" />
+        <col class="c-total" />
+      </colgroup>
       <thead>
         <tr>
           <th>#</th>
@@ -2248,11 +2341,11 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
           <th>اسم الصنف</th>
           <th>الفئة</th>
           <th>الكمية المتبقية</th>
-          <th>سعر التكلفة (وحدة صغرى)</th>
+          <th>سعر التكلفة<br/>(وحدة صغرى)</th>
           <th>المجموع</th>
         </tr>
       </thead>
-      <tbody>${rows || `<tr><td colspan="7" class="cell">لا توجد أصناف</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td colspan="7">لا توجد أصناف</td></tr>`}</tbody>
     </table>
     <div class="totals">
       <span>عدد الأصناف: ${data.lines.length}</span>
@@ -2260,7 +2353,7 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
     </div>
     <div class="footer">
       <span>تم إنشاء التقرير تلقائياً من نظام إدارة المطاعم</span>
-      <span>تصميم احترافي حديث · خط 14 Bold</span>
+      <span>A4 أفقي · هوامش 0.6 سم · خط 14 Bold</span>
     </div>
   </div>
 </body>
