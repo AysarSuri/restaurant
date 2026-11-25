@@ -36,6 +36,7 @@ import { useAuth } from "@/App";
 import { useLocation } from "wouter";
 import { useI18n } from "@/i18n";
 import { bumpOrdersLive } from "@/lib/orders-live";
+import { bumpStockLive } from "@/lib/stock-live";
 import { Dialog } from "@/components/ui-elements";
 
 interface CartItem extends MenuItem {
@@ -232,7 +233,9 @@ export default function TableOrder() {
 
   const afterSaveSuccess = (order: any) => {
     void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    void queryClient.invalidateQueries({ queryKey: ["/api/inventory/stock"] });
     bumpOrdersLive();
+    bumpStockLive();
     setOrderNum(order.orderNumber || editingOrderNumber || "");
     setCartOpen(false);
     setStep("success");

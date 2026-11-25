@@ -44,6 +44,7 @@ import {
   printSupplierStatementA4,
 } from "@/lib/print-receipt";
 import { SupplierReturnsPanel } from "@/components/supplier-returns-panel";
+import { bumpStockLive } from "@/lib/stock-live";
 import { useI18n } from "@/i18n";
 import {
   ArrowLeftRight,
@@ -568,11 +569,14 @@ export default function SuppliersPage() {
     void queryClient.invalidateQueries({ queryKey: getGetSupplierReturnsQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetSupplierMovementsQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetSupplierDebtsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: ["/api/inventory/stock"] });
+    void queryClient.invalidateQueries({ queryKey: ["/api/menu/items"] });
     if (statementSupplierId > 0) {
       void queryClient.invalidateQueries({
         queryKey: getGetSupplierStatementQueryKey(statementSupplierId),
       });
     }
+    bumpStockLive();
   };
 
   const openNewSupplier = () => {
@@ -1546,7 +1550,7 @@ export default function SuppliersPage() {
                   <div>الصنف *</div>
                   <div>كمية *</div>
                   <div>الوحدة *</div>
-                  <div>سعر *</div>
+                  <div>سعر الوحدة *</div>
                   <div>مبلغ</div>
                   <div />
                 </div>
@@ -1655,7 +1659,7 @@ export default function SuppliersPage() {
 
                         <div className="min-w-0 order-4">
                           <span className="md:hidden text-[13px] font-bold mb-0.5 block text-muted-foreground">
-                            سعر *
+                            {line.unitKind === "major" ? "سعر الوحدة الكبرى *" : "سعر العدد *"}
                           </span>
                           <Input
                             type="number"
@@ -1664,6 +1668,11 @@ export default function SuppliersPage() {
                             className="h-12 w-full text-[15px] font-bold"
                             dir="ltr"
                             value={line.price}
+                            title={
+                              line.unitKind === "major"
+                                ? "سعر الوحدة الكبرى — تكلفة العدد تُحدَّث تلقائياً في المخزن"
+                                : "سعر العدد"
+                            }
                             onChange={(e) =>
                               setPurchaseLines((rows) =>
                                 rows.map((r, i) =>

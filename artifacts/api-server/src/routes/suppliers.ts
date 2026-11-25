@@ -12,8 +12,41 @@ import {
   cardsTable,
 } from "@workspace/db/schema";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import {
+  applyWeightedCostAdd,
+  applyWeightedCostRemove,
+  applyWeightedCostPurchaseReplace,
+  applyWeightedCostReturnReplace,
+  mapDbItemsToCostLines,
+} from "../lib/item-cost-avg";
 
 const router: IRouter = Router();
+
+async function loadPurchaseCostLines(purchaseId: number) {
+  const rows = await db
+    .select({
+      menuItemId: supplierPurchaseItemsTable.menuItemId,
+      qty: supplierPurchaseItemsTable.qty,
+      unitKind: supplierPurchaseItemsTable.unitKind,
+      price: supplierPurchaseItemsTable.price,
+    })
+    .from(supplierPurchaseItemsTable)
+    .where(eq(supplierPurchaseItemsTable.purchaseId, purchaseId));
+  return mapDbItemsToCostLines(rows);
+}
+
+async function loadReturnCostLines(returnId: number) {
+  const rows = await db
+    .select({
+      menuItemId: supplierReturnItemsTable.menuItemId,
+      qty: supplierReturnItemsTable.qty,
+      unitKind: supplierReturnItemsTable.unitKind,
+      price: supplierReturnItemsTable.price,
+    })
+    .from(supplierReturnItemsTable)
+    .where(eq(supplierReturnItemsTable.returnId, returnId));
+  return mapDbItemsToCostLines(rows);
+}
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -627,6 +660,16 @@ router.post("/purchases", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
 
+  /** 1) Weighted avg cost BEFORE insert (Q = remaining without this purchase) */
+  await applyWeightedCostAdd(
+    parsed.items.map((it) => ({
+      menuItemId: it.menuItemId,
+      qty: it.qty,
+      unitKind: it.unitKind,
+      price: it.price,
+    }))
+  );
+
   // Always assign next sequential invoice number (starts at 1)
   let invoiceNo = await nextPurchaseInvoiceNo();
   while (await isDuplicatePurchaseInvoiceNo(invoiceNo)) {
@@ -677,6 +720,16 @@ router.put("/purchases/:id", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
 
+  const oldLines = await loadPurchaseCostLines(id);
+  const newLines = parsed.items.map((it) => ({
+    menuItemId: it.menuItemId,
+    qty: it.qty,
+    unitKind: it.unitKind,
+    price: it.price,
+  }));
+  /** Reverse old purchase effect then apply new lines (formulas 4 then 1) */
+  await applyWeightedCostPurchaseReplace(oldLines, newLines);
+
   const [purchase] = await db
     .update(supplierPurchasesTable)
     .set({
@@ -713,6 +766,11 @@ router.put("/purchases/:id", async (req, res) => {
 router.delete("/purchases/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const oldLines = await loadPurchaseCostLines(id);
+  /** 4) Delete purchase line(s): (Q*C - q*p) / (Q - q) while stock still includes them */
+  await applyWeightedCostRemove(oldLines);
+
   const [row] = await db
     .delete(supplierPurchasesTable)
     .where(eq(supplierPurchasesTable.id, id))
@@ -833,6 +891,16 @@ router.post("/returns", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
 
+  /** 3) Return qty: (Q*C - q*p) / (Q - q) before stock decreases */
+  await applyWeightedCostRemove(
+    parsed.items.map((it) => ({
+      menuItemId: it.menuItemId,
+      qty: it.qty,
+      unitKind: it.unitKind,
+      price: it.price,
+    }))
+  );
+
   let invoiceNo = await nextReturnInvoiceNo();
   while (await isDuplicateReturnInvoiceNo(invoiceNo)) {
     invoiceNo = String(Number(invoiceNo) + 1);
@@ -882,6 +950,16 @@ router.put("/returns/:id", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
 
+  const oldLines = await loadReturnCostLines(id);
+  const newLines = parsed.items.map((it) => ({
+    menuItemId: it.menuItemId,
+    qty: it.qty,
+    unitKind: it.unitKind,
+    price: it.price,
+  }));
+  /** Undo old return then apply new return (formulas 2 then 3) */
+  await applyWeightedCostReturnReplace(oldLines, newLines);
+
   const [ret] = await db
     .update(supplierReturnsTable)
     .set({
@@ -916,6 +994,11 @@ router.put("/returns/:id", async (req, res) => {
 router.delete("/returns/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const oldLines = await loadReturnCostLines(id);
+  /** 2) Delete return line(s): (Q*C + q*p) / (Q + q) while return still in stock calc */
+  await applyWeightedCostAdd(oldLines);
+
   const [row] = await db
     .delete(supplierReturnsTable)
     .where(eq(supplierReturnsTable.id, id))

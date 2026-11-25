@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   useGetWarehouseStock,
   useGetWarehouseItemDetail,
   useGetSettings,
+  getGetWarehouseStockQueryKey,
   type WarehouseStockRow,
   type WarehouseMovementLine,
 } from "@workspace/api-client-react";
@@ -13,6 +14,8 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import { printWarehouseStockReportA4 } from "@/lib/print-receipt";
+import { subscribeStockLive } from "@/lib/stock-live";
+import { subscribeOrdersLive } from "@/lib/orders-live";
 import {
   ArrowLeft,
   Boxes,
@@ -134,8 +137,11 @@ export default function Inventory() {
 
   const { data: stock, isLoading, refetch, isFetching } = useGetWarehouseStock({
     query: {
-      queryKey: ["/api/inventory/stock", selectedBranchId],
-      staleTime: 8_000,
+      queryKey: [...getGetWarehouseStockQueryKey(), selectedBranchId],
+      staleTime: 400,
+      refetchInterval: 1_500,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
     },
   });
 
@@ -152,6 +158,10 @@ export default function Inventory() {
   } = useGetWarehouseItemDetail(menuItemId, detailParams, {
     query: {
       enabled: page === "detail" && menuItemId != null && menuItemId > 0,
+      staleTime: 400,
+      refetchInterval: page === "detail" ? 1_500 : false,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
     },
   });
 
@@ -159,8 +169,33 @@ export default function Inventory() {
     query: { staleTime: 60_000 },
   });
 
+  /** Live: POS / purchases / returns → refresh both pages ASAP */
+  useEffect(() => {
+    const refresh = () => {
+      void refetch();
+      if (page === "detail" && menuItemId != null && menuItemId > 0) {
+        void refetchDetail();
+      }
+    };
+    const unsubStock = subscribeStockLive(refresh);
+    const unsubOrders = subscribeOrdersLive(refresh);
+    return () => {
+      unsubStock();
+      unsubOrders();
+    };
+  }, [refetch, refetchDetail, page, menuItemId]);
+
+  useEffect(() => {
+    if (!selectedItemId) return;
+    const stillCosted = (stock ?? []).some(
+      (r) => String(r.menuItemId) === selectedItemId && Number(r.costPerMinor) > 0
+    );
+    if (!stillCosted) setSelectedItemId("");
+  }, [stock, selectedItemId]);
+
   const filtered = useMemo(() => {
-    const list = stock ?? [];
+    /** Only costed items («تكلفة») — never «بدون تكلفة» */
+    const list = (stock ?? []).filter((r) => Number(r.costPerMinor) > 0);
     const q = search.trim().toLowerCase();
     if (!q) return list;
     return list.filter(
@@ -184,12 +219,12 @@ export default function Inventory() {
 
   const itemOptions = useMemo(
     () =>
-      (stock ?? []).map((r) => ({
+      filtered.map((r) => ({
         value: String(r.menuItemId),
         label: `${r.code} — ${r.nameAr}`,
         subtitle: r.remainingLabel,
       })),
-    [stock]
+    [filtered]
   );
 
   const printReport = () => {

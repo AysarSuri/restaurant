@@ -9,7 +9,7 @@ import {
   ordersTable,
   orderItemsTable,
 } from "@workspace/db/schema";
-import { and, eq, gte, lte, ne, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, gt, isNotNull, lte, ne, type SQL } from "drizzle-orm";
 import type { BranchScope } from "./branch-scope";
 import { branchEq } from "./branch-scope";
 
@@ -130,10 +130,12 @@ export async function listWarehouseStock(scope: BranchScope): Promise<WarehouseS
     })
     .from(menuItemsTable)
     .leftJoin(menuCategoriesTable, eq(menuCategoriesTable.id, menuItemsTable.categoryId))
-    .where(sql`${menuItemsTable.cost} is not null and ${menuItemsTable.cost}::numeric > 0`)
+    /** Only «تكلفة» items — never «بدون تكلفة» */
+    .where(and(isNotNull(menuItemsTable.cost), gt(menuItemsTable.cost, "0")))
     .orderBy(menuItemsTable.nameAr);
 
-  if (items.length === 0) return [];
+  const costed = items.filter((it) => Number(it.cost) > 0);
+  if (costed.length === 0) return [];
 
   const purchaseConds: SQL[] = [];
   const returnConds: SQL[] = [];
@@ -200,7 +202,7 @@ export async function listWarehouseStock(scope: BranchScope): Promise<WarehouseS
     sold.set(line.menuItemId, (sold.get(line.menuItemId) ?? 0) + num(line.quantity));
   }
 
-  return items.map((it) => {
+  return costed.map((it) => {
     const sub = Math.max(1, it.subunitQty ?? 1);
     const minorUnit = (it.minorUnit ?? "").trim() || "عدد";
     const cost = num(it.cost);
@@ -261,6 +263,8 @@ export async function getWarehouseItemMovements(
     .limit(1);
 
   if (!item) return null;
+  /** Detail page only for costed items */
+  if (!(Number(item.cost) > 0)) return null;
 
   const sub = Math.max(1, item.subunitQty ?? 1);
   const minorUnit = (item.minorUnit ?? "").trim() || "عدد";

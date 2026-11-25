@@ -46,6 +46,7 @@ import { getOrCreateDeviceKey } from "@/lib/device-id";
 import { printThermalReceipt } from "@/lib/print-receipt";
 import { toast } from "@/hooks/use-toast";
 import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
+import { bumpStockLive } from "@/lib/stock-live";
 
 const isTableOrderSource = (order: { source?: string | null } | null | undefined) =>
   String(order?.source ?? "").toLowerCase() === "table_order";
@@ -814,9 +815,11 @@ export default function POS() {
   const invalidateOrdersQueries = () => {
     void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
     void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
+    void queryClient.invalidateQueries({ queryKey: ["/api/inventory/stock"] });
     void refetchTodayOrders();
     void refetchTables();
     bumpOrdersLive();
+    bumpStockLive();
   };
 
   useEffect(() => {

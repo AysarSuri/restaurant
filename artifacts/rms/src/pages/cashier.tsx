@@ -44,6 +44,7 @@ import { printKitchenTicketThermal } from "@/lib/print-receipt";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { toast } from "@/hooks/use-toast";
 import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
+import { bumpStockLive } from "@/lib/stock-live";
 
 type SeatKind = "table" | "room" | "person" | "takeaway" | "delivery";
 type CashierPage = "unpaid" | "paid";
@@ -822,11 +823,9 @@ export default function Cashier() {
           setIsDiscountPadOpen(false);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
           void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
-          try {
-            localStorage.setItem("rms-orders-bump", String(Date.now()));
-          } catch {
-            /* ignore */
-          }
+          void queryClient.invalidateQueries({ queryKey: ["/api/inventory/stock"] });
+          bumpOrdersLive();
+          bumpStockLive();
           void refreshAll(false);
           setPage("paid");
         },
@@ -859,11 +858,9 @@ export default function Cashier() {
           setPaymentDialog(null);
           void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
           void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
-          try {
-            localStorage.setItem("rms-orders-bump", String(Date.now()));
-          } catch {
-            /* ignore */
-          }
+          void queryClient.invalidateQueries({ queryKey: ["/api/inventory/stock"] });
+          bumpOrdersLive();
+          bumpStockLive();
           void refreshAll(false);
           setPage("unpaid");
           toast({ title: t("cashier.moveToUnpaidOk") });
