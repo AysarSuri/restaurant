@@ -43,6 +43,12 @@ import { DiningTableIcon } from "@/components/dining-table-icon";
 import { RoomIcon } from "@/components/room-icon";
 import { TABLE_STATUS_META } from "@/lib/table-status";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
+import {
+  DEVICE_PRINTERS_QUERY_KEY,
+  DEVICE_PRINTERS_REQUEST,
+} from "@/lib/device-printer-query";
+import { useDeviceVirtualKeyboard } from "@/hooks/use-device-virtual-keyboard";
+import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
 import { printThermalReceipt } from "@/lib/print-receipt";
 import { toast } from "@/hooks/use-toast";
 import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
@@ -200,7 +206,10 @@ export default function POS() {
   const { data: appSettings } = useGetSettings();
   const { data: paymentCards } = useGetCards();
   const { data: branches } = useGetBranches();
-  const { data: devicePrinters } = useGetDevicePrinters();
+  const { data: devicePrinters } = useGetDevicePrinters({
+    query: { queryKey: DEVICE_PRINTERS_QUERY_KEY },
+    request: DEVICE_PRINTERS_REQUEST,
+  });
   /** Drivers for the active POS branch (plus unassigned). */
   const driversBranchParam =
     selectedBranchId === "all" ? ("" as const) : selectedBranchId;
@@ -240,10 +249,10 @@ export default function POS() {
     );
   }, [devicePrinters, deviceKey]);
 
-  /** Settings → Numbers: amount/phone numeric pads */
-  const amountPadEnabled = Boolean(devicePrinter?.virtualNumericKeypad);
+  /** Settings → Numbers: amount/phone numeric pads (local prefs win for this device) */
+  const amountPadEnabled = useDeviceVirtualNumericKeypad(true);
   /** Settings → Keyboard: multilingual text pads (search, address, person) */
-  const textKeyboardEnabled = Boolean(devicePrinter?.virtualKeyboard);
+  const textKeyboardEnabled = useDeviceVirtualKeyboard(true);
 
   const salesSendToKitchen =
     devicePrinter != null

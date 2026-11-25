@@ -14,6 +14,7 @@ import {
   type DevicePrinter,
 } from "@workspace/api-client-react";
 import { DEVICE_PRINTERS_QUERY_KEY } from "@/lib/device-printer-query";
+import { resolvePadEnabled, setLocalPadPrefs } from "@/lib/device-pad-prefs";
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { useBranch } from "@/lib/branch-context";
@@ -239,11 +240,22 @@ export default function SettingsPage() {
   }, []);
 
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
+  const [padPrefsTick, setPadPrefsTick] = useState(0);
   const [deviceName, setDeviceName] = useState(() => suggestDeviceName());
   const [printerName, setPrinterName] = useState("");
   const [deviceBranchId, setDeviceBranchId] = useState<number | "">("");
   const [deleteTarget, setDeleteTarget] = useState<DevicePrinter | null>(null);
   const [deliveryFeeInput, setDeliveryFeeInput] = useState("0");
+
+  useEffect(() => {
+    const bump = () => setPadPrefsTick((n) => n + 1);
+    window.addEventListener("rms-pad-prefs-changed", bump);
+    window.addEventListener("storage", bump);
+    return () => {
+      window.removeEventListener("rms-pad-prefs-changed", bump);
+      window.removeEventListener("storage", bump);
+    };
+  }, []);
 
   useEffect(() => {
     if (!settings) return;
@@ -496,11 +508,21 @@ export default function SettingsPage() {
     const nextNumericKeypad =
       "virtualNumericKeypad" in patch
         ? Boolean(patch.virtualNumericKeypad)
-        : Boolean(row.virtualNumericKeypad);
+        : resolvePadEnabled(
+            "virtualNumericKeypad",
+            row.virtualNumericKeypad,
+            deviceKey,
+            row.deviceKey
+          );
     const nextVirtualKeyboard =
       "virtualKeyboard" in patch
         ? Boolean(patch.virtualKeyboard)
-        : Boolean(row.virtualKeyboard);
+        : resolvePadEnabled(
+            "virtualKeyboard",
+            row.virtualKeyboard,
+            deviceKey,
+            row.deviceKey
+          );
 
     const optimistic: DevicePrinter = {
       ...row,
@@ -513,6 +535,16 @@ export default function SettingsPage() {
       virtualNumericKeypad: nextNumericKeypad,
       virtualKeyboard: nextVirtualKeyboard,
     };
+
+    // Persist on this browser immediately so toggles never flip back after refetch
+    if (row.deviceKey === deviceKey) {
+      if ("virtualKeyboard" in patch) {
+        setLocalPadPrefs({ virtualKeyboard: nextVirtualKeyboard });
+      }
+      if ("virtualNumericKeypad" in patch) {
+        setLocalPadPrefs({ virtualNumericKeypad: nextNumericKeypad });
+      }
+    }
 
     // Optimistic UI so choices stick immediately
     syncPrinters((list) => list.map((p) => (p.id === row.id ? optimistic : p)));
@@ -584,6 +616,16 @@ export default function SettingsPage() {
         onError: (err: any) => {
           // Revert optimistic change
           syncPrinters((list) => list.map((p) => (p.id === row.id ? row : p)));
+          if (row.deviceKey === deviceKey) {
+            if ("virtualKeyboard" in patch) {
+              setLocalPadPrefs({ virtualKeyboard: Boolean(row.virtualKeyboard) });
+            }
+            if ("virtualNumericKeypad" in patch) {
+              setLocalPadPrefs({
+                virtualNumericKeypad: Boolean(row.virtualNumericKeypad),
+              });
+            }
+          }
           notifySaveErr(
             err?.data?.message ||
               err?.message ||
@@ -1691,7 +1733,13 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {(printers ?? []).map((row) => {
-                const keyboardOn = Boolean(row.virtualKeyboard);
+                void padPrefsTick;
+                const keyboardOn = resolvePadEnabled(
+                  "virtualKeyboard",
+                  row.virtualKeyboard,
+                  deviceKey,
+                  row.deviceKey
+                );
                 const isMine = row.deviceKey === deviceKey;
                 return (
                   <Card
@@ -1800,7 +1848,13 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-3">
               {(printers ?? []).map((row) => {
-                const keypadOn = Boolean(row.virtualNumericKeypad);
+                void padPrefsTick;
+                const keypadOn = resolvePadEnabled(
+                  "virtualNumericKeypad",
+                  row.virtualNumericKeypad,
+                  deviceKey,
+                  row.deviceKey
+                );
                 const isMine = row.deviceKey === deviceKey;
                 return (
                   <Card

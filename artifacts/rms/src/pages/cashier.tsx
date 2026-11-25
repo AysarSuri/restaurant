@@ -40,6 +40,11 @@ import { RoomIcon } from "@/components/room-icon";
 import { DeliveryBikeIcon } from "@/components/delivery-bike-icon";
 import { useCurrency } from "@/hooks/use-currency";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
+import {
+  DEVICE_PRINTERS_QUERY_KEY,
+  DEVICE_PRINTERS_REQUEST,
+} from "@/lib/device-printer-query";
+import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
 import { printKitchenTicketThermal } from "@/lib/print-receipt";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { toast } from "@/hooks/use-toast";
@@ -622,7 +627,10 @@ export default function Cashier() {
     decimalPlaces,
   } = useCurrency();
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
-  const { data: devicePrinters } = useGetDevicePrinters();
+  const { data: devicePrinters } = useGetDevicePrinters({
+    query: { queryKey: DEVICE_PRINTERS_QUERY_KEY },
+    request: DEVICE_PRINTERS_REQUEST,
+  });
   const devicePrinter = useMemo(() => {
     const list = devicePrinters ?? [];
     return (
@@ -632,8 +640,8 @@ export default function Cashier() {
     );
   }, [devicePrinters, deviceKey]);
 
-  /** Settings → Numbers: on-screen amount pad */
-  const amountPadEnabled = Boolean(devicePrinter?.virtualNumericKeypad);
+  /** Settings → Numbers: on-screen amount pad (local prefs win for this device) */
+  const amountPadEnabled = useDeviceVirtualNumericKeypad(true);
 
   const branchPaymentCards = useMemo(() => {
     const list = (paymentCards ?? []).filter((c) => c.isActive !== false);
