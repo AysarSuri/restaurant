@@ -514,6 +514,7 @@ export default function CashMovements() {
                   min={0}
                   step="0.01"
                   inputMode="decimal"
+                  amountPad
                   className="min-h-14 h-14 ps-11 text-[17px] font-bold touch-manipulation"
                   dir="ltr"
                   value={form.amount}

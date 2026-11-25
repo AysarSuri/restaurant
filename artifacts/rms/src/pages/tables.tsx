@@ -868,6 +868,7 @@ export default function Tables() {
             <Input
               type="number"
               min={1}
+              noAmountPad
               value={addForm.capacity}
               onChange={(e) => setAddForm((f) => ({ ...f, capacity: e.target.value }))}
               dir="ltr"
@@ -934,6 +935,7 @@ export default function Tables() {
             <Input
               type="number"
               min={1}
+              noAmountPad
               value={editForm.capacity}
               onChange={(e) => setEditForm((f) => ({ ...f, capacity: e.target.value }))}
               dir="ltr"

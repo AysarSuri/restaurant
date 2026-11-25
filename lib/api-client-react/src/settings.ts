@@ -84,6 +84,8 @@ export interface DevicePrinter {
   salesSendToKitchen?: boolean;
   /** All app forms in browser fullscreen on this device */
   formsFullscreen?: boolean;
+  /** On-screen numeric keypad for amount/price fields on this device */
+  virtualNumericKeypad?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -101,6 +103,7 @@ export interface UpsertDevicePrinterBody {
   salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   salesSendToKitchen?: boolean;
   formsFullscreen?: boolean;
+  virtualNumericKeypad?: boolean;
 }
 
 export interface UpdateDevicePrinterBody {
@@ -115,6 +118,7 @@ export interface UpdateDevicePrinterBody {
   salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   salesSendToKitchen?: boolean;
   formsFullscreen?: boolean;
+  virtualNumericKeypad?: boolean;
 }
 
 export const getGetSettingsUrl = () => `/api/settings`;

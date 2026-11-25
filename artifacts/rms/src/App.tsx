@@ -33,6 +33,7 @@ import { applyBrandPrimary } from "@/lib/brand-theme";
 import { LocaleProvider } from "@/i18n";
 import { EnterAsTab } from "@/components/enter-as-tab";
 import { useDeviceFormsFullscreen } from "@/hooks/use-device-forms-fullscreen";
+import { VirtualNumericKeypadHost } from "@/components/virtual-numeric-keypad-host";
 import { useGetSettings } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
@@ -102,6 +103,11 @@ function FormsFullscreenSync() {
   const { user } = useAuth();
   useDeviceFormsFullscreen(Boolean(user));
   return null;
+}
+
+function VirtualNumericKeypadSync() {
+  const { user } = useAuth();
+  return <VirtualNumericKeypadHost active={Boolean(user)} />;
 }
 
 // ─── Auth ─────────────────────────────────────────────────
@@ -281,6 +287,7 @@ function App() {
                 <EnterAsTab />
                 <BrandThemeSync />
                 <FormsFullscreenSync />
+                <VirtualNumericKeypadSync />
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                   <Router />
                 </WouterRouter>

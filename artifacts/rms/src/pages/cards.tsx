@@ -374,6 +374,7 @@ export default function CardsPage() {
               type="number"
               min={0}
               step="1000"
+              amountPad
               dir="ltr"
               value={form.openingBalance}
               onChange={(e) => setForm((p) => ({ ...p, openingBalance: e.target.value }))}

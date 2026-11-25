@@ -63,8 +63,15 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
 }
 
 // --- INPUT ---
-export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
-  ({ className, ...props }, ref) => {
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  /** Force on-screen amount keypad when device setting is on */
+  amountPad?: boolean;
+  /** Never open amount keypad (capacity, seats, etc.) */
+  noAmountPad?: boolean;
+};
+
+export const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, amountPad, noAmountPad, ...props }, ref) => {
     return (
       <input
         className={cn(
@@ -72,6 +79,8 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
           className
         )}
         ref={ref}
+        data-amount-pad={amountPad ? "true" : undefined}
+        data-no-amount-pad={noAmountPad ? "true" : undefined}
         {...props}
       />
     );

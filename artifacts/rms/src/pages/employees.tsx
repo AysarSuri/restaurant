@@ -522,6 +522,7 @@ export default function Employees() {
               </label>
               <Input
                 type="number"
+                amountPad
                 placeholder="0"
                 value={form.salary}
                 onChange={(e) => set("salary", e.target.value)}

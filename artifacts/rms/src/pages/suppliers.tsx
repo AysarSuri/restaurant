@@ -1649,6 +1649,7 @@ export default function SuppliersPage() {
                             type="number"
                             min={0}
                             step="0.001"
+                            noAmountPad
                             className="h-12 w-full text-[15px] font-bold"
                             dir="ltr"
                             value={line.qty}
@@ -1699,6 +1700,7 @@ export default function SuppliersPage() {
                             type="number"
                             min={0}
                             step="0.01"
+                            amountPad
                             className="h-12 w-full text-[15px] font-bold"
                             dir="ltr"
                             value={line.price}
@@ -1858,6 +1860,7 @@ export default function SuppliersPage() {
                       type="number"
                       min={0}
                       step="0.01"
+                      amountPad
                       className="h-12 text-[15px] font-bold"
                       dir="ltr"
                       value={purchaseForm.paidAmount}
@@ -1877,6 +1880,7 @@ export default function SuppliersPage() {
                       type="number"
                       min={0}
                       step="0.01"
+                      amountPad
                       className="h-12 text-[15px] font-bold"
                       dir="ltr"
                       value={purchaseForm.discountAmount}
@@ -2756,6 +2760,7 @@ export default function SuppliersPage() {
             <Input
               type="number"
               step="0.01"
+              amountPad
               dir="ltr"
               placeholder="فارغ = صفر"
               className="h-12 text-[15px] font-bold placeholder:text-muted-foreground/35 placeholder:font-normal"
@@ -2914,6 +2919,7 @@ export default function SuppliersPage() {
                 type="number"
                 min={0}
                 step="0.01"
+                amountPad
                 className="h-12 text-[16px] font-bold"
                 dir="ltr"
                 value={movementForm.amount}

@@ -46,6 +46,10 @@ export async function ensureSalesDeviceColumns() {
           ADD COLUMN IF NOT EXISTS forms_fullscreen boolean NOT NULL DEFAULT false
         `);
         await db.execute(sql`
+          ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS virtual_numeric_keypad boolean NOT NULL DEFAULT false
+        `);
+        await db.execute(sql`
           ALTER TABLE orders
           ADD COLUMN IF NOT EXISTS collect_at_cashier boolean NOT NULL DEFAULT false
         `);

@@ -928,6 +928,7 @@ export default function Menu() {
                     </label>
                     <Input
                       type="number"
+                      amountPad
                       value={formData.price}
                       onChange={(e) =>
                         setFormData((f) => ({
@@ -1044,6 +1045,7 @@ export default function Menu() {
                             type="number"
                             min={1}
                             step={1}
+                            noAmountPad
                             value={isSameUnit ? 1 : formData.subunitQty}
                             disabled={isSameUnit}
                             readOnly={isSameUnit}
@@ -1083,6 +1085,7 @@ export default function Menu() {
                         <Input
                           type="number"
                           min={0}
+                          amountPad
                           value={formData.cost}
                           onChange={(e) =>
                             setFormData((f) => ({
