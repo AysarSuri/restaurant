@@ -290,7 +290,7 @@ export default function Inventory() {
           <button
             type="button"
             onClick={() => setPage("remaining")}
-            className="group text-start rounded-3xl border-2 border-border/70 bg-card/90 min-h-[10rem] p-6 hover:border-primary/50 hover:bg-primary/5 hover:shadow-lg active:scale-[0.98] transition-all"
+            className="group flex flex-col items-center text-center rounded-3xl border-2 border-border/70 bg-card/90 min-h-[10rem] p-6 hover:border-primary/50 hover:bg-primary/5 hover:shadow-lg active:scale-[0.98] transition-all"
           >
             <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 mb-4 group-hover:scale-105 transition-transform">
               <Boxes className="w-7 h-7" strokeWidth={2.25} />
@@ -303,7 +303,7 @@ export default function Inventory() {
           <button
             type="button"
             onClick={() => setPage("detail")}
-            className="group text-start rounded-3xl border-2 border-border/70 bg-card/90 min-h-[10rem] p-6 hover:border-cyan-500/50 hover:bg-cyan-500/5 hover:shadow-lg active:scale-[0.98] transition-all"
+            className="group flex flex-col items-center text-center rounded-3xl border-2 border-border/70 bg-card/90 min-h-[10rem] p-6 hover:border-cyan-500/50 hover:bg-cyan-500/5 hover:shadow-lg active:scale-[0.98] transition-all"
           >
             <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-md shadow-cyan-500/25 mb-4 group-hover:scale-105 transition-transform">
               <ClipboardList className="w-7 h-7" strokeWidth={2.25} />
