@@ -25,7 +25,16 @@ type I18nContextValue = {
   usesYmdSlash: boolean;
 };
 
-const I18nContext = createContext<I18nContextValue | null>(null);
+/**
+ * Keep a single Context instance across Vite HMR when `messages.ts` reloads.
+ * Without this, LocaleProvider can keep the old context while consumers get a new one.
+ */
+const I18N_CONTEXT_KEY = "__rms_i18n_context__";
+const I18nContext: React.Context<I18nContextValue | null> =
+  ((globalThis as unknown as Record<string, React.Context<I18nContextValue | null> | undefined>)[
+    I18N_CONTEXT_KEY
+  ] ??=
+    createContext<I18nContextValue | null>(null));
 
 function readStoredLocale(): Locale {
   try {

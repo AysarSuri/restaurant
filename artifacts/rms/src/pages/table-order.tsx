@@ -6,6 +6,11 @@ import {
   useGetMenuCategories,
   useGetTables,
   useCreateOrder,
+  useUpdateOrder,
+  useGetOrders,
+  getGetOrdersQueryKey,
+  type Order,
+  type MenuItem,
 } from "@workspace/api-client-react";
 import {
   ShoppingCart,
@@ -23,12 +28,15 @@ import {
   UserRound,
   Star,
   Send,
+  PencilLine,
+  Clock,
+  Save,
 } from "lucide-react";
-import type { MenuItem } from "@workspace/api-client-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
 import { useI18n } from "@/i18n";
 import { bumpOrdersLive } from "@/lib/orders-live";
+import { Dialog } from "@/components/ui-elements";
 
 interface CartItem extends MenuItem {
   cartQuantity: number;
@@ -39,6 +47,25 @@ type SeatKind = "table" | "room" | "person";
 
 const formatIQD = (v: number) => new Intl.NumberFormat("en-IQ").format(Math.round(v));
 
+function isOrderUnpaid(order: Pick<Order, "paymentMethod" | "status">) {
+  if (order.paymentMethod) return false;
+  return order.status !== "paid" && order.status !== "cancelled";
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function formatListDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+function todayDateKey(d = new Date()) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 export default function TableOrder() {
   const { t } = useI18n();
   const { user, logout } = useAuth();
@@ -48,7 +75,8 @@ export default function TableOrder() {
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
   const { data: tables } = useGetTables();
-  const { mutate: createOrder, isPending } = useCreateOrder();
+  const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
+  const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder();
 
   const [step, setStep] = useState<"menu" | "success">("menu");
   const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>("favorites");
@@ -56,11 +84,46 @@ export default function TableOrder() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderNum, setOrderNum] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
+  const [editPickerOpen, setEditPickerOpen] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const [editingOrderNumber, setEditingOrderNumber] = useState<string | null>(null);
 
   const tableId = user?.tableId;
   const tableNumber = user?.tableNumber;
   const tableInfo = tables?.find((tbl) => tbl.id === tableId);
   const seatKind: SeatKind = ((tableInfo?.type as SeatKind) || "table") as SeatKind;
+  const branchId = tableInfo?.branchId ?? null;
+  const isSaving = isCreating || isUpdating;
+
+  const todayOrdersParams = useMemo(
+    () => ({ date: todayDateKey(), limit: 200 }),
+    // refresh date key once per mount day is enough; picker refetch on open
+    []
+  );
+
+  const { data: todayOrders, refetch: refetchTodayOrders, isFetching: isFetchingOrders } =
+    useGetOrders(todayOrdersParams, {
+      query: {
+        queryKey: getGetOrdersQueryKey(todayOrdersParams),
+        staleTime: 2_000,
+        refetchInterval: editPickerOpen ? 3_000 : false,
+      },
+    });
+
+  const unpaidSeatOrders = useMemo(() => {
+    if (tableId == null) return [];
+    const list = todayOrders ?? [];
+    return list
+      .filter((o) => {
+        if (o.type !== "dine_in") return false;
+        if (o.tableId !== tableId) return false;
+        if (branchId != null && o.branchId != null && o.branchId !== branchId) return false;
+        return isOrderUnpaid(o);
+      })
+      .sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+  }, [todayOrders, tableId, branchId]);
 
   const seatTitle = useMemo(() => {
     const n = tableNumber ?? tableInfo?.number ?? "—";
@@ -114,26 +177,99 @@ export default function TableOrder() {
   const totalItems = cart.reduce((s, i) => s + i.cartQuantity, 0);
   const subtotal = cart.reduce((s, i) => s + i.price * i.cartQuantity, 0);
 
+  const loadOrderIntoCart = (order: Order) => {
+    const menuById = new Map((items ?? []).map((m) => [m.id, m]));
+    const nextCart: CartItem[] = [];
+    for (const line of order.items ?? []) {
+      const menuItemId = Number(line.menuItemId);
+      if (!Number.isFinite(menuItemId)) continue;
+      const qty = Math.abs(Number(line.quantity) || 0);
+      if (qty === 0) continue;
+      const unitPrice = Number(line.unitPrice);
+      const fromOrder = line.menuItem;
+      const fromMenu = menuById.get(menuItemId);
+      const base: MenuItem =
+        fromOrder ??
+        fromMenu ??
+        ({
+          id: menuItemId,
+          categoryId: fromMenu?.categoryId ?? 0,
+          name: fromMenu?.name ?? `#${menuItemId}`,
+          nameAr: fromMenu?.nameAr ?? `صنف #${menuItemId}`,
+          price: Number.isFinite(unitPrice) ? unitPrice : Number(fromMenu?.price) || 0,
+          isAvailable: true,
+        } as MenuItem);
+
+      const existing = nextCart.find((c) => c.id === menuItemId);
+      if (existing) {
+        existing.cartQuantity += qty;
+        continue;
+      }
+      nextCart.push({
+        ...base,
+        price: Number.isFinite(unitPrice) ? unitPrice : Number(base.price) || 0,
+        cartQuantity: qty,
+      });
+    }
+    setCart(nextCart);
+    setEditingOrderId(order.id);
+    setEditingOrderNumber(order.orderNumber || null);
+    setOrderNum(order.orderNumber || "");
+    setStep("menu");
+    setEditPickerOpen(false);
+    setCartOpen(true);
+  };
+
+  const clearEditing = () => {
+    setEditingOrderId(null);
+    setEditingOrderNumber(null);
+  };
+
+  const openEditPicker = () => {
+    setEditPickerOpen(true);
+    void refetchTodayOrders();
+  };
+
+  const afterSaveSuccess = (order: any) => {
+    void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    bumpOrdersLive();
+    setOrderNum(order.orderNumber || editingOrderNumber || "");
+    setCartOpen(false);
+    setStep("success");
+  };
+
   const handleSubmitOrder = () => {
     if (!tableId || cart.length === 0) return;
+    const lineItems = cart.map((i) => ({
+      menuItemId: i.id,
+      quantity: i.cartQuantity,
+    }));
+
+    if (editingOrderId != null) {
+      updateOrder(
+        {
+          id: editingOrderId,
+          data: { items: lineItems },
+        },
+        {
+          onSuccess: (order: any) => afterSaveSuccess(order),
+        }
+      );
+      return;
+    }
+
     createOrder(
       {
         data: {
           type: "dine_in",
           tableId,
-          branchId: tableInfo?.branchId ?? undefined,
+          branchId: branchId ?? undefined,
           source: "table_order",
-          items: cart.map((i) => ({ menuItemId: i.id, quantity: i.cartQuantity })),
+          items: lineItems,
         } as any,
       },
       {
-        onSuccess: (order: any) => {
-          void queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-          bumpOrdersLive();
-          setOrderNum(order.orderNumber || "");
-          setCartOpen(false);
-          setStep("success");
-        },
+        onSuccess: (order: any) => afterSaveSuccess(order),
       }
     );
   };
@@ -142,6 +278,7 @@ export default function TableOrder() {
     setCart([]);
     setSearch("");
     setActiveCategory("favorites");
+    clearEditing();
     setStep("menu");
   };
 
@@ -168,6 +305,29 @@ export default function TableOrder() {
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {editingOrderId != null && (
+        <div className="mx-3 mt-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold text-amber-900 dark:text-amber-100 truncate">
+              {t("tableOrder.editingInvoice")}
+            </p>
+            <p className="text-xs font-display font-bold tabular-nums text-amber-800 dark:text-amber-200 truncate">
+              {editingOrderNumber ?? `#${editingOrderId}`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              clearEditing();
+              setCart([]);
+            }}
+            className="text-[11px] font-bold text-muted-foreground hover:text-destructive shrink-0"
+          >
+            {t("tableOrder.cancelEdit")}
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         <AnimatePresence>
@@ -239,11 +399,16 @@ export default function TableOrder() {
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={handleSubmitOrder}
-          disabled={cart.length === 0 || isPending || !tableId}
+          disabled={cart.length === 0 || isSaving || !tableId}
           className="w-full h-14 rounded-2xl bg-gradient-to-l from-primary via-primary to-amber-500 hover:brightness-105 text-primary-foreground font-extrabold text-base transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-primary/25"
         >
-          {isPending ? (
+          {isSaving ? (
             <RefreshCw className="w-5 h-5 animate-spin" />
+          ) : editingOrderId != null ? (
+            <>
+              <Save className="w-5 h-5" />
+              {t("tableOrder.saveEdit")}
+            </>
           ) : (
             <>
               <Send className="w-5 h-5" />
@@ -254,7 +419,10 @@ export default function TableOrder() {
         {cart.length > 0 && (
           <button
             type="button"
-            onClick={() => setCart([])}
+            onClick={() => {
+              setCart([]);
+              clearEditing();
+            }}
             className="w-full text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors py-1"
           >
             {t("tableOrder.clear")}
@@ -287,13 +455,35 @@ export default function TableOrder() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {subtotal > 0 && (
+          {editingOrderNumber ? (
+            <div className="hidden sm:flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/25">
+              <span className="text-[11px] font-extrabold text-amber-800 dark:text-amber-200 font-display tabular-nums truncate max-w-[9rem]">
+                {editingOrderNumber}
+              </span>
+            </div>
+          ) : subtotal > 0 ? (
             <div className="hidden sm:flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20">
               <span className="text-sm font-extrabold text-primary font-display tabular-nums">
                 {formatIQD(subtotal)} {t("common.iqd")}
               </span>
             </div>
-          )}
+          ) : null}
+
+          <button
+            type="button"
+            onClick={openEditPicker}
+            disabled={!tableId}
+            className="relative inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100 text-sm font-extrabold hover:bg-amber-500/20 transition-colors disabled:opacity-40"
+          >
+            <PencilLine className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("tableOrder.edit")}</span>
+            {unpaidSeatOrders.length > 0 ? (
+              <span className="min-w-5 h-5 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
+                {unpaidSeatOrders.length}
+              </span>
+            ) : null}
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -451,7 +641,9 @@ export default function TableOrder() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
           >
-            <h2 className="text-2xl md:text-3xl font-extrabold">{t("tableOrder.sent")}</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold">
+              {editingOrderId != null ? t("tableOrder.updated") : t("tableOrder.sent")}
+            </h2>
             {orderNum ? (
               <p className="text-muted-foreground mt-1.5 font-display font-bold tabular-nums">
                 {t("tableOrder.orderNumber", { n: orderNum })}
@@ -549,6 +741,80 @@ export default function TableOrder() {
           </>
         )}
       </AnimatePresence>
+
+      <Dialog
+        isOpen={editPickerOpen}
+        onClose={() => setEditPickerOpen(false)}
+        title={t("tableOrder.editTitle")}
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3">
+            <p className="text-sm font-bold text-foreground">{seatTitle}</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              {t("tableOrder.editHint")}
+            </p>
+          </div>
+
+          {isFetchingOrders && unpaidSeatOrders.length === 0 ? (
+            <div className="py-14 text-center text-muted-foreground">
+              <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin opacity-60" />
+              <p className="text-sm font-medium">{t("common.loading")}</p>
+            </div>
+          ) : unpaidSeatOrders.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
+              <PencilLine className="w-10 h-10 mx-auto mb-3 opacity-45" />
+              <p className="font-bold">{t("tableOrder.noUnpaidInvoices")}</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border/60 overflow-hidden max-h-[min(55vh,480px)] overflow-y-auto divide-y divide-border/50">
+              {unpaidSeatOrders.map((order, idx) => {
+                const payable = (() => {
+                  const sub = Number(order.subtotal) || 0;
+                  const disc = Math.max(0, Number(order.discount) || 0);
+                  if (sub > 0 || disc > 0) return Math.max(0, sub - disc);
+                  return Math.max(0, Number(order.total) || 0);
+                })();
+                const selected = editingOrderId === order.id;
+                return (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() => loadOrderIntoCart(order)}
+                    className={`w-full text-start px-4 py-3.5 flex items-center gap-3 transition-colors ${
+                      selected ? "bg-amber-500/10" : "hover:bg-amber-500/5"
+                    }`}
+                  >
+                    <span className="text-[11px] font-black tabular-nums text-muted-foreground w-6 shrink-0">
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-extrabold text-sm font-display tabular-nums truncate">
+                          {order.orderNumber}
+                        </p>
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-800 dark:text-amber-200">
+                          {t("cashier.colUnpaid")}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 font-bold tabular-nums" dir="ltr">
+                          <Clock className="w-3.5 h-3.5 text-primary/80" />
+                          {formatListDateTime(order.createdAt)}
+                        </span>
+                        <span className="truncate">{seatTitle}</span>
+                      </div>
+                    </div>
+                    <span className="font-display font-extrabold text-sm tabular-nums shrink-0">
+                      {formatIQD(payable)} {t("common.iqd")}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Dialog>
     </div>
   );
 }

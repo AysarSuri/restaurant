@@ -1,7 +1,6 @@
 import React from "react";
 import { Languages } from "lucide-react";
-import { LOCALES, type Locale } from "@/i18n/types";
-import { useI18n } from "@/i18n/context";
+import { LOCALES, useI18n, type Locale } from "@/i18n";
 
 type Props = {
   compact?: boolean;
