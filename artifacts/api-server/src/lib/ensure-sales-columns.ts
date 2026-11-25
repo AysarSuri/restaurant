@@ -42,12 +42,20 @@ export async function ensureSalesDeviceColumns() {
           ADD COLUMN IF NOT EXISTS sales_send_to_kitchen boolean NOT NULL DEFAULT true
         `);
         await db.execute(sql`
+          ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS forms_fullscreen boolean NOT NULL DEFAULT false
+        `);
+        await db.execute(sql`
           ALTER TABLE orders
           ADD COLUMN IF NOT EXISTS collect_at_cashier boolean NOT NULL DEFAULT false
         `);
         await db.execute(sql`
           ALTER TABLE orders
           ADD COLUMN IF NOT EXISTS pos_edited_at timestamp
+        `);
+        await db.execute(sql`
+          ALTER TABLE orders
+          ADD COLUMN IF NOT EXISTS source text
         `);
         await db.execute(sql`
           ALTER TABLE app_settings

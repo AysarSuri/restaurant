@@ -272,6 +272,8 @@ export interface Order {
   collectAtCashier?: boolean;
   /** Last POS edit timestamp — cashier shows “edited” badge */
   posEditedAt?: string | null;
+  /** `table_order` = guest tablet; otherwise POS / legacy */
+  source?: string | null;
   notes?: string;
   deliveryAddress?: string;
   deliveryPhone?: string;
@@ -304,6 +306,8 @@ export interface CreateOrderBody {
   deliveryFee?: number;
   driverId?: number | null;
   notes?: string;
+  /** Set `table_order` from the guest tablet form */
+  source?: string | null;
   deliveryAddress?: string;
   deliveryPhone?: string;
 }

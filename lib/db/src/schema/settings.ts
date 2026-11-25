@@ -75,6 +75,8 @@ export const devicePrintersTable = pgTable("device_printers", {
   salesPaymentAtDelivery: text("sales_payment_at_delivery").default("pos").notNull(),
   /** Independent kitchen routing for this device */
   salesSendToKitchen: boolean("sales_send_to_kitchen").default(true).notNull(),
+  /** When true, all app forms run in browser fullscreen on this device */
+  formsFullscreen: boolean("forms_fullscreen").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

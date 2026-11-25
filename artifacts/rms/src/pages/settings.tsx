@@ -59,10 +59,12 @@ import {
   Bike,
   UtensilsCrossed,
   Package,
+  MoreHorizontal,
+  Maximize2,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 
-type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency";
+type TabId = "restaurant" | "sales" | "printers" | "themes" | "currency" | "other";
 type DeviceSalesPaymentAt = "pos" | "cashier";
 type SalesPaymentOrderType = "dine_in" | "takeaway" | "delivery";
 
@@ -128,6 +130,7 @@ const TABS: { id: TabId; labelKey: string; icon: typeof Store; hintKey: string }
   { id: "printers", labelKey: "settings.printers", icon: Printer, hintKey: "settings.printer80" },
   { id: "currency", labelKey: "settings.currency", icon: Coins, hintKey: "settings.currencyHint" },
   { id: "themes", labelKey: "settings.themes", icon: Palette, hintKey: "settings.themeHint" },
+  { id: "other", labelKey: "settings.other", icon: MoreHorizontal, hintKey: "settings.otherHint" },
 ];
 
 const DECIMAL_OPTIONS = [0, 1, 2, 3, 4];
@@ -456,7 +459,9 @@ export default function SettingsPage() {
       salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
       salesPaymentAtDelivery?: DeviceSalesPaymentAt;
       salesSendToKitchen?: boolean;
-    }
+      formsFullscreen?: boolean;
+    },
+    opts?: { successKey?: string; errorKey?: string }
   ) => {
     clearSaveFlash();
     setSaveMsg("");
@@ -469,6 +474,8 @@ export default function SettingsPage() {
       patch.salesPaymentAtDelivery ?? paymentAtForType(row, "delivery");
     const nextKitchen =
       patch.salesSendToKitchen ?? row.salesSendToKitchen !== false;
+    const nextFullscreen =
+      patch.formsFullscreen ?? row.formsFullscreen === true;
 
     const optimistic: DevicePrinter = {
       ...row,
@@ -477,6 +484,7 @@ export default function SettingsPage() {
       salesPaymentAtTakeaway: nextTakeaway,
       salesPaymentAtDelivery: nextDelivery,
       salesSendToKitchen: nextKitchen,
+      formsFullscreen: nextFullscreen,
     };
 
     // Optimistic UI so choices stick immediately
@@ -495,6 +503,7 @@ export default function SettingsPage() {
           salesPaymentAtTakeaway: nextTakeaway,
           salesPaymentAtDelivery: nextDelivery,
           salesSendToKitchen: nextKitchen,
+          formsFullscreen: nextFullscreen,
         },
       },
       {
@@ -533,16 +542,24 @@ export default function SettingsPage() {
                       updated.salesSendToKitchen != null
                         ? updated.salesSendToKitchen !== false
                         : nextKitchen,
+                    formsFullscreen:
+                      updated.formsFullscreen != null
+                        ? updated.formsFullscreen === true
+                        : nextFullscreen,
                   }
                 : p
             )
           );
-          notifySaveOk(t("settings.savedSales"));
+          notifySaveOk(t(opts?.successKey ?? "settings.savedSales"));
         },
         onError: (err: any) => {
           // Revert optimistic change
           syncPrinters((list) => list.map((p) => (p.id === row.id ? row : p)));
-          notifySaveErr(err?.data?.message || err?.message || t("settings.saveSalesFailed"));
+          notifySaveErr(
+            err?.data?.message ||
+              err?.message ||
+              t(opts?.errorKey ?? "settings.saveSalesFailed")
+          );
         },
       }
     );
@@ -663,7 +680,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-start">
+      <nav className="w-full lg:w-72 xl:w-80 flex-shrink-0 flex flex-col gap-2">
         {TABS.map((tabItem) => {
           const active = tab === tabItem.id;
           const Icon = tabItem.icon;
@@ -677,31 +695,42 @@ export default function SettingsPage() {
                 setSaveMsg("");
                 setSaveErr("");
               }}
-              className={`text-start rounded-2xl border-2 px-4 py-3.5 transition-all ${
+              className={`w-full text-start rounded-2xl border-2 px-4 py-3.5 transition-all touch-manipulation ${
                 active
-                  ? "border-primary bg-primary/10 shadow-lg shadow-primary/10"
-                  : "border-border/70 bg-card/60 hover:border-primary/35"
+                  ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/25"
+                  : "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50"
               }`}
             >
               <div className="flex items-center gap-3">
                 <span
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    active ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    active
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-primary/15 text-primary"
                   }`}
                 >
                   <Icon className="w-5 h-5" />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="font-extrabold text-sm sm:text-base truncate">{t(tabItem.labelKey)}</p>
-                  <p className="text-[11px] text-muted-foreground">{t(tabItem.hintKey)}</p>
+                  <p
+                    className={`text-[11px] ${
+                      active ? "text-primary-foreground/80" : "text-primary/70"
+                    }`}
+                  >
+                    {t(tabItem.hintKey)}
+                  </p>
                 </div>
-                {active && <Check className="w-4 h-4 text-primary ms-auto flex-shrink-0" />}
+                {active ? (
+                  <Check className="w-4 h-4 text-primary-foreground flex-shrink-0" />
+                ) : null}
               </div>
             </button>
           );
         })}
-      </div>
+      </nav>
 
+      <div className="min-w-0 flex-1 w-full space-y-5">
       {(saveMsg || saveErr) && (
         <div
           ref={saveBannerRef}
@@ -1604,6 +1633,115 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {tab === "other" && (
+        <div className="space-y-5 max-w-4xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+                <Maximize2 className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">{t("settings.formsFullscreenTitle")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("settings.formsFullscreenHint")}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {(printers ?? []).length === 0 ? (
+            <Card className="p-8 border border-dashed border-border/60 text-center space-y-2">
+              <Monitor className="w-10 h-10 mx-auto text-muted-foreground" />
+              <p className="font-extrabold">{t("settings.noDevices")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.registerAbove")}</p>
+              <Button variant="outline" className="mt-2" onClick={() => setTab("printers")}>
+                {t("settings.printers")}
+              </Button>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {(printers ?? []).map((row) => {
+                const fullscreenOn = row.formsFullscreen === true;
+                const isMine = row.deviceKey === deviceKey;
+                return (
+                  <Card
+                    key={row.id}
+                    className={`p-4 sm:p-5 border space-y-3 ${
+                      isMine ? "border-primary/40 bg-primary/5" : "border-border/60"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-extrabold text-base truncate">{row.deviceName}</p>
+                          {isMine ? (
+                            <Badge variant="default">{t("settings.thisDevice")}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground font-semibold mt-1">
+                          {row.branchName?.trim() || t("branch.noneSpecified")}
+                          {row.printerName?.trim() ? ` · ${row.printerName}` : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={updatingPrinter}
+                      onClick={() =>
+                        handleSaveDeviceSales(
+                          row,
+                          { formsFullscreen: !fullscreenOn },
+                          {
+                            successKey: "settings.savedFormsFullscreen",
+                            errorKey: "settings.saveFormsFullscreenFailed",
+                          }
+                        )
+                      }
+                      className={`w-full text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
+                        fullscreenOn
+                          ? "border-indigo-500/60 bg-indigo-500/10"
+                          : "border-border/70 bg-card/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            fullscreenOn ? "bg-indigo-500 text-white" : "bg-secondary"
+                          }`}
+                        >
+                          <Maximize2 className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold">{t("settings.formsFullscreen")}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {fullscreenOn
+                              ? t("settings.formsFullscreenOn")
+                              : t("settings.formsFullscreenOff")}
+                          </p>
+                        </div>
+                        <span
+                          className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors ${
+                            fullscreenOn ? "bg-indigo-500" : "bg-secondary"
+                          }`}
+                          aria-hidden
+                        >
+                          <span
+                            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                              fullscreenOn ? "start-1" : "end-1"
+                            }`}
+                          />
+                        </span>
+                      </div>
+                    </button>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === "themes" && (
         <div className="space-y-5 max-w-3xl">
           <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
@@ -1706,6 +1844,8 @@ export default function SettingsPage() {
           </Card>
         </div>
       )}
+      </div>
+      </div>
 
       <Dialog
         isOpen={Boolean(deleteTarget)}

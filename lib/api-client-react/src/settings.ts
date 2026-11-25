@@ -82,6 +82,8 @@ export interface DevicePrinter {
   salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   /** Independent kitchen send for this device */
   salesSendToKitchen?: boolean;
+  /** All app forms in browser fullscreen on this device */
+  formsFullscreen?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -98,6 +100,7 @@ export interface UpsertDevicePrinterBody {
   salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
   salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   salesSendToKitchen?: boolean;
+  formsFullscreen?: boolean;
 }
 
 export interface UpdateDevicePrinterBody {
@@ -111,6 +114,7 @@ export interface UpdateDevicePrinterBody {
   salesPaymentAtTakeaway?: DeviceSalesPaymentAt;
   salesPaymentAtDelivery?: DeviceSalesPaymentAt;
   salesSendToKitchen?: boolean;
+  formsFullscreen?: boolean;
 }
 
 export const getGetSettingsUrl = () => `/api/settings`;

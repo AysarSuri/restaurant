@@ -25,7 +25,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, CreditCard,
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
-  DoorOpen, UserRound, Lock, Wallet, Printer, PencilLine, Undo2,
+  DoorOpen, UserRound, Lock, Wallet, Printer, PencilLine, RotateCcw,
   ShoppingBag, Truck, Bike,
 } from "lucide-react";
 import type { MenuItem, Order } from "@workspace/api-client-react";
@@ -42,6 +42,10 @@ import { TABLE_STATUS_META } from "@/lib/table-status";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
 import { printThermalReceipt } from "@/lib/print-receipt";
 import { toast } from "@/hooks/use-toast";
+import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
+
+const isTableOrderSource = (order: { source?: string | null } | null | undefined) =>
+  String(order?.source ?? "").toLowerCase() === "table_order";
 
 type SeatEntityType = "table" | "room" | "person";
 
@@ -273,8 +277,8 @@ export default function POS() {
   const [checkoutCardId, setCheckoutCardId] = useState<number | null>(null);
   const [isReceivedPadOpen, setIsReceivedPadOpen] = useState(false);
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
-  /** "all" = normal seat pick; "openOrders" = today's stored lists */
-  const [seatPickerMode, setSeatPickerMode] = useState<"all" | "openOrders">("all");
+  /** "all" = seat pick; "openOrders" = all today lists; "tableOrders" = dine-in only */
+  const [seatPickerMode, setSeatPickerMode] = useState<"all" | "openOrders" | "tableOrders">("all");
   const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
   const [personSearch, setPersonSearch] = useState("");
   const [isPersonSearchPadOpen, setIsPersonSearchPadOpen] = useState(false);
@@ -289,6 +293,11 @@ export default function POS() {
   const [now, setNow] = useState(() => new Date());
   /** When set, POS is editing an existing stored order (load items + save via update). */
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  /** Invoice loaded from guest tablet «طلب طاولة» */
+  const [editingFromTableOrder, setEditingFromTableOrder] = useState(false);
+  /** Pulse «قوائم طلب طاولة» when a new tablet order arrives */
+  const [tableOrderPulse, setTableOrderPulse] = useState(false);
+  const knownTableOrderIdsRef = useRef<Set<number> | null>(null);
   /** When on, tapping menu items adds return (negative) lines in red. */
   const [isReturnMode, setIsReturnMode] = useState(false);
 
@@ -309,8 +318,8 @@ export default function POS() {
     {
       query: {
         queryKey: getGetOrdersQueryKey(todayOrdersParams),
-        refetchInterval: 8_000,
-        staleTime: 4_000,
+        refetchInterval: 1_500,
+        staleTime: 800,
       },
     }
   );
@@ -328,6 +337,20 @@ export default function POS() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
   }, [todayOrders, selectedBranchId]);
+
+  /** Guest-tablet table orders only (source = table_order) */
+  const todayTableOrders = useMemo(
+    () => todayBranchOrders.filter((o) => isTableOrderSource(o)),
+    [todayBranchOrders]
+  );
+
+  const unpaidTableOrderCount = useMemo(
+    () => todayTableOrders.filter((o) => !isPosOrderReceived(o)).length,
+    [todayTableOrders]
+  );
+
+  const pickerListOrders =
+    seatPickerMode === "tableOrders" ? todayTableOrders : todayBranchOrders;
 
   const openSeatStages = useMemo(() => {
     const map = new Map<number, { cashier: boolean; kitchen: boolean }>();
@@ -393,6 +416,34 @@ export default function POS() {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    return subscribeOrdersLive(() => {
+      void refetchTodayOrders();
+    });
+  }, [refetchTodayOrders]);
+
+  useEffect(() => {
+    const ids = new Set(todayTableOrders.map((o) => o.id));
+    const prev = knownTableOrderIdsRef.current;
+    if (prev == null) {
+      knownTableOrderIdsRef.current = ids;
+      return;
+    }
+    const newcomers = todayTableOrders.filter((o) => !prev.has(o.id));
+    knownTableOrderIdsRef.current = ids;
+    if (newcomers.length === 0) return;
+    setTableOrderPulse(true);
+    const latest = newcomers[0];
+    toast({
+      title: t("pos.newTableOrderToast"),
+      description: latest.orderNumber
+        ? t("pos.newTableOrderToastDesc", { n: latest.orderNumber })
+        : undefined,
+    });
+    const timer = window.setTimeout(() => setTableOrderPulse(false), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [todayTableOrders, t]);
+
   const startNewOrderSession = () => {
     setInvoiceNumber(nextInvoiceNumber());
   };
@@ -429,14 +480,14 @@ export default function POS() {
     setSeatPickerMode("all");
   };
 
-  const openSeatPicker = (mode: "all" | "openOrders" = "all") => {
+  const openSeatPicker = (mode: "all" | "openOrders" | "tableOrders" = "all") => {
     setSeatPickerMode(mode);
     setPersonSearch("");
     setIsPersonSearchPadOpen(false);
     if (mode === "all") {
       setPickerEntityType("table");
     }
-    if (mode === "openOrders") {
+    if (mode === "openOrders" || mode === "tableOrders") {
       void refetchTodayOrders();
     }
     setIsTablePickerOpen(true);
@@ -485,6 +536,7 @@ export default function POS() {
     setDiscount(Number(order.discount) || 0);
     setInvoiceNumber(order.orderNumber || invoiceNumber);
     setEditingOrderId(order.id);
+    setEditingFromTableOrder(isTableOrderSource(order));
     setOrderSuccess(false);
     setCartOpen(true);
   };
@@ -709,6 +761,7 @@ export default function POS() {
     setIsCheckoutOpen(false);
     setOrderSuccess(false);
     setEditingOrderId(null);
+    setEditingFromTableOrder(false);
     setIsReturnMode(false);
     startNewOrderSession();
   };
@@ -718,11 +771,7 @@ export default function POS() {
     void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
     void refetchTodayOrders();
     void refetchTables();
-    try {
-      localStorage.setItem("rms-orders-bump", String(Date.now()));
-    } catch {
-      /* ignore quota / private mode */
-    }
+    bumpOrdersLive();
   };
 
   useEffect(() => {
@@ -914,6 +963,11 @@ export default function POS() {
       >
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-primary via-amber-400 to-transparent" />
         <div className={`border-b border-border/50 space-y-3 sm:space-y-4 ${isPortraitPos && !compact ? "p-5 xl:p-6" : "p-4 sm:p-5"}`}>
+          {editingFromTableOrder ? (
+            <div className="rounded-xl border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-[11px] sm:text-xs font-extrabold text-sky-900 dark:text-sky-100 leading-snug">
+              {t("pos.fromTableOrderBanner")}
+            </div>
+          ) : null}
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 overflow-hidden">
               <h2 className="font-extrabold flex items-center gap-1 shrink-0 text-sm sm:text-[0.95rem] leading-none">
@@ -932,6 +986,14 @@ export default function POS() {
               {editingOrderId != null && (
                 <span className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-800 dark:text-amber-200 shrink-0">
                   {t("pos.editLists")}
+                </span>
+              )}
+              {editingFromTableOrder && (
+                <span
+                  className="inline-flex items-center rounded-full border border-sky-500/40 bg-sky-500/15 px-2.5 py-0.5 text-[10px] sm:text-[11px] font-extrabold text-sky-800 dark:text-sky-200 shrink-0 max-w-[14rem] truncate"
+                  title={t("pos.fromTableOrderBanner")}
+                >
+                  {t("pos.fromTableOrderBadge")}
                 </span>
               )}
               {isReturnMode && (
@@ -1332,10 +1394,10 @@ export default function POS() {
           <Button
             variant={activeCategory === "favorites" ? "default" : "secondary"}
             onClick={() => setActiveCategory("favorites")}
-            className={`rounded-full px-3 sm:px-5 flex-shrink-0 touch-target gap-1.5 ${
+            className={`rounded-full px-3 sm:px-5 flex-shrink-0 touch-target gap-1.5 shadow-none hover:translate-y-0 ${
               activeCategory === "favorites"
-                ? "bg-amber-500 hover:bg-amber-500/90 text-white border-amber-500"
-                : "text-amber-700 dark:text-amber-400 border border-amber-500/30"
+                ? "bg-amber-500 hover:bg-amber-500/90 text-white border border-amber-500 from-amber-500 to-amber-500"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/15"
             }`}
           >
             <Star className="w-4 h-4 text-black fill-black" />
@@ -1344,27 +1406,38 @@ export default function POS() {
           <Button
             variant={activeCategory === null ? "default" : "secondary"}
             onClick={() => setActiveCategory(null)}
-            className="rounded-full px-4 sm:px-6 flex-shrink-0 touch-target"
+            className={`rounded-full px-4 sm:px-6 flex-shrink-0 touch-target shadow-none hover:translate-y-0 ${
+              activeCategory === null
+                ? "bg-primary hover:bg-primary/90 text-primary-foreground border border-primary from-primary to-primary shadow-md shadow-primary/25"
+                : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 hover:text-primary"
+            }`}
           >
             {t("common.all")}
           </Button>
-          {categories?.map((cat) => (
-            <Button
-              key={cat.id}
-              variant={activeCategory === cat.id ? "default" : "secondary"}
-              onClick={() => setActiveCategory(cat.id)}
-              className="rounded-full px-3 sm:px-5 whitespace-nowrap flex-shrink-0 touch-target gap-2"
-            >
-              {cat.imageUrl ? (
-                <img
-                  src={cat.imageUrl}
-                  alt=""
-                  className="w-6 h-6 rounded-full object-cover border border-white/20"
-                />
-              ) : null}
-              {cat.nameAr}
-            </Button>
-          ))}
+          {categories?.map((cat) => {
+            const selected = activeCategory === cat.id;
+            return (
+              <Button
+                key={cat.id}
+                variant={selected ? "default" : "secondary"}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`rounded-full px-3 sm:px-5 whitespace-nowrap flex-shrink-0 touch-target gap-2 shadow-none hover:translate-y-0 ${
+                  selected
+                    ? "bg-primary hover:bg-primary/90 text-primary-foreground border border-primary from-primary to-primary shadow-md shadow-primary/25"
+                    : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 hover:text-primary"
+                }`}
+              >
+                {cat.imageUrl ? (
+                  <img
+                    src={cat.imageUrl}
+                    alt=""
+                    className="w-6 h-6 rounded-full object-cover border border-white/20"
+                  />
+                ) : null}
+                {cat.nameAr}
+              </Button>
+            );
+          })}
         </div>
 
         <div className={`flex-1 overflow-y-auto relative z-10 ${isCompactPos ? "pb-28 p-3 sm:p-4" : isPortraitPos ? "p-4 xl:p-5" : "p-3 sm:p-4 md:p-5 xl:p-6"}`}>
@@ -1473,15 +1546,71 @@ export default function POS() {
             <button
               type="button"
               onClick={() => setIsReturnMode((v) => !v)}
-              className={`group inline-flex h-12 sm:h-14 min-w-[7.5rem] flex-1 items-center justify-center gap-2 rounded-2xl border px-4 text-sm sm:text-base font-extrabold transition-all active:scale-[0.98] ${
+              className={`group relative inline-flex h-12 sm:h-14 min-w-[7.5rem] flex-1 items-center justify-center gap-2.5 overflow-hidden rounded-2xl border-2 px-3.5 sm:px-4 text-sm sm:text-base font-extrabold transition-all active:scale-[0.98] ${
                 isReturnMode
-                  ? "border-rose-500 bg-rose-600 text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500"
-                  : "border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 hover:border-rose-500"
+                  ? "border-rose-400/80 bg-gradient-to-l from-rose-600 via-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/35 hover:brightness-110"
+                  : "border-rose-500/40 bg-gradient-to-l from-rose-500/12 via-card to-card text-rose-700 dark:text-rose-300 hover:border-rose-500/70 hover:from-rose-500/18"
               }`}
               title={t("pos.returnModeOn")}
+              aria-pressed={isReturnMode}
             >
-              <Undo2 className={`w-5 h-5 ${isReturnMode ? "text-white" : "text-rose-600 dark:text-rose-300"}`} />
-              {t("pos.return")}
+              <span
+                className={`absolute inset-0 pointer-events-none transition-opacity ${
+                  isReturnMode
+                    ? "bg-[radial-gradient(circle_at_20%_15%,rgba(255,255,255,0.28),transparent_55%)] opacity-100"
+                    : "opacity-0 group-hover:opacity-100 bg-[radial-gradient(circle_at_20%_15%,hsla(var(--primary),0.08),transparent_55%)]"
+                }`}
+              />
+              <span
+                className={`relative inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border transition-colors ${
+                  isReturnMode
+                    ? "border-white/35 bg-white/20 text-white shadow-inner"
+                    : "border-rose-500/35 bg-rose-500/15 text-rose-600 dark:text-rose-300 group-hover:bg-rose-500/25"
+                }`}
+              >
+                <RotateCcw
+                  className={`w-[1.15rem] h-[1.15rem] sm:w-5 sm:h-5 ${
+                    isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""
+                  }`}
+                  strokeWidth={2.35}
+                />
+              </span>
+              <span className="relative truncate tracking-tight">{t("pos.return")}</span>
+              {isReturnMode ? (
+                <span className="relative hidden sm:inline-flex h-2 w-2 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.25)]" />
+              ) : null}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTableOrderPulse(false);
+                openSeatPicker("tableOrders");
+              }}
+              className={`group relative inline-flex h-12 sm:h-14 min-w-0 flex-[1.25] items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 bg-gradient-to-l from-sky-500/15 via-card to-card px-3 sm:px-4 text-sm sm:text-base font-extrabold text-sky-800 dark:text-sky-200 shadow-md shadow-sky-500/10 transition-all hover:border-sky-500/70 hover:from-sky-500/25 active:scale-[0.98] ${
+                tableOrderPulse
+                  ? "border-sky-500/80 ring-2 ring-sky-400/50 animate-pulse"
+                  : unpaidTableOrderCount > 0
+                    ? "border-sky-500/65"
+                    : "border-sky-500/40"
+              }`}
+            >
+              <span className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsla(199,89%,48%,0.18),transparent_55%)] pointer-events-none opacity-80" />
+              <span className="relative inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-500/15 text-sky-700 dark:text-sky-300">
+                <Table2 className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.25} />
+              </span>
+              <span className="relative truncate">{t("pos.tableOrderLists")}</span>
+              {todayTableOrders.length > 0 ? (
+                <span
+                  className={`relative ms-0.5 inline-flex min-w-6 h-6 items-center justify-center rounded-full border px-1.5 text-[11px] font-display font-bold tabular-nums ${
+                    unpaidTableOrderCount > 0 || tableOrderPulse
+                      ? "bg-sky-500 text-white border-sky-400 shadow-md shadow-sky-500/40"
+                      : "bg-sky-500/20 border-sky-500/30 text-sky-800 dark:text-sky-100"
+                  }`}
+                >
+                  {unpaidTableOrderCount > 0 ? unpaidTableOrderCount : todayTableOrders.length}
+                </span>
+              ) : null}
             </button>
 
             <button
@@ -1555,19 +1684,45 @@ export default function POS() {
       <Dialog
         isOpen={isTablePickerOpen}
         onClose={closeSeatPicker}
-        title={seatPickerMode === "openOrders" ? t("pos.editListsTitle") : t("tables.chooseNumber")}
+        title={
+          seatPickerMode === "openOrders"
+            ? t("pos.editListsTitle")
+            : seatPickerMode === "tableOrders"
+              ? t("pos.tableOrderListsTitle")
+              : t("tables.chooseNumber")
+        }
         maxWidth="max-w-5xl"
       >
         <div className="space-y-4">
-          {seatPickerMode === "openOrders" ? (
+          {seatPickerMode === "openOrders" || seatPickerMode === "tableOrders" ? (
             <>
-              <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent px-4 py-3 flex items-start justify-between gap-3">
+              <div
+                className={`rounded-2xl border px-4 py-3 flex items-start justify-between gap-3 ${
+                  seatPickerMode === "tableOrders"
+                    ? "border-sky-500/30 bg-gradient-to-l from-sky-500/12 via-primary/5 to-transparent"
+                    : "border-amber-500/25 bg-gradient-to-l from-amber-500/10 via-primary/5 to-transparent"
+                }`}
+              >
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-foreground">{t("pos.editListsTitle")}</p>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{t("pos.editListsHint")}</p>
+                  <p className="text-sm font-bold text-foreground">
+                    {seatPickerMode === "tableOrders"
+                      ? t("pos.tableOrderListsTitle")
+                      : t("pos.editListsTitle")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    {seatPickerMode === "tableOrders"
+                      ? t("pos.tableOrderListsHint")
+                      : t("pos.editListsHint")}
+                  </p>
                 </div>
-                <span className="flex-shrink-0 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-[11px] font-extrabold text-amber-800 dark:text-amber-200 tabular-nums">
-                  {t("pos.todayListsCount", { n: todayBranchOrders.length })}
+                <span
+                  className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-extrabold tabular-nums ${
+                    seatPickerMode === "tableOrders"
+                      ? "border-sky-500/30 bg-sky-500/15 text-sky-800 dark:text-sky-200"
+                      : "border-amber-500/30 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                  }`}
+                >
+                  {t("pos.todayListsCount", { n: pickerListOrders.length })}
                 </span>
               </div>
 
@@ -1577,15 +1732,23 @@ export default function POS() {
                   <p className="font-bold">{t("pos.pickBranchFirstTitle")}</p>
                   <p className="text-xs mt-1 opacity-80">{t("pos.pickBranchFirstHint")}</p>
                 </div>
-              ) : todayBranchOrders.length === 0 ? (
+              ) : pickerListOrders.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
-                  <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="font-bold">{t("pos.noOpenSeats")}</p>
+                  {seatPickerMode === "tableOrders" ? (
+                    <Table2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  ) : (
+                    <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  )}
+                  <p className="font-bold">
+                    {seatPickerMode === "tableOrders"
+                      ? t("pos.noTableOrderLists")
+                      : t("pos.noOpenSeats")}
+                  </p>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border/60 bg-card/70 overflow-hidden max-h-[min(62vh,560px)] overflow-y-auto overscroll-contain shadow-sm">
                   <div className="divide-y divide-border/50">
-                    {todayBranchOrders.map((order, idx) => {
+                    {pickerListOrders.map((order, idx) => {
                       const seat =
                         branchTables.find((t) => t.id === order.tableId) ??
                         (order.table as RestaurantTable | undefined);
@@ -1666,6 +1829,11 @@ export default function POS() {
                               <span className="inline-flex items-center rounded-full border border-border/60 bg-secondary/70 px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
                                 {typeLabel}
                               </span>
+                              {isTableOrderSource(order) ? (
+                                <span className="inline-flex items-center rounded-full border border-sky-500/35 bg-sky-500/15 px-2 py-0.5 text-[10px] font-extrabold text-sky-800 dark:text-sky-200">
+                                  {t("pos.fromTableOrderBadge")}
+                                </span>
+                              ) : null}
                               <span
                                 className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${
                                   received

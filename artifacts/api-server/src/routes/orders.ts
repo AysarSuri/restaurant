@@ -113,6 +113,7 @@ async function getOrderWithDetails(orderId: number) {
       paymentMethod: ordersTable.paymentMethod,
       collectAtCashier: ordersTable.collectAtCashier,
       posEditedAt: ordersTable.posEditedAt,
+      source: ordersTable.source,
       notes: ordersTable.notes,
       deliveryAddress: ordersTable.deliveryAddress,
       deliveryPhone: ordersTable.deliveryPhone,
@@ -204,6 +205,7 @@ router.get("/", async (req, res) => {
       paymentMethod: ordersTable.paymentMethod,
       collectAtCashier: ordersTable.collectAtCashier,
       posEditedAt: ordersTable.posEditedAt,
+      source: ordersTable.source,
       notes: ordersTable.notes,
       deliveryAddress: ordersTable.deliveryAddress,
       deliveryPhone: ordersTable.deliveryPhone,
@@ -282,9 +284,21 @@ router.post("/", async (req, res) => {
     branchId,
     paymentMethod,
     deviceKey,
+    source,
   } = req.body;
 
-  const resolvedBranchId = resolveWriteBranchId(scope, branchId);
+  let resolvedBranchId = resolveWriteBranchId(scope, branchId);
+  const orderSource =
+    String(source ?? "").trim().toLowerCase() === "table_order" ? "table_order" : null;
+  /** Tablet table-order: inherit branch from the seat when client/header omit it */
+  if (!resolvedBranchId && tableId != null && Number.isFinite(Number(tableId))) {
+    const [seat] = await db
+      .select({ branchId: restaurantTablesTable.branchId })
+      .from(restaurantTablesTable)
+      .where(eq(restaurantTablesTable.id, Number(tableId)))
+      .limit(1);
+    if (seat?.branchId != null) resolvedBranchId = seat.branchId;
+  }
   if (!resolvedBranchId) {
     res.status(400).json({ error: "اختر فرعاً قبل إنشاء طلب" });
     return;
@@ -343,9 +357,13 @@ router.post("/", async (req, res) => {
       ? paymentMethod
       : undefined;
 
-  const collectAtCashier = routing.paymentAt === "cashier" && !validPay;
+  /** Tablet table-order always lands unpaid on cashier for review/collect */
+  const collectAtCashier =
+    orderSource === "table_order" || (routing.paymentAt === "cashier" && !validPay);
   let initialStatus: "pending" | "preparing" | "paid" = "pending";
-  if (collectAtCashier) {
+  if (orderSource === "table_order") {
+    initialStatus = "pending";
+  } else if (collectAtCashier) {
     initialStatus = routing.sendToKitchen ? "preparing" : "pending";
   } else if (routing.sendToKitchen) {
     initialStatus = "preparing";
@@ -369,6 +387,7 @@ router.post("/", async (req, res) => {
       deliveryFee: deliveryFeeAmt.toString(),
       total: total.toString(),
       notes,
+      source: orderSource,
       deliveryAddress,
       deliveryPhone,
       driverId:

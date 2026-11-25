@@ -43,6 +43,7 @@ import { getOrCreateDeviceKey } from "@/lib/device-id";
 import { printKitchenTicketThermal } from "@/lib/print-receipt";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { toast } from "@/hooks/use-toast";
+import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
 
 type SeatKind = "table" | "room" | "person" | "takeaway" | "delivery";
 type CashierPage = "unpaid" | "paid";
@@ -55,7 +56,8 @@ type OrderCardModel = {
   shortNo: string;
 };
 
-const SILENT_REFETCH_MS = 4_000;
+/** Fast poll so POS add/edit/delete shows on cashier within ~1–2s */
+const SILENT_REFETCH_MS = 1_500;
 
 const formatIQD = (v: number | string) =>
   new Intl.NumberFormat("en-IQ").format(Math.round(Number(v)));
@@ -581,7 +583,7 @@ export default function Cashier() {
 
   const silentQueryOpts = {
     refetchInterval: SILENT_REFETCH_MS,
-    staleTime: 2_000,
+    staleTime: 500,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
@@ -684,16 +686,13 @@ export default function Cashier() {
       void refetchToday();
       void refetchOpen();
     };
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "rms-orders-bump") bump();
-    };
     const onVisible = () => {
       if (document.visibilityState === "visible") bump();
     };
-    window.addEventListener("storage", onStorage);
+    const unsub = subscribeOrdersLive(bump);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.removeEventListener("storage", onStorage);
+      unsub();
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refetchToday, refetchOpen]);
@@ -708,9 +707,8 @@ export default function Cashier() {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
     if (selectedBranchId === "all") return merged;
-    return merged.filter(
-      (o) => o.branchId == null || o.branchId === selectedBranchId
-    );
+    // Strict: only this branch (no null leak from other branches)
+    return merged.filter((o) => o.branchId === selectedBranchId);
   }, [todayOrders, openOrders, selectedBranchId]);
 
   /** Newest date/time first (descending) for both unpaid and paid lists */

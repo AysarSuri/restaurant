@@ -32,6 +32,7 @@ import { BranchProvider } from "@/lib/branch-context";
 import { applyBrandPrimary } from "@/lib/brand-theme";
 import { LocaleProvider } from "@/i18n";
 import { EnterAsTab } from "@/components/enter-as-tab";
+import { useDeviceFormsFullscreen } from "@/hooks/use-device-forms-fullscreen";
 import { useGetSettings } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
@@ -94,6 +95,12 @@ function BrandThemeSync() {
     if (data?.themePrimary) applyBrandPrimary(data.themePrimary);
   }, [data?.themePrimary]);
 
+  return null;
+}
+
+function FormsFullscreenSync() {
+  const { user } = useAuth();
+  useDeviceFormsFullscreen(Boolean(user));
   return null;
 }
 
@@ -273,6 +280,7 @@ function App() {
               <TooltipProvider>
                 <EnterAsTab />
                 <BrandThemeSync />
+                <FormsFullscreenSync />
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                   <Router />
                 </WouterRouter>

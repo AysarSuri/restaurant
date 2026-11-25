@@ -31,6 +31,12 @@ export const ordersTable = pgTable("orders", {
   collectAtCashier: boolean("collect_at_cashier").default(false).notNull(),
   /** Last time this invoice was edited from the POS form (null = never edited) */
   posEditedAt: timestamp("pos_edited_at"),
+  /**
+   * Order channel / origin:
+   * - table_order → guest tablet «طلب طاولة»
+   * - null/pos → created from POS (or legacy)
+   */
+  source: text("source"),
   notes: text("notes"),
   deliveryAddress: text("delivery_address"),
   deliveryPhone: text("delivery_phone"),

@@ -281,6 +281,7 @@ function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
     salesPaymentAtTakeaway: takeaway,
     salesPaymentAtDelivery: delivery,
     salesSendToKitchen: row.salesSendToKitchen !== false,
+    formsFullscreen: row.formsFullscreen === true,
   };
 }
 
@@ -347,6 +348,7 @@ router.get("/printers", async (_req, res) => {
       salesPaymentAtTakeaway: devicePrintersTable.salesPaymentAtTakeaway,
       salesPaymentAtDelivery: devicePrintersTable.salesPaymentAtDelivery,
       salesSendToKitchen: devicePrintersTable.salesSendToKitchen,
+      formsFullscreen: devicePrintersTable.formsFullscreen,
       createdAt: devicePrintersTable.createdAt,
       updatedAt: devicePrintersTable.updatedAt,
       branchName: branchesTable.name,
@@ -386,6 +388,7 @@ router.post("/printers", async (req, res) => {
     note,
     isActive,
     salesSendToKitchen,
+    formsFullscreen,
   } = body;
 
   const key = String(deviceKey ?? "").trim();
@@ -424,6 +427,10 @@ router.post("/printers", async (req, res) => {
           salesSendToKitchen != null
             ? Boolean(salesSendToKitchen)
             : existing.salesSendToKitchen !== false,
+        formsFullscreen:
+          formsFullscreen != null
+            ? Boolean(formsFullscreen)
+            : existing.formsFullscreen === true,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, existing.id))
@@ -455,6 +462,7 @@ router.post("/printers", async (req, res) => {
         isActive: isActive ?? true,
         ...createPayment,
         salesSendToKitchen: salesSendToKitchen != null ? Boolean(salesSendToKitchen) : true,
+        formsFullscreen: formsFullscreen != null ? Boolean(formsFullscreen) : false,
       })
       .returning();
 
@@ -489,6 +497,7 @@ router.post("/printers", async (req, res) => {
         isActive: isActive ?? true,
         ...createPayment,
         salesSendToKitchen: salesSendToKitchen != null ? Boolean(salesSendToKitchen) : true,
+        formsFullscreen: formsFullscreen != null ? Boolean(formsFullscreen) : false,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, fallbackId))
@@ -516,6 +525,7 @@ router.put("/printers/:id", async (req, res) => {
     note,
     isActive,
     salesSendToKitchen,
+    formsFullscreen,
   } = body;
 
   const [existing] = await db
@@ -554,6 +564,10 @@ router.put("/printers/:id", async (req, res) => {
         salesSendToKitchen != null
           ? Boolean(salesSendToKitchen)
           : existing.salesSendToKitchen !== false,
+      formsFullscreen:
+        formsFullscreen != null
+          ? Boolean(formsFullscreen)
+          : existing.formsFullscreen === true,
       updatedAt: new Date(),
     })
     .where(eq(devicePrintersTable.id, id))
