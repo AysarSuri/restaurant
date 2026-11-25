@@ -1064,6 +1064,10 @@ components:
         status:
           type: string
           enum: [available, occupied, reserved, cleaning]
+        branchId:
+          type: integer
+          nullable: true
+          description: Seat branch — same number allowed on a different branch
       required:
         - number
         - capacity
@@ -1083,6 +1087,10 @@ components:
         status:
           type: string
           enum: [available, occupied, reserved, cleaning]
+        branchId:
+          type: integer
+          nullable: true
+          description: Seat branch — uniqueness is per branch + type + number
 
     # ORDERS
     OrderItem:

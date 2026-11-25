@@ -291,17 +291,42 @@ router.post("/", async (req, res) => {
   let resolvedBranchId = resolveWriteBranchId(scope, branchId);
   const orderSource =
     String(source ?? "").trim().toLowerCase() === "table_order" ? "table_order" : null;
-  /** Tablet table-order: inherit branch from the seat when client/header omit it */
-  if (!resolvedBranchId && tableId != null && Number.isFinite(Number(tableId))) {
+
+  let seatBranchId: number | null = null;
+  if (tableId != null && Number.isFinite(Number(tableId))) {
     const [seat] = await db
       .select({ branchId: restaurantTablesTable.branchId })
       .from(restaurantTablesTable)
       .where(eq(restaurantTablesTable.id, Number(tableId)))
       .limit(1);
-    if (seat?.branchId != null) resolvedBranchId = seat.branchId;
+    if (!seat) {
+      res.status(400).json({ error: "الطاولة/الغرفة/الشخص غير موجود" });
+      return;
+    }
+    seatBranchId = seat.branchId ?? null;
+  }
+
+  /** Tablet table-order: inherit branch from the seat when client/header omit it */
+  if (!resolvedBranchId && seatBranchId != null) {
+    resolvedBranchId = seatBranchId;
   }
   if (!resolvedBranchId) {
     res.status(400).json({ error: "اختر فرعاً قبل إنشاء طلب" });
+    return;
+  }
+  /** Seat must belong to the same branch as the order */
+  if (tableId != null && seatBranchId != null && seatBranchId !== resolvedBranchId) {
+    res.status(400).json({
+      error: "الطاولة/الغرفة/الشخص لا يتبع هذا الفرع",
+      message: "الطاولة/الغرفة/الشخص لا يتبع هذا الفرع",
+    });
+    return;
+  }
+  if (tableId != null && seatBranchId == null) {
+    res.status(400).json({
+      error: "عيّن فرعاً لهذه الطاولة/الغرفة/الشخص أولاً",
+      message: "عيّن فرعاً لهذه الطاولة/الغرفة/الشخص أولاً",
+    });
     return;
   }
 

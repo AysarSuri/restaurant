@@ -9,6 +9,7 @@ import {
   useUpdateOrder,
   useGetOrders,
   getGetOrdersQueryKey,
+  getGetTablesQueryKey,
   type Order,
   type MenuItem,
 } from "@workspace/api-client-react";
@@ -73,9 +74,17 @@ export default function TableOrder() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
+  const loginBranchId =
+    typeof user?.selectedBranchId === "number" ? user.selectedBranchId : null;
+
   const { data: categories } = useGetMenuCategories();
   const { data: items } = useGetMenuItems({ available: true });
-  const { data: tables } = useGetTables();
+  const { data: tables } = useGetTables({
+    query: {
+      queryKey: [...getGetTablesQueryKey(), loginBranchId ?? "table-order"],
+      staleTime: 2_000,
+    },
+  });
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder();
 
@@ -91,9 +100,14 @@ export default function TableOrder() {
 
   const tableId = user?.tableId;
   const tableNumber = user?.tableNumber;
-  const tableInfo = tables?.find((tbl) => tbl.id === tableId);
+  const tableInfo = tables?.find(
+    (tbl) =>
+      tbl.id === tableId &&
+      (loginBranchId == null || tbl.branchId === loginBranchId)
+  );
   const seatKind: SeatKind = ((tableInfo?.type as SeatKind) || "table") as SeatKind;
-  const branchId = tableInfo?.branchId ?? null;
+  /** Prefer seat branch; fall back to login branch so table orders stay branch-scoped */
+  const branchId = tableInfo?.branchId ?? loginBranchId;
   const isSaving = isCreating || isUpdating;
 
   const todayOrdersParams = useMemo(
@@ -105,20 +119,20 @@ export default function TableOrder() {
   const { data: todayOrders, refetch: refetchTodayOrders, isFetching: isFetchingOrders } =
     useGetOrders(todayOrdersParams, {
       query: {
-        queryKey: getGetOrdersQueryKey(todayOrdersParams),
+        queryKey: [...getGetOrdersQueryKey(todayOrdersParams), branchId ?? "table"],
         staleTime: 2_000,
         refetchInterval: editPickerOpen ? 3_000 : false,
       },
     });
 
   const unpaidSeatOrders = useMemo(() => {
-    if (tableId == null) return [];
+    if (tableId == null || branchId == null) return [];
     const list = todayOrders ?? [];
     return list
       .filter((o) => {
         if (o.type !== "dine_in") return false;
         if (o.tableId !== tableId) return false;
-        if (branchId != null && o.branchId != null && o.branchId !== branchId) return false;
+        if (o.branchId !== branchId) return false;
         return isOrderUnpaid(o);
       })
       .sort(
@@ -243,6 +257,7 @@ export default function TableOrder() {
 
   const handleSubmitOrder = () => {
     if (!tableId || cart.length === 0) return;
+    if (branchId == null) return;
     const lineItems = cart.map((i) => ({
       menuItemId: i.id,
       quantity: i.cartQuantity,
@@ -266,7 +281,7 @@ export default function TableOrder() {
         data: {
           type: "dine_in",
           tableId,
-          branchId: branchId ?? undefined,
+          branchId,
           source: "table_order",
           items: lineItems,
         } as any,

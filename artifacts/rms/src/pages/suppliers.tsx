@@ -44,7 +44,9 @@ import {
   printSupplierStatementA4,
 } from "@/lib/print-receipt";
 import { SupplierReturnsPanel } from "@/components/supplier-returns-panel";
+import { BranchSwitcher } from "@/components/branch-switcher";
 import { bumpStockLive } from "@/lib/stock-live";
+import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import {
   ArrowLeftRight,
@@ -152,7 +154,13 @@ const EMPTY_PURCHASE_LINE = (): PurchaseLine => ({
   price: "",
 });
 
-const EMPTY_SUPPLIER = { code: "", name: "", openingBalance: "" as string | number, notes: "" };
+const EMPTY_SUPPLIER = {
+  code: "",
+  name: "",
+  branchId: "",
+  openingBalance: "" as string | number,
+  notes: "",
+};
 
 function nextSupplierCode(list: Supplier[] | undefined): string {
   let max = 0;
@@ -213,9 +221,15 @@ function supplierDeleteBlockReason(
 export default function SuppliersPage() {
   const queryClient = useQueryClient();
   const { formatDate } = useI18n();
+  const { selectedBranchId, branchLabel } = useBranch();
   const [section, setSection] = useState<Section>("hub");
 
-  const { data: suppliers, isLoading: loadingSuppliers } = useGetSuppliers();
+  const { data: suppliers, isLoading: loadingSuppliers } = useGetSuppliers({
+    query: {
+      queryKey: [...getGetSuppliersQueryKey(), selectedBranchId],
+      staleTime: 800,
+    },
+  });
   const { data: purchases, isLoading: loadingPurchases } = useGetSupplierPurchases();
   const { data: supplierReturns } = useGetSupplierReturns();
   const { data: movements, isLoading: loadingMovements } = useGetSupplierMovements();
@@ -584,6 +598,8 @@ export default function SuppliersPage() {
     setSupplierForm({
       ...EMPTY_SUPPLIER,
       code: nextSupplierCode(suppliers),
+      branchId:
+        selectedBranchId === "all" ? "" : String(selectedBranchId),
     });
     setSupplierError("");
     setSupplierFormOpen(true);
@@ -594,6 +610,7 @@ export default function SuppliersPage() {
     setSupplierForm({
       code: s.code,
       name: s.name,
+      branchId: s.branchId != null ? String(s.branchId) : "",
       openingBalance: Number(s.openingBalance) || 0,
       notes: s.notes || "",
     });
@@ -604,20 +621,26 @@ export default function SuppliersPage() {
   const saveSupplier = () => {
     const code = supplierForm.code.trim();
     const name = supplierForm.name.trim();
+    const branchIdNum = Number(supplierForm.branchId);
     if (!name) return setSupplierError("اسم المورد مطلوب");
+    if (!Number.isFinite(branchIdNum) || branchIdNum <= 0) {
+      return setSupplierError("اختر الفرع قبل حفظ اسم المورد");
+    }
     const nameTaken = (suppliers ?? []).some(
       (s) =>
         s.name.trim().toLowerCase() === name.toLowerCase() &&
+        s.branchId === branchIdNum &&
         s.id !== editingSupplier?.id
     );
     if (nameTaken) {
-      return setSupplierError("اسم المورد مكرر — اختر اسماً مختلفاً");
+      return setSupplierError("اسم المورد مكرر في هذا الفرع — اختر اسماً مختلفاً");
     }
     if (editingSupplier && !code) return setSupplierError("كود المورد مطلوب");
     setSupplierError("");
     const body = {
       code: editingSupplier ? code : nextSupplierCode(suppliers),
       name,
+      branchId: branchIdNum,
       openingBalance:
         supplierForm.openingBalance === "" || supplierForm.openingBalance === null
           ? 0
@@ -1278,16 +1301,19 @@ export default function SuppliersPage() {
             <div>
               <h2 className="text-[15px] font-bold">أسماء الموردين</h2>
               <p className="text-[13px] text-muted-foreground font-semibold mt-0.5">
-                كود المورد · اسم المورد · رصيد افتتاحي · ملاحظة
+                كود · اسم · فرع · رصيد · ملاحظة · {branchLabel}
               </p>
             </div>
-            <Button
-              type="button"
-              className="rounded-full h-12 px-5 text-[15px] font-bold touch-manipulation"
-              onClick={openNewSupplier}
-            >
-              <Plus className="w-5 h-5 me-1.5" /> إضافة مورد
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <BranchSwitcher />
+              <Button
+                type="button"
+                className="rounded-full h-12 px-5 text-[15px] font-bold touch-manipulation"
+                onClick={openNewSupplier}
+              >
+                <Plus className="w-5 h-5 me-1.5" /> إضافة مورد
+              </Button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-l from-primary/10 via-amber-500/5 to-transparent p-3 sm:p-4">
@@ -1338,6 +1364,7 @@ export default function SuppliersPage() {
                   <tr>
                     <th className="text-start p-3 font-bold">كود المورد</th>
                     <th className="text-start p-3 font-bold">اسم المورد</th>
+                    <th className="text-start p-3 font-bold">الفرع</th>
                     <th className="text-start p-3 font-bold">رصيد افتتاحي</th>
                     <th className="text-start p-3 font-bold">الرصيد الحالي</th>
                     <th className="text-start p-3 font-bold">ملاحظة</th>
@@ -1349,6 +1376,13 @@ export default function SuppliersPage() {
                     <tr key={s.id} className="border-t border-border/30">
                       <td className="p-3 font-mono font-bold">{s.code}</td>
                       <td className="p-3 font-bold">{s.name}</td>
+                      <td className="p-3 font-semibold text-muted-foreground">
+                        {s.branchName?.trim() ||
+                          (s.branchId != null
+                            ? branchOptions.find((b) => b.value === String(s.branchId))
+                                ?.label || String(s.branchId)
+                            : "—")}
+                      </td>
                       <td className="p-3 font-bold" dir="ltr">
                         {fmtMoney(Number(s.openingBalance) || 0)}
                       </td>
@@ -2693,6 +2727,27 @@ export default function SuppliersPage() {
                 if (supplierError) setSupplierError("");
               }}
             />
+          </div>
+          <div>
+            <ModernCombobox
+              value={supplierForm.branchId}
+              onChange={(v) => {
+                setSupplierForm((f) => ({ ...f, branchId: v }));
+                if (supplierError) setSupplierError("");
+              }}
+              options={branchOptions}
+              label="الفرع *"
+              placeholder="اختر الفرع"
+              icon={Building2}
+              searchable
+              searchPlaceholder="ابحث عن فرع..."
+              emptyText="لا يوجد فرع"
+              labelClassName="text-[15px] font-bold text-foreground"
+              valueClassName="text-[15px] font-bold"
+            />
+            <p className="text-[12px] text-muted-foreground mt-1 font-semibold">
+              يُحفظ اسم المورد تابعاً لهذا الفرع — نفس الاسم مسموح في فرع آخر
+            </p>
           </div>
           <div>
             <label className="text-[15px] font-bold text-foreground mb-1.5 block">

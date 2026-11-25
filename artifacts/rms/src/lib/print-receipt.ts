@@ -2233,10 +2233,6 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
     .brand-name { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.2; }
     .brand-meta { margin: 2px 0 0; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.82); }
     .doc-side { text-align: left; flex-shrink: 0; max-width: 42%; }
-    .doc-badge {
-      display: inline-block; margin: 0 0 3px; padding: 2px 8px; border-radius: 999px;
-      background: rgba(255,255,255,0.16); font-size: 10px; font-weight: 800;
-    }
     .doc-title { margin: 0; font-size: 15px; font-weight: 800; }
     .doc-sub { margin: 2px 0 0; font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.8); }
     table.stock {
@@ -2319,7 +2315,6 @@ function buildWarehouseStockReportA4Html(data: WarehouseStockReportData) {
         </div>
       </div>
       <div class="doc-side">
-        <span class="doc-badge">A4 Landscape · هوامش 0.6 سم · 14 Bold</span>
         <p class="doc-title">تقرير الكمية المتبقية حسب الصنف</p>
         <p class="doc-sub">${esc(data.printedAtLabel)}</p>
       </div>

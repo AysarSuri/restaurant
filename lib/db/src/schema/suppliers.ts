@@ -12,11 +12,13 @@ import { menuItemsTable } from "./menuItems";
 import { branchesTable } from "./branches";
 import { cardsTable } from "./cards";
 
-/** Supplier master data */
+/** Supplier master data — name uniqueness is per branch */
 export const suppliersTable = pgTable("suppliers", {
   id: serial("id").primaryKey(),
   code: text("code").notNull(),
   name: text("name").notNull(),
+  /** Supplier belongs to this branch (same name allowed on other branches) */
+  branchId: integer("branch_id").references(() => branchesTable.id),
   /** Opening balance: + we owe them, − they owe us */
   openingBalance: numeric("opening_balance", { precision: 14, scale: 2 })
     .default("0")

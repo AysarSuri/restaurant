@@ -155,6 +155,8 @@ export interface CreateTableBody {
   type?: CreateTableBodyType;
   location?: string;
   status?: CreateTableBodyStatus;
+  /** Seat belongs to this branch — same number allowed on other branches */
+  branchId?: number | null;
 }
 
 export type UpdateTableBodyType =
@@ -182,6 +184,8 @@ export interface UpdateTableBody {
   type?: UpdateTableBodyType;
   location?: string;
   status?: UpdateTableBodyStatus;
+  /** Move / keep seat on a branch — uniqueness is per branch + type + number */
+  branchId?: number | null;
 }
 
 export type OrderItemStatus =
@@ -299,6 +303,8 @@ export interface CreateOrderItemBody {
 export interface CreateOrderBody {
   type: CreateOrderBodyType;
   tableId?: number;
+  /** Order branch — must match seat branch when tableId is set */
+  branchId?: number | null;
   customerId?: number;
   employeeId?: number;
   items: CreateOrderItemBody[];

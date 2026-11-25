@@ -19,6 +19,11 @@ import {
   applyWeightedCostReturnReplace,
   mapDbItemsToCostLines,
 } from "../lib/item-cost-avg";
+import {
+  parseBranchScope,
+  branchEq,
+  resolveWriteBranchId,
+} from "../lib/branch-scope";
 
 const router: IRouter = Router();
 
@@ -103,9 +108,19 @@ async function isDuplicateSupplierCode(code: string, excludeId?: number) {
   return rows.length > 0;
 }
 
-async function isDuplicateSupplierName(name: string, excludeId?: number) {
+/** Duplicate name only within the same branch — other branches may reuse the name */
+async function isDuplicateSupplierName(
+  name: string,
+  branchId: number | null | undefined,
+  excludeId?: number
+) {
   const normalized = name.trim().toLowerCase();
   const conditions = [sql`lower(${suppliersTable.name}) = ${normalized}`];
+  if (branchId != null && Number.isFinite(branchId)) {
+    conditions.push(eq(suppliersTable.branchId, branchId));
+  } else {
+    conditions.push(sql`${suppliersTable.branchId} is null`);
+  }
   if (excludeId != null) conditions.push(ne(suppliersTable.id, excludeId));
   const rows = await db
     .select({ id: suppliersTable.id })
@@ -191,11 +206,16 @@ async function nextMovementInvoiceNo(): Promise<string> {
   return String(max + 1);
 }
 
-function mapSupplier(row: typeof suppliersTable.$inferSelect) {
+function mapSupplier(
+  row: typeof suppliersTable.$inferSelect,
+  branchName?: string | null
+) {
   return {
     id: row.id,
     code: row.code,
     name: row.name,
+    branchId: row.branchId ?? null,
+    branchName: branchName ?? null,
     openingBalance: num(row.openingBalance),
     notes: row.notes,
     createdAt: row.createdAt,
@@ -269,28 +289,45 @@ async function computeBalances(supplierIds: number[]) {
 
 // ─── Suppliers CRUD ───────────────────────────────────────
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const cond = branchEq(suppliersTable.branchId, scope);
   const rows = await db
-    .select()
+    .select({
+      supplier: suppliersTable,
+      branchName: branchesTable.name,
+    })
     .from(suppliersTable)
+    .leftJoin(branchesTable, eq(suppliersTable.branchId, branchesTable.id))
+    .where(cond)
     .orderBy(asc(suppliersTable.code), asc(suppliersTable.name));
-  const balances = await computeBalances(rows.map((r) => r.id));
+  const balances = await computeBalances(rows.map((r) => r.supplier.id));
   res.json(
     rows.map((r) => ({
-      ...mapSupplier(r),
-      balance: Number((balances.get(r.id) ?? 0).toFixed(2)),
+      ...mapSupplier(r.supplier, r.branchName),
+      balance: Number((balances.get(r.supplier.id) ?? 0).toFixed(2)),
     }))
   );
 });
 
 router.post("/", async (req, res) => {
+  const scope = parseBranchScope(req);
   const name = String(req.body?.name ?? "").trim();
   const notes = String(req.body?.notes ?? "").trim() || null;
   const openingBalance = money(req.body?.openingBalance);
+  const resolvedBranchId = resolveWriteBranchId(
+    scope,
+    req.body?.branchId != null ? Number(req.body.branchId) : null
+  );
 
   if (!name) return res.status(400).json({ message: "اسم المورد مطلوب" });
-  if (await isDuplicateSupplierName(name)) {
-    return res.status(400).json({ message: "اسم المورد مكرر — اختر اسماً مختلفاً" });
+  if (!resolvedBranchId) {
+    return res.status(400).json({ message: "اختر فرعاً قبل حفظ اسم المورد" });
+  }
+  if (await isDuplicateSupplierName(name, resolvedBranchId)) {
+    return res
+      .status(400)
+      .json({ message: "اسم المورد مكرر في هذا الفرع — اختر اسماً مختلفاً" });
   }
 
   let code = await nextSupplierCode();
@@ -301,39 +338,75 @@ router.post("/", async (req, res) => {
 
   const [row] = await db
     .insert(suppliersTable)
-    .values({ code, name, openingBalance, notes })
+    .values({ code, name, openingBalance, notes, branchId: resolvedBranchId })
     .returning();
-  res.status(201).json({ ...mapSupplier(row), balance: num(row.openingBalance) });
+  const [branch] = await db
+    .select({ name: branchesTable.name })
+    .from(branchesTable)
+    .where(eq(branchesTable.id, resolvedBranchId))
+    .limit(1);
+  res.status(201).json({
+    ...mapSupplier(row, branch?.name ?? null),
+    balance: num(row.openingBalance),
+  });
 });
 
 router.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
 
+  const [existing] = await db
+    .select()
+    .from(suppliersTable)
+    .where(eq(suppliersTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "المورد غير موجود" });
+
   const code = String(req.body?.code ?? "").trim();
   const name = String(req.body?.name ?? "").trim();
   const notes = String(req.body?.notes ?? "").trim() || null;
   const openingBalance = money(req.body?.openingBalance);
+  const nextBranchId =
+    req.body?.branchId != null && Number.isFinite(Number(req.body.branchId))
+      ? Number(req.body.branchId)
+      : existing.branchId;
 
   if (!code) return res.status(400).json({ message: "كود المورد مطلوب" });
   if (!name) return res.status(400).json({ message: "اسم المورد مطلوب" });
+  if (nextBranchId == null) {
+    return res.status(400).json({ message: "عيّن فرعاً لهذا المورد" });
+  }
   if (await isDuplicateSupplierCode(code, id)) {
     return res.status(400).json({ message: "كود المورد مكرر" });
   }
-  if (await isDuplicateSupplierName(name, id)) {
-    return res.status(400).json({ message: "اسم المورد مكرر — اختر اسماً مختلفاً" });
+  if (await isDuplicateSupplierName(name, nextBranchId, id)) {
+    return res
+      .status(400)
+      .json({ message: "اسم المورد مكرر في هذا الفرع — اختر اسماً مختلفاً" });
   }
 
   const [row] = await db
     .update(suppliersTable)
-    .set({ code, name, openingBalance, notes, updatedAt: new Date() })
+    .set({
+      code,
+      name,
+      openingBalance,
+      notes,
+      branchId: nextBranchId,
+      updatedAt: new Date(),
+    })
     .where(eq(suppliersTable.id, id))
     .returning();
   if (!row) return res.status(404).json({ message: "المورد غير موجود" });
 
+  const [branch] = await db
+    .select({ name: branchesTable.name })
+    .from(branchesTable)
+    .where(eq(branchesTable.id, nextBranchId))
+    .limit(1);
   const balances = await computeBalances([id]);
   res.json({
-    ...mapSupplier(row),
+    ...mapSupplier(row, branch?.name ?? null),
     balance: Number((balances.get(id) ?? 0).toFixed(2)),
   });
 });

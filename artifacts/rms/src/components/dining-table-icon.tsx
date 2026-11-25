@@ -92,12 +92,12 @@ export function DiningTableIcon({ className = "", number }: DiningTableIconProps
       {number != null && (
         <text
           x="80"
-          y="56"
+          y="57"
           textAnchor="middle"
           dominantBaseline="middle"
           fill="#5C3A10"
-          fontSize="16"
-          fontWeight="800"
+          fontSize={String(number).length > 2 ? "22" : "28"}
+          fontWeight="900"
           fontFamily="Vazirmatn, 'Noto Sans Arabic', sans-serif"
         >
           {number}

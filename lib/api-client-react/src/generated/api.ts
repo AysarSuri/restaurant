@@ -1145,6 +1145,50 @@ export const useUpdateTable = <
   return useMutation(getUpdateTableMutationOptions(options));
 };
 
+export const getDeleteTableUrl = (id: number) => `/api/tables/${id}`;
+
+export const deleteTable = async (
+  id: number,
+  options?: RequestInit,
+): Promise<{ success: boolean }> => {
+  return customFetch<{ success: boolean }>(getDeleteTableUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const useDeleteTable = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTable>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTable>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteTable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  return useMutation({
+    mutationFn: ({ id }) => deleteTable(id, requestOptions),
+    ...mutationOptions,
+  });
+};
+
 /**
  * @summary Get orders
  */

@@ -23,6 +23,8 @@ export interface Supplier {
   id: number;
   code: string;
   name: string;
+  branchId?: number | null;
+  branchName?: string | null;
   openingBalance: number;
   balance?: number;
   notes?: string | null;
@@ -35,6 +37,8 @@ export interface UpsertSupplierBody {
   name: string;
   openingBalance?: number;
   notes?: string;
+  /** Required on create — supplier is stored under this branch */
+  branchId?: number | null;
 }
 
 export interface SupplierPurchaseItem {

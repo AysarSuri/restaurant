@@ -4,13 +4,18 @@ import {
   useGetTables,
   useUpdateTable,
   useCreateTable,
+  useDeleteTable,
+  useGetBranches,
+  getGetTablesQueryKey,
   type RestaurantTableStatus,
+  type RestaurantTable,
   RestaurantTableType as TableTypeEnum,
 } from "@workspace/api-client-react";
 
 type RestaurantTableType = (typeof TableTypeEnum)[keyof typeof TableTypeEnum];
-import { Button, Dialog, Select, Input } from "@/components/ui-elements";
+import { Button, Dialog, Input } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
+import { BranchSwitcher } from "@/components/branch-switcher";
 import {
   Users,
   MapPin,
@@ -18,9 +23,12 @@ import {
   Armchair,
   Plus,
   UserRound,
-  ChevronLeft,
   DoorOpen,
   Search,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  Building2,
 } from "lucide-react";
 import { DiningTableIcon } from "@/components/dining-table-icon";
 import { RoomIcon } from "@/components/room-icon";
@@ -85,28 +93,62 @@ const normalizeName = (value: string) => value.trim().replace(/\s+/g, " ").toLow
 const EMPTY_TABLE_FORM = {
   number: "",
   capacity: "4",
-  location: "",
+  branchId: "",
   type: TableTypeEnum.table as EntityType,
+  status: "available" as RestaurantTableStatus,
 };
 
 const STATUS_META = TABLE_STATUS_META;
 
+function apiErrorMessage(err: any, fallback: string) {
+  return (
+    err?.data?.error ||
+    err?.data?.message ||
+    err?.response?.data?.error ||
+    err?.response?.data?.message ||
+    err?.message ||
+    fallback
+  );
+}
+
 export default function Tables() {
-  const { selectedBranchId } = useBranch();
-  const { data: tables, isLoading, refetch } = useGetTables();
-  const { mutate: updateTable, isPending } = useUpdateTable();
+  const { selectedBranchId, branchLabel } = useBranch();
+  const { data: branches } = useGetBranches();
+  const { data: tables, isLoading, refetch } = useGetTables({
+    query: {
+      queryKey: [...getGetTablesQueryKey(), selectedBranchId],
+      staleTime: 1_000,
+    },
+  });
+  const { mutate: updateTable, isPending: isUpdating } = useUpdateTable();
   const { mutate: createTable, isPending: isCreating } = useCreateTable();
-  const [selectedTable, setSelectedTable] = useState<any>(null);
-  const [status, setStatus] = useState<RestaurantTableStatus>("available");
+  const { mutate: deleteTable, isPending: isDeleting } = useDeleteTable();
+
+  const branchOptions = useMemo<ComboboxOption[]>(
+    () =>
+      (branches ?? []).map((b) => ({
+        value: String(b.id),
+        label: b.nameAr?.trim() || b.name || String(b.id),
+        icon: Building2,
+      })),
+    [branches]
+  );
   const [entityType, setEntityType] = useState<EntityType>("table");
   const [filter, setFilter] = useState<"all" | RestaurantTableStatus>("all");
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(EMPTY_TABLE_FORM);
   const [addError, setAddError] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState<RestaurantTable | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_TABLE_FORM);
+  const [editError, setEditError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<RestaurantTable | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   const [searchId, setSearchId] = useState("");
 
   const typeMeta = TYPE_META[entityType];
   const TypeIcon = typeMeta.icon;
+  const needsBranchPick = selectedBranchId === "all";
 
   const searchPlaceholder =
     entityType === "person"
@@ -115,18 +157,25 @@ export default function Tables() {
         ? "ابحث برقم الغرفة..."
         : "ابحث برقم الطاولة...";
 
+  /** Show seats for the selected branch only (same name OK on other branches) */
+  const branchSeats = useMemo(() => {
+    const list = tables ?? [];
+    if (selectedBranchId === "all") return list;
+    return list.filter((t) => t.branchId === selectedBranchId);
+  }, [tables, selectedBranchId]);
+
   const typedTables = useMemo(() => {
-    return (tables ?? []).filter((t) => (t.type ?? "table") === entityType);
-  }, [tables, entityType]);
+    return branchSeats.filter((t) => (t.type ?? "table") === entityType);
+  }, [branchSeats, entityType]);
 
   const typeCounts = useMemo(() => {
     const base = { table: 0, room: 0, person: 0 };
-    for (const t of tables ?? []) {
+    for (const t of branchSeats) {
       const key = (t.type ?? "table") as EntityType;
       if (key in base) base[key] += 1;
     }
     return base;
-  }, [tables]);
+  }, [branchSeats]);
 
   const searchOptions = useMemo<ComboboxOption[]>(() => {
     const allLabel =
@@ -184,8 +233,13 @@ export default function Tables() {
     return `${parts[0][0]}${parts[1][0]}`;
   };
 
-  const nextNumberForType = (type: EntityType) => {
-    const nums = (tables ?? [])
+  const nextNumberForType = (type: EntityType, branchId?: string | number) => {
+    const bid = branchId != null && branchId !== "" ? Number(branchId) : null;
+    const pool =
+      bid != null && Number.isFinite(bid)
+        ? (tables ?? []).filter((t) => t.branchId === bid)
+        : branchSeats;
+    const nums = pool
       .filter((t) => (t.type ?? "table") === type)
       .map((t) => parseInt(String(t.number), 10))
       .filter((n) => Number.isFinite(n) && n > 0);
@@ -195,11 +249,13 @@ export default function Tables() {
 
   const openAdd = () => {
     const isPerson = entityType === "person";
+    const branchId = selectedBranchId === "all" ? "" : String(selectedBranchId);
     setAddForm({
-      number: isPerson ? "" : nextNumberForType(entityType),
+      number: isPerson ? "" : nextNumberForType(entityType, branchId),
       capacity: isPerson ? "1" : "4",
-      location: "",
+      branchId,
       type: entityType,
+      status: "available",
     });
     setAddError("");
     setAddOpen(true);
@@ -210,10 +266,28 @@ export default function Tables() {
     setAddForm((f) => ({
       ...f,
       type,
-      number: isPerson ? "" : nextNumberForType(type),
+      number: isPerson ? "" : nextNumberForType(type, f.branchId),
       capacity: isPerson ? "1" : f.capacity || "4",
     }));
     setAddError("");
+  };
+
+  const openEdit = (table: RestaurantTable) => {
+    setEditingTable(table);
+    setEditForm({
+      number: String(table.number ?? ""),
+      capacity: String(table.capacity ?? 1),
+      branchId: table.branchId != null ? String(table.branchId) : "",
+      type: ((table.type as EntityType) || "table") as EntityType,
+      status: (table.status as RestaurantTableStatus) || "available",
+    });
+    setEditError("");
+    setEditOpen(true);
+  };
+
+  const openDelete = (table: RestaurantTable) => {
+    setDeleteTarget(table);
+    setDeleteError("");
   };
 
   const handleCreateTable = () => {
@@ -222,6 +296,11 @@ export default function Tables() {
     const isPerson = type === "person";
     const number = addForm.number.trim().replace(/\s+/g, " ");
     const capacity = Number(addForm.capacity);
+    const branchIdNum = Number(addForm.branchId);
+    if (!Number.isFinite(branchIdNum) || branchIdNum <= 0) {
+      setAddError("اختر الفرع التابع له");
+      return;
+    }
     if (!number) {
       setAddError(isPerson ? "اسم الشخص مطلوب" : `${labels.numberLabel} مطلوب`);
       return;
@@ -231,17 +310,13 @@ export default function Tables() {
       return;
     }
     const targetKey = normalizeName(number);
-    const duplicate = tables?.some((t) => {
-      if ((t.type ?? "table") !== type) return false;
-      if (
-        selectedBranchId !== "all" &&
-        t.branchId != null &&
-        t.branchId !== selectedBranchId
-      ) {
-        return false;
-      }
-      return normalizeName(String(t.number)) === targetKey;
-    });
+    /** Duplicate only within the same branch + type — other branches may reuse the name */
+    const duplicate = (tables ?? []).some(
+      (t) =>
+        (t.type ?? "table") === type &&
+        t.branchId === branchIdNum &&
+        normalizeName(String(t.number)) === targetKey
+    );
     if (duplicate) {
       setAddError(
         isPerson
@@ -259,8 +334,8 @@ export default function Tables() {
           number,
           capacity,
           type,
-          location: addForm.location.trim() || undefined,
           status: "available",
+          branchId: branchIdNum,
         },
       },
       {
@@ -271,33 +346,92 @@ export default function Tables() {
           refetch();
         },
         onError: (err: any) => {
-          setAddError(
-            err?.data?.error ||
-              err?.response?.data?.error ||
-              err?.data?.message ||
-              err?.message ||
-              `تعذر إضافة ${labels.label}`
-          );
+          setAddError(apiErrorMessage(err, `تعذر إضافة ${labels.label}`));
         },
       }
     );
   };
 
-  const handleUpdateStatus = () => {
-    if (!selectedTable) return;
+  const handleSaveEdit = () => {
+    if (!editingTable) return;
+    const type = editForm.type;
+    const labels = TYPE_META[type];
+    const isPerson = type === "person";
+    const number = editForm.number.trim().replace(/\s+/g, " ");
+    const capacity = Number(editForm.capacity);
+    if (!number) {
+      setEditError(isPerson ? "اسم الشخص مطلوب" : `${labels.numberLabel} مطلوب`);
+      return;
+    }
+    if (!capacity || capacity < 1) {
+      setEditError("السعة يجب أن تكون رقمًا أكبر من صفر");
+      return;
+    }
+    const targetKey = normalizeName(number);
+    const branchId = editingTable.branchId ?? (typeof selectedBranchId === "number" ? selectedBranchId : null);
+    const duplicate = branchSeats.some(
+      (t) =>
+        t.id !== editingTable.id &&
+        (t.type ?? "table") === type &&
+        (branchId == null || t.branchId === branchId) &&
+        normalizeName(String(t.number)) === targetKey
+    );
+    if (duplicate) {
+      setEditError(
+        isPerson
+          ? "اسم الشخص مستخدم مسبقًا في هذا الفرع"
+          : type === "room"
+            ? "رقم الغرفة مستخدم مسبقًا في هذا الفرع"
+            : "رقم الطاولة مستخدم مسبقًا في هذا الفرع"
+      );
+      return;
+    }
+    setEditError("");
     updateTable(
-      { id: selectedTable.id, data: { status } },
+      {
+        id: editingTable.id,
+        data: {
+          number,
+          capacity,
+          type,
+          status: editForm.status,
+          branchId: branchId ?? undefined,
+        },
+      },
       {
         onSuccess: () => {
-          setSelectedTable(null);
+          setEditOpen(false);
+          setEditingTable(null);
           refetch();
         },
+        onError: (err: any) => setEditError(apiErrorMessage(err, `تعذر تعديل ${labels.label}`)),
       }
     );
   };
 
-  const selectedTypeMeta = TYPE_META[(selectedTable?.type ?? "table") as EntityType];
-  const SelectedTypeIcon = selectedTypeMeta.icon;
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    setDeleteError("");
+    deleteTable(
+      { id: deleteTarget.id },
+      {
+        onSuccess: () => {
+          setDeleteTarget(null);
+          if (editingTable?.id === deleteTarget.id) {
+            setEditOpen(false);
+            setEditingTable(null);
+          }
+          refetch();
+        },
+        onError: (err: any) =>
+          setDeleteError(apiErrorMessage(err, "تعذر الحذف")),
+      }
+    );
+  };
+
+  const editTypeMeta = TYPE_META[editForm.type];
+  const EditTypeIcon = editTypeMeta.icon;
+  const deleteTypeMeta = TYPE_META[((deleteTarget?.type as EntityType) || "table")];
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -306,10 +440,15 @@ export default function Tables() {
           <Sparkles className="w-4 h-4" />
           <span className="text-[11px] font-display tracking-[0.2em] uppercase">Hall Floor</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground">إدارة الطاولات</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          ثلاث صفحات: طاولات وغرف وأشخاص مع تحديث سريع للحالة
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground">إدارة الطاولات</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              طاولات وغرف وأشخاص حسب الفرع · نفس الاسم مسموح في فرع آخر · {branchLabel}
+            </p>
+          </div>
+          <BranchSwitcher />
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border/70 bg-secondary/40 p-2 sm:p-2.5 shadow-sm space-y-2.5">
@@ -326,7 +465,6 @@ export default function Tables() {
                   setEntityType(key);
                   setFilter("all");
                   setSearchId("");
-                  setSelectedTable(null);
                 }}
                   className={`flex-1 inline-flex items-center justify-center gap-2 h-11 sm:h-12 px-2.5 sm:px-4 rounded-lg text-sm sm:text-base font-extrabold transition-all duration-200 ${
                     active
@@ -359,10 +497,7 @@ export default function Tables() {
                 setFilter("all");
                 if (value) {
                   const found = typedTables.find((t) => String(t.id) === value);
-                  if (found) {
-                    setSelectedTable(found);
-                    setStatus(found.status);
-                  }
+                  if (found) openEdit(found);
                 }
               }}
               options={searchOptions}
@@ -445,29 +580,21 @@ export default function Tables() {
         </div>
       ) : entityType === "person" ? (
         <div className="rounded-2xl border border-border/70 bg-card/40 overflow-hidden shadow-sm">
-          <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_40px] gap-3 px-5 py-3 border-b border-border/60 bg-secondary/40 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+          <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_120px] gap-3 px-5 py-3 border-b border-border/60 bg-secondary/40 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
             <span>الاسم</span>
             <span>الموقع</span>
             <span className="text-center">السعة</span>
             <span className="text-center">الحالة</span>
-            <span />
+            <span className="text-center">إجراءات</span>
           </div>
           <div className="divide-y divide-border/50">
-            {filtered.map((person, idx) => {
+            {filtered.map((person) => {
               const meta = STATUS_META[person.status] ?? STATUS_META.available;
               const name = String(person.number);
               return (
-                <motion.button
+                <div
                   key={person.id}
-                  type="button"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(idx * 0.03, 0.3) }}
-                  onClick={() => {
-                    setSelectedTable(person);
-                    setStatus(person.status);
-                  }}
-                  className="w-full text-start px-4 sm:px-5 py-3.5 sm:py-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_40px] gap-2 sm:gap-3 items-center hover:bg-primary/5 transition-colors group"
+                  className="px-4 sm:px-5 py-3.5 sm:py-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_90px_110px_120px] gap-2 sm:gap-3 items-center hover:bg-primary/5 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary/90 to-amber-500 text-primary-foreground flex items-center justify-center text-sm font-extrabold shadow-md shadow-primary/20 flex-shrink-0">
@@ -504,10 +631,28 @@ export default function Tables() {
                     </span>
                   </div>
 
-                  <div className="hidden sm:flex justify-end">
-                    <ChevronLeft className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="flex justify-end sm:justify-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-2.5 gap-1 font-bold"
+                      onClick={() => openEdit(person)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      تعديل
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 w-9 p-0 text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => openDelete(person)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                </motion.button>
+                </div>
               );
             })}
           </div>
@@ -517,18 +662,12 @@ export default function Tables() {
           {filtered.map((table, idx) => {
             const meta = STATUS_META[table.status] ?? STATUS_META.available;
             return (
-              <motion.button
+              <motion.div
                 key={table.id}
-                type="button"
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(idx * 0.04, 0.4) }}
                 whileHover={{ y: -6 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => {
-                  setSelectedTable(table);
-                  setStatus(table.status);
-                }}
                 className={`
                   group relative aspect-[4/5] rounded-[1.75rem] border-2 backdrop-blur-xl
                   overflow-hidden text-center shadow-lg shadow-black/5
@@ -546,7 +685,7 @@ export default function Tables() {
                     {meta.label}
                   </div>
 
-                  <div className="relative w-full max-w-[9.5rem] sm:max-w-[11rem] mx-auto group-hover:scale-105 transition-transform duration-300">
+                  <div className="relative w-full max-w-[11rem] sm:max-w-[13rem] mx-auto group-hover:scale-105 transition-transform duration-300">
                     {entityType === "table" ? (
                       <DiningTableIcon
                         number={table.number}
@@ -574,9 +713,30 @@ export default function Tables() {
                         <span className="truncate max-w-[9rem]">{table.location}</span>
                       </div>
                     )}
+                    <div className="flex items-center justify-center gap-1.5 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2.5 gap-1 text-[11px] font-extrabold bg-background/80"
+                        onClick={() => openEdit(table)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        تعديل
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0 text-destructive border-destructive/35 bg-background/80 hover:bg-destructive/10"
+                        onClick={() => openDelete(table)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </motion.button>
+              </motion.div>
             );
           })}
         </div>
@@ -610,10 +770,33 @@ export default function Tables() {
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {addForm.type === "person"
-                  ? "أدخل اسم الشخص والسعة والموقع (اختياري)"
-                  : "اختر النوع ثم أدخل الرقم والسعة والموقع (اختياري)"}
+                  ? "أدخل اسم الشخص والسعة واختر الفرع التابع له"
+                  : "اختر النوع والرقم والسعة والفرع التابع له"}
               </p>
             </div>
+          </div>
+
+          <div>
+            <ModernCombobox
+              value={addForm.branchId}
+              onChange={(v) => {
+                setAddForm((f) => ({
+                  ...f,
+                  branchId: v,
+                  number: f.type === "person" ? f.number : nextNumberForType(f.type, v),
+                }));
+                if (addError) setAddError("");
+              }}
+              options={branchOptions}
+              label="تابع فرع *"
+              placeholder="اختر الفرع"
+              icon={Building2}
+              searchable
+              searchPlaceholder="ابحث عن فرع..."
+              emptyText="لا يوجد فرع"
+              labelClassName="text-sm font-semibold"
+              valueClassName="text-sm font-bold"
+            />
           </div>
 
           <div>
@@ -691,14 +874,6 @@ export default function Tables() {
               autoFocus={addForm.type !== "person"}
             />
           </div>
-          <div>
-            <label className="text-sm font-semibold mb-1.5 block">الموقع</label>
-            <Input
-              value={addForm.location}
-              onChange={(e) => setAddForm((f) => ({ ...f, location: e.target.value }))}
-              placeholder="صالة رئيسية / شرفة..."
-            />
-          </div>
 
           {addError && <p className="text-sm font-semibold text-destructive">{addError}</p>}
 
@@ -715,50 +890,67 @@ export default function Tables() {
       </Dialog>
 
       <Dialog
-        isOpen={!!selectedTable}
-        onClose={() => setSelectedTable(null)}
-        title={`${selectedTypeMeta.label} ${selectedTable?.number ?? ""}`}
+        isOpen={editOpen}
+        onClose={() => {
+          setEditOpen(false);
+          setEditingTable(null);
+        }}
+        title={`تعديل ${editTypeMeta.label}`}
+        maxWidth="max-w-md"
       >
-        {selectedTable && (
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-border/60 bg-secondary/40 p-4 flex items-center gap-4">
-              {(selectedTable.type ?? "table") === "table" ? (
-                <DiningTableIcon number={selectedTable.number} className="w-24 h-auto flex-shrink-0" />
-              ) : (selectedTable.type ?? "table") === "room" ? (
-                <RoomIcon number={selectedTable.number} className="w-28 h-auto flex-shrink-0" />
-              ) : (
-                <SelectedTypeIcon className="w-14 h-14 text-primary flex-shrink-0" />
-              )}
-              <div className="min-w-0">
-                <p className="font-bold text-foreground">تحديث حالة {selectedTypeMeta.label}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  السعة {selectedTable.capacity} · {selectedTable.location || "بدون موقع"}
-                </p>
-              </div>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-amber-500/5 to-transparent p-4 flex items-center gap-3">
+            {editForm.type === "table" ? (
+              <DiningTableIcon number={editForm.number} className="w-16 h-auto flex-shrink-0" />
+            ) : editForm.type === "room" ? (
+              <RoomIcon number={editForm.number} className="w-20 h-auto flex-shrink-0" />
+            ) : (
+              <EditTypeIcon className="w-12 h-12 text-primary flex-shrink-0" />
+            )}
+            <div className="min-w-0">
+              <p className="font-bold text-foreground">تعديل {editTypeMeta.label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                عدّل الرقم/الاسم والسعة والحالة
+              </p>
             </div>
+          </div>
 
-            <div>
-              <label className="text-sm font-semibold mb-2 block">الحالة الجديدة</label>
-              <Select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as RestaurantTableStatus)}
-              >
-                <option value="available">متاح</option>
-                <option value="occupied">مشغول</option>
-                <option value="reserved">محجوز</option>
-                <option value="cleaning">تنظيف</option>
-              </Select>
-            </div>
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">
+              {editTypeMeta.numberLabel} <span className="text-destructive">*</span>
+            </label>
+            <Input
+              value={editForm.number}
+              onChange={(e) => setEditForm((f) => ({ ...f, number: e.target.value }))}
+              placeholder={editForm.type === "person" ? "احمد محمد" : "1"}
+              dir={editForm.type === "person" ? undefined : "ltr"}
+            />
+          </div>
 
+          <div>
+            <label className="text-sm font-semibold mb-1.5 block">
+              السعة ({editTypeMeta.capacityLabel}) <span className="text-destructive">*</span>
+            </label>
+            <Input
+              type="number"
+              min={1}
+              value={editForm.capacity}
+              onChange={(e) => setEditForm((f) => ({ ...f, capacity: e.target.value }))}
+              dir="ltr"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-semibold mb-2 block">الحالة</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(["available", "occupied", "reserved", "cleaning"] as const).map((s) => {
                 const m = STATUS_META[s];
-                const active = status === s;
+                const active = editForm.status === s;
                 return (
                   <button
                     key={s}
                     type="button"
-                    onClick={() => setStatus(s)}
+                    onClick={() => setEditForm((f) => ({ ...f, status: s }))}
                     className={`h-10 rounded-xl border-2 text-xs font-bold transition-all ${
                       active ? m.chip + " scale-[1.02]" : m.filterIdle
                     }`}
@@ -768,17 +960,76 @@ export default function Tables() {
                 );
               })}
             </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setSelectedTable(null)}>
-                إلغاء
-              </Button>
-              <Button onClick={handleUpdateStatus} isLoading={isPending}>
-                حفظ الحالة
-              </Button>
-            </div>
           </div>
-        )}
+
+          {editError ? (
+            <p className="text-sm font-semibold text-destructive">{editError}</p>
+          ) : null}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setEditOpen(false);
+                setEditingTable(null);
+              }}
+            >
+              إلغاء
+            </Button>
+            <Button onClick={handleSaveEdit} isLoading={isUpdating} className="gap-1.5">
+              <Pencil className="w-4 h-4" />
+              حفظ التعديل
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        title={`حذف ${deleteTypeMeta.label}`}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-5 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-destructive/15 text-destructive flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <div>
+            <p className="font-bold text-[15px]">
+              حذف {deleteTypeMeta.label} «{deleteTarget?.number}»؟
+            </p>
+            <p className="text-sm text-muted-foreground mt-1 font-semibold">
+              لا يمكن التراجع — إن كانت مستخدمة في طلبات فسيُرفض الحذف
+            </p>
+          </div>
+          {deleteError ? (
+            <p className="text-sm font-bold text-destructive">{deleteError}</p>
+          ) : null}
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError("");
+              }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 gap-1.5"
+              isLoading={isDeleting}
+              onClick={handleConfirmDelete}
+            >
+              <Trash2 className="w-4 h-4" />
+              حذف
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );

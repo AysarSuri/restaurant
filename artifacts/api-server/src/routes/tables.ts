@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { restaurantTablesTable } from "@workspace/db/schema";
-import { eq, asc, and, ne } from "drizzle-orm";
+import { restaurantTablesTable, ordersTable } from "@workspace/db/schema";
+import { eq, asc, and, ne, sql } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 
 const router: IRouter = Router();
@@ -143,17 +143,20 @@ router.put("/:id", async (req, res) => {
     return;
   }
 
-  if (nextBranchId != null) {
-    const dup = await findDuplicateSeat({
-      type: resolvedType,
-      number: nextNumber,
-      branchId: nextBranchId,
-      excludeId: id,
-    });
-    if (dup) {
-      res.status(400).json({ error: duplicateError(resolvedType) });
-      return;
-    }
+  if (nextBranchId == null || !Number.isFinite(Number(nextBranchId))) {
+    res.status(400).json({ error: "عيّن فرعاً لهذه الطاولة/الغرفة/الشخص" });
+    return;
+  }
+
+  const dup = await findDuplicateSeat({
+    type: resolvedType,
+    number: nextNumber,
+    branchId: nextBranchId,
+    excludeId: id,
+  });
+  if (dup) {
+    res.status(400).json({ error: duplicateError(resolvedType) });
+    return;
   }
 
   const [table] = await db
@@ -164,11 +167,50 @@ router.put("/:id", async (req, res) => {
       ...(location !== undefined ? { location } : {}),
       ...(status !== undefined ? { status } : {}),
       type: resolvedType,
-      ...(branchId != null ? { branchId: Number(branchId) } : {}),
+      branchId: nextBranchId,
     })
     .where(eq(restaurantTablesTable.id, id))
     .returning();
   res.json(table);
+});
+
+router.delete("/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "معرف غير صالح" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(restaurantTablesTable)
+    .where(eq(restaurantTablesTable.id, id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "غير موجود" });
+    return;
+  }
+
+  const [used] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(ordersTable)
+    .where(eq(ordersTable.tableId, id));
+  if ((used?.count ?? 0) > 0) {
+    const kind =
+      existing.type === "person"
+        ? "الشخص"
+        : existing.type === "room"
+          ? "الغرفة"
+          : "الطاولة";
+    res.status(400).json({
+      error: `لا يمكن حذف ${kind} لأنها مستخدمة في طلبات`,
+      message: `لا يمكن حذف ${kind} لأنها مستخدمة في طلبات`,
+    });
+    return;
+  }
+
+  await db.delete(restaurantTablesTable).where(eq(restaurantTablesTable.id, id));
+  res.json({ success: true });
 });
 
 export default router;

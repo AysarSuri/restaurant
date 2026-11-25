@@ -95,16 +95,16 @@ export function RoomIcon({ className = "", number }: RoomIconProps) {
       {/* Room number — large, under TV */}
       {number != null && (
         <>
-          <rect x="108" y="61" width="40" height="20" rx="4" fill="#F7D65C" />
-          <rect x="109" y="62" width="38" height="3.5" rx="1.4" fill="#FFE98A" opacity="0.55" />
+          <rect x="104" y="59" width="48" height="24" rx="5" fill="#F7D65C" />
+          <rect x="105.5" y="60.5" width="45" height="4" rx="1.6" fill="#FFE98A" opacity="0.55" />
           <text
             x="128"
-            y="73.5"
+            y="74"
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#5C3A10"
-            fontSize="18"
-            fontWeight="800"
+            fontSize={String(number).length > 2 ? "22" : "28"}
+            fontWeight="900"
             fontFamily="Vazirmatn, 'Noto Sans Arabic', sans-serif"
           >
             {number}

@@ -28,6 +28,7 @@ try {
     "inventory",
     "customers",
     "expenses",
+    "suppliers",
   ];
   for (const table of tables) {
     const sql = `UPDATE ${table} SET branch_id = $1 WHERE branch_id IS NULL`;

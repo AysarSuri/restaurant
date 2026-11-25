@@ -245,12 +245,11 @@ export default function POS() {
       ? devicePrinter.salesSendToKitchen !== false
       : appSettings?.posSaveTarget !== "none";
 
+  /** POS seats: only the selected branch (same number OK on other branches) */
   const branchTables = useMemo(() => {
     const list = tables ?? [];
     if (selectedBranchId === "all") return [];
-    return list.filter(
-      (t) => t.branchId == null || t.branchId === selectedBranchId
-    );
+    return list.filter((t) => t.branchId === selectedBranchId);
   }, [tables, selectedBranchId]);
 
   /** null = all, "favorites" = favorites only, number = category id */
@@ -329,7 +328,7 @@ export default function POS() {
     todayOrdersParams,
     {
       query: {
-        queryKey: getGetOrdersQueryKey(todayOrdersParams),
+        queryKey: [...getGetOrdersQueryKey(todayOrdersParams), selectedBranchId],
         refetchInterval: 1_500,
         staleTime: 800,
       },
@@ -341,7 +340,7 @@ export default function POS() {
     const filtered =
       selectedBranchId === "all"
         ? list
-        : list.filter((o) => o.branchId == null || o.branchId === selectedBranchId);
+        : list.filter((o) => o.branchId === selectedBranchId);
     // Newest first by created date+time (exclude cancelled from edit picker)
     return [...filtered]
       .filter((o) => o.status !== "cancelled")
@@ -777,6 +776,7 @@ export default function POS() {
           data: {
             type: orderType,
             tableId: orderType === "dine_in" ? selectedTableId ?? undefined : undefined,
+            branchId: selectedBranchId === "all" ? undefined : selectedBranchId,
             items: lineItems,
             discount: discount || undefined,
             deliveryAddress: orderType === "delivery" ? deliveryAddress : undefined,
@@ -1008,6 +1008,7 @@ export default function POS() {
         data: {
           type: orderType,
           tableId: orderType === "dine_in" ? selectedTableId ?? undefined : undefined,
+          branchId: selectedBranchId === "all" ? undefined : selectedBranchId,
           items: lineItems,
           discount: discount || undefined,
           deliveryAddress: orderType === "delivery" ? deliveryAddress : undefined,

@@ -82,22 +82,24 @@ function MovementTable({
         <div className="py-10 text-center text-sm text-muted-foreground font-semibold">{empty}</div>
       ) : (
         <div className="overflow-x-auto max-h-[min(42vh,420px)] overflow-y-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-center">
             <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10">
               <tr className="border-b border-border/40 text-muted-foreground">
-                <th className="p-2.5 text-start font-bold">#</th>
-                <th className="p-2.5 text-start font-bold">التاريخ</th>
-                <th className="p-2.5 text-start font-bold">الرقم</th>
-                <th className="p-2.5 text-start font-bold">الكمية</th>
-                <th className="p-2.5 text-start font-bold">بالصغرى</th>
-                <th className="p-2.5 text-start font-bold">المبلغ</th>
+                <th className="p-2.5 text-center font-bold">#</th>
+                <th className="p-2.5 text-center font-bold">التاريخ</th>
+                <th className="p-2.5 text-center font-bold">الرقم</th>
+                <th className="p-2.5 text-center font-bold">الكمية</th>
+                <th className="p-2.5 text-center font-bold">بالصغرى</th>
+                <th className="p-2.5 text-center font-bold">المبلغ</th>
               </tr>
             </thead>
             <tbody>
               {lines.map((l, idx) => (
                 <tr key={l.id} className="border-t border-border/30 hover:bg-secondary/30">
-                  <td className="p-2.5 font-bold tabular-nums text-muted-foreground">{idx + 1}</td>
-                  <td className="p-2.5 font-bold tabular-nums" dir="ltr">
+                  <td className="p-2.5 text-center font-bold tabular-nums text-muted-foreground">
+                    {idx + 1}
+                  </td>
+                  <td className="p-2.5 text-center font-bold tabular-nums" dir="ltr">
                     {l.date}
                     {l.time ? (
                       <span className="block text-[11px] text-muted-foreground font-semibold">
@@ -105,14 +107,16 @@ function MovementTable({
                       </span>
                     ) : null}
                   </td>
-                  <td className="p-2.5 font-extrabold font-display tabular-nums" dir="ltr">
+                  <td className="p-2.5 text-center font-extrabold font-display tabular-nums" dir="ltr">
                     {l.docNo}
                   </td>
-                  <td className="p-2.5 font-bold">
+                  <td className="p-2.5 text-center font-bold">
                     {fmtQty(l.qty)} {l.unitLabel}
                   </td>
-                  <td className="p-2.5 font-extrabold tabular-nums">{fmtQty(l.qtyMinor)}</td>
-                  <td className="p-2.5 font-extrabold font-display tabular-nums" dir="ltr">
+                  <td className="p-2.5 text-center font-extrabold tabular-nums">
+                    {fmtQty(l.qtyMinor)}
+                  </td>
+                  <td className="p-2.5 text-center font-extrabold font-display tabular-nums" dir="ltr">
                     {fmtMoney(Number(l.amount) || 0)}
                   </td>
                 </tr>

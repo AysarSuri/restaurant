@@ -386,7 +386,7 @@ export default function Login() {
     ? allTables
         .filter((tbl) => {
           if (selectedBranchId == null || selectedBranchId === "all") return false;
-          return tbl.branchId == null || tbl.branchId === selectedBranchId;
+          return tbl.branchId === selectedBranchId;
         })
         .map((tbl) => ({
           id: tbl.id,
