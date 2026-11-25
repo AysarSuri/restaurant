@@ -13,11 +13,10 @@ import {
 } from "@/components/ui-elements";
 import {
   Plus, Search, Edit, Trash2, Users,
-  Phone, Mail, Briefcase, CalendarDays, BadgeDollarSign,
+  Phone, Briefcase, BadgeDollarSign,
   ToggleLeft, ToggleRight, AlertTriangle, Building2, Check,
 } from "lucide-react";
 import type { Employee } from "@workspace/api-client-react";
-import { YmdDateInput } from "@/components/ymd-date-input";
 import { useI18n } from "@/i18n";
 
 const ROLES: { value: string; label: string; color: string }[] = [
@@ -44,9 +43,6 @@ const EMPTY_FORM = {
   name: "",
   role: "cashier",
   phone: "",
-  email: "",
-  salary: "",
-  hireDate: new Date().toISOString().slice(0, 10),
   isActive: true,
   branchIds: [] as number[],
 };
@@ -92,9 +88,6 @@ export default function Employees() {
       name: emp.name,
       role,
       phone: emp.phone ?? "",
-      email: emp.email ?? "",
-      salary: emp.salary ? String(emp.salary) : "",
-      hireDate: emp.hireDate ? String(emp.hireDate).slice(0, 10) : "",
       isActive: emp.isActive ?? true,
       branchIds: emp.branchIds ?? [],
     });
@@ -121,9 +114,6 @@ export default function Employees() {
       name: form.name.trim(),
       role: form.role as any,
       phone: form.phone || undefined,
-      email: form.email || undefined,
-      salary: form.salary ? Number(form.salary) : undefined,
-      hireDate: form.hireDate || undefined,
       isActive: form.isActive,
       allBranches: usesAll,
       branchIds: usesAll ? [] : form.branchIds,
@@ -485,60 +475,17 @@ export default function Employees() {
             )}
           </div>
 
-          {/* Phone + Email */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">
-                <Phone className="w-4 h-4 inline me-1 text-primary" />
-                رقم الهاتف
-              </label>
-              <Input
-                placeholder="07XX-XXX-XXXX"
-                value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
-                dir="ltr"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">
-                <Mail className="w-4 h-4 inline me-1 text-primary" />
-                البريد الإلكتروني
-              </label>
-              <Input
-                placeholder="email@example.com"
-                value={form.email}
-                onChange={(e) => set("email", e.target.value)}
-                dir="ltr"
-              />
-            </div>
-          </div>
-
-          {/* Salary + Hire Date */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">
-                <BadgeDollarSign className="w-4 h-4 inline me-1 text-primary" />
-                الراتب (د.ع)
-              </label>
-              <Input
-                type="number"
-                amountPad
-                placeholder="0"
-                value={form.salary}
-                onChange={(e) => set("salary", e.target.value)}
-                dir="ltr"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">
-                <CalendarDays className="w-4 h-4 inline me-1 text-primary" />
-                تاريخ التعيين
-              </label>
-              <YmdDateInput
-                value={form.hireDate}
-                onChange={(hireDate) => set("hireDate", hireDate)}
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1.5">
+              <Phone className="w-4 h-4 inline me-1 text-primary" />
+              رقم الهاتف
+            </label>
+            <Input
+              placeholder="07XX-XXX-XXXX"
+              value={form.phone}
+              onChange={(e) => set("phone", e.target.value)}
+              dir="ltr"
+            />
           </div>
 
           {/* Active Toggle */}
