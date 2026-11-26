@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { logger } from "./logger";
 
 /** Bump when new ALTER COLUMN blocks are added so they run after hot reload / redeploy. */
-const ENSURE_VERSION = 4;
+const ENSURE_VERSION = 6;
 let ensuredVersion = 0;
 let ensurePromise: Promise<void> | null = null;
 
@@ -58,6 +58,14 @@ export async function ensureSalesDeviceColumns() {
         await db.execute(sql`
           ALTER TABLE device_printers
           ADD COLUMN IF NOT EXISTS virtual_keyboard boolean NOT NULL DEFAULT false
+        `);
+        await db.execute(sql`
+          ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS a4_printer_name text NOT NULL DEFAULT ''
+        `);
+        await db.execute(sql`
+          ALTER TABLE device_printers
+          ADD COLUMN IF NOT EXISTS click_sound boolean NOT NULL DEFAULT false
         `);
         await db.execute(sql`
           ALTER TABLE orders

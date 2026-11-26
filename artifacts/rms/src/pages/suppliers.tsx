@@ -50,6 +50,7 @@ import { SupplierReturnsPanel } from "@/components/supplier-returns-panel";
 import { BranchSwitcher } from "@/components/branch-switcher";
 import { bumpStockLive } from "@/lib/stock-live";
 import { useBranch } from "@/lib/branch-context";
+import { useDeviceA4PrinterName } from "@/lib/device-printer-query";
 import { useI18n } from "@/i18n";
 import {
   ArrowLeftRight,
@@ -230,6 +231,7 @@ export default function SuppliersPage() {
   const suppliersGateBranchId =
     forcedBranchId ??
     (selectedBranchId !== "all" ? selectedBranchId : null);
+  const a4PrinterName = useDeviceA4PrinterName(suppliersGateBranchId);
   const { shiftClosed, blockReason, blockReasonFor } = useOpenShiftGate(
     suppliersGateBranchId
   );
@@ -1053,8 +1055,12 @@ export default function SuppliersPage() {
       .replace(/"/g, "&quot;");
 
   const printBlock = (title: string, html: string) => {
+    const docTitle = a4PrinterName?.trim() || title;
+    const printerHint = a4PrinterName?.trim()
+      ? `<span dir="ltr" style="opacity:.9">طابعة A4: ${escHtml(a4PrinterName.trim())}</span>`
+      : `<span>معاينة تقرير A4 — بدون طباعة مباشرة</span>`;
     const fullHtml = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/><title>${escHtml(
-      title
+      docTitle
     )}</title>
       <style>
         body{font-family:Tahoma,Arial,sans-serif;padding:72px 24px 24px;color:#111}
@@ -1074,7 +1080,7 @@ export default function SuppliersPage() {
         @media print{.rms-a4-preview-bar,button{display:none!important}body{padding-top:24px!important}}
       </style></head><body>
       <div class="rms-a4-preview-bar" role="toolbar">
-        <span>معاينة تقرير A4 — بدون طباعة مباشرة</span>
+        ${printerHint}
         <button type="button" class="print-btn" onclick="window.print()">طباعة</button>
         <button type="button" class="close-btn" onclick="window.close()">إغلاق</button>
       </div>
@@ -1200,6 +1206,7 @@ export default function SuppliersPage() {
           balance: Number(l.balance) || 0,
           kind: l.kind,
         })),
+        a4PrinterName,
       });
     } catch (e) {
       window.alert(

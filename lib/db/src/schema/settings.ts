@@ -59,7 +59,10 @@ export const devicePrintersTable = pgTable("device_printers", {
   /** Stable browser/machine fingerprint stored in localStorage */
   deviceKey: text("device_key").notNull().unique(),
   deviceName: text("device_name").notNull(),
+  /** Thermal 80×80 printer for receipts / kitchen tickets */
   printerName: text("printer_name").notNull().default(""),
+  /** A4 printer for A4 reports only (inventory, expenses, vault, suppliers, …) */
+  a4PrinterName: text("a4_printer_name").notNull().default(""),
   /** Fixed receipt paper format */
   paperSize: text("paper_size").default("80x80").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
@@ -85,6 +88,8 @@ export const devicePrintersTable = pgTable("device_printers", {
   virtualNumericKeypad: boolean("virtual_numeric_keypad").default(false).notNull(),
   /** When true, text fields open the multilingual on-screen keyboard on this device */
   virtualKeyboard: boolean("virtual_keyboard").default(false).notNull(),
+  /** When true, play a short click sound after every button press on this device */
+  clickSound: boolean("click_sound").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

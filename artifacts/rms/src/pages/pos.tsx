@@ -954,18 +954,29 @@ export default function POS() {
 
   const buildDirectReceipt = (paymentLabel: string) => {
     const nowStamp = new Date();
+    const seatType = (selectedTable?.type ?? "table") as SeatEntityType;
+    const seatValue = selectedTable?.number != null ? String(selectedTable.number).trim() : "";
+    const seatVisual =
+      orderType === "dine_in" && seatValue
+        ? {
+            kind:
+              seatType === "room" ? ("room" as const) : seatType === "person" ? ("person" as const) : ("table" as const),
+            value: seatValue,
+          }
+        : null;
     return {
       restaurantName: appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
       branchName: currentBranch?.name?.trim() || branchLabel,
-      mobile1: currentBranch?.mobile1,
-      mobile2: currentBranch?.mobile2,
+      mobile1: currentBranch?.mobile1 || appSettings?.mobile || null,
+      mobile2: currentBranch?.mobile2 || null,
       address: currentBranch?.address,
-      logoUrl: currentBranch?.logoUrl,
+      logoUrl: currentBranch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
       invoiceNumber,
       dateLabel: formatDate(nowStamp),
       timeLabel: formatClock(nowStamp),
       orderTypeLabel: orderTypeLabels[orderType],
       seatLabel: orderType === "dine_in" ? seatLabel(selectedTable, t) : null,
+      seatVisual,
       items: cart.map((i) => ({
         name: `${i.isReturn ? `${t("pos.returnLine")} · ` : ""}${menuItemDisplayName(i, locale)}`,
         quantity: cartLineSignedQty(i),

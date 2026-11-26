@@ -72,6 +72,8 @@ export interface DevicePrinter {
   deviceKey: string;
   deviceName: string;
   printerName: string;
+  /** A4 reports printer name for this device (not used for thermal 80mm) */
+  a4PrinterName?: string;
   paperSize: string;
   isActive: boolean;
   note?: string | null;
@@ -91,6 +93,8 @@ export interface DevicePrinter {
   virtualNumericKeypad?: boolean;
   /** Multilingual on-screen keyboard for text fields on this device */
   virtualKeyboard?: boolean;
+  /** Play a click sound after every button press on this device */
+  clickSound?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -99,6 +103,7 @@ export interface UpsertDevicePrinterBody {
   deviceKey: string;
   deviceName: string;
   printerName?: string;
+  a4PrinterName?: string;
   branchId?: number | null;
   note?: string;
   isActive?: boolean;
@@ -110,11 +115,13 @@ export interface UpsertDevicePrinterBody {
   formsFullscreen?: boolean;
   virtualNumericKeypad?: boolean;
   virtualKeyboard?: boolean;
+  clickSound?: boolean;
 }
 
 export interface UpdateDevicePrinterBody {
   deviceName?: string;
   printerName?: string;
+  a4PrinterName?: string;
   branchId?: number | null;
   note?: string;
   isActive?: boolean;
@@ -126,6 +133,7 @@ export interface UpdateDevicePrinterBody {
   formsFullscreen?: boolean;
   virtualNumericKeypad?: boolean;
   virtualKeyboard?: boolean;
+  clickSound?: boolean;
 }
 
 export const getGetSettingsUrl = () => `/api/settings`;

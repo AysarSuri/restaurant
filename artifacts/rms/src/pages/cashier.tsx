@@ -46,7 +46,7 @@ import {
   resolveDevicePrinter,
 } from "@/lib/device-printer-query";
 import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
-import { printKitchenTicketThermal } from "@/lib/print-receipt";
+import { printKitchenTicketThermal, printThermalReceipt } from "@/lib/print-receipt";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { toast } from "@/hooks/use-toast";
 import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
@@ -810,34 +810,58 @@ export default function Cashier() {
 
   const confirmCashierCollect = () => {
     if (!paymentDialog) return;
-    const subtotal = Number(paymentDialog.subtotal) || 0;
+    const orderSnapshot = paymentDialog;
+    const subtotal = Number(orderSnapshot.subtotal) || 0;
     const discount = Math.max(
       0,
       Math.min(checkoutDiscount, subtotal > 0 ? subtotal : checkoutDiscount)
     );
-    const total = orderPayableAmount({ ...paymentDialog, discount });
+    const total = orderPayableAmount({ ...orderSnapshot, discount });
     if (checkoutPayMethod === "cash" && checkoutReceived < total) return;
     if (checkoutPayMethod === "card" && !checkoutCardId) return;
 
     const paymentMethod = checkoutPayMethod === "card" ? "card" : "cash";
+    const receivedSnapshot = checkoutReceived;
+    const cardIdSnapshot = checkoutCardId;
+    const cardName =
+      paymentMethod === "card"
+        ? branchPaymentCards.find((c) => c.id === cardIdSnapshot)?.name?.trim() || ""
+        : "";
     // Cashier collect = واصل only — never send to kitchen from this screen
     const keepKitchen =
-      paymentDialog.status === "preparing" || paymentDialog.status === "ready"
-        ? paymentDialog.status
+      orderSnapshot.status === "preparing" || orderSnapshot.status === "ready"
+        ? orderSnapshot.status
         : "paid";
 
     updateStatus(
       {
-        id: paymentDialog.id,
+        id: orderSnapshot.id,
         data: {
           status: keepKitchen,
           paymentMethod,
-          cardId: paymentMethod === "card" ? checkoutCardId : null,
+          cardId: paymentMethod === "card" ? cardIdSnapshot : null,
           discount,
         } as any,
       },
       {
         onSuccess: () => {
+          // Same sales thermal receipt as POS (with prices) after تحصيل / تأكيد واصل
+          try {
+            printCashierSalesReceipt(orderSnapshot, {
+              paymentMethod,
+              cardName,
+              discount,
+              total,
+              received: paymentMethod === "cash" ? receivedSnapshot : total,
+            });
+          } catch {
+            /* save already succeeded — toast print failure below */
+            toast({
+              variant: "destructive",
+              title: t("cashier.printFailed"),
+              description: t("pos.printPopupBlocked"),
+            });
+          }
           setPaymentDialog(null);
           setSelectedOrder(null);
           setIsReceivedPadOpen(false);
@@ -849,6 +873,12 @@ export default function Cashier() {
           bumpStockLive();
           void refreshAll(false);
           setPage("paid");
+          toast({
+            title: t("pos.savedPrinted"),
+            description: devicePrinter?.printerName?.trim()
+              ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
+              : t("pos.printGeneric"),
+          });
         },
       }
     );
@@ -898,15 +928,25 @@ export default function Cashier() {
 
   const primaryPayLabel = t("cashier.collectPaid");
 
+  const resolveOrderBranch = (order: Order) =>
+    (order.branchId != null
+      ? (branches ?? []).find((b) => b.id === order.branchId)
+      : null) ??
+    (selectedBranchId !== "all"
+      ? (branches ?? []).find((b) => b.id === selectedBranchId)
+      : null);
+
+  const orderTypeLabel = (order: Order) =>
+    order.type === "delivery"
+      ? t("order.delivery")
+      : order.type === "takeaway"
+        ? t("order.takeaway")
+        : t("order.dineIn");
+
+  /** Print button on invoice card → kitchen thermal (no prices) */
   const printCashierReceipt = (order: Order) => {
     const card = toCard(order, t);
-    const branch =
-      (order.branchId != null
-        ? (branches ?? []).find((b) => b.id === order.branchId)
-        : null) ??
-      (selectedBranchId !== "all"
-        ? (branches ?? []).find((b) => b.id === selectedBranchId)
-        : null);
+    const branch = resolveOrderBranch(order);
     const created = new Date(order.createdAt);
     const statusLabel =
       order.status === "ready"
@@ -916,20 +956,16 @@ export default function Cashier() {
           : order.status === "preparing"
             ? t("kds.colPreparing")
             : t("cashier.colUnpaid");
-    const typeLabel =
-      order.type === "delivery"
-        ? t("order.delivery")
-        : order.type === "takeaway"
-          ? t("order.takeaway")
-          : t("order.dineIn");
 
     try {
-      // Same kitchen thermal ticket as KDS (no prices)
       printKitchenTicketThermal({
         restaurantName:
           appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
         branchName: branch?.name?.trim() || branchLabel,
         logoUrl: branch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
+        mobile1: branch?.mobile1 || appSettings?.mobile || null,
+        mobile2: branch?.mobile2 || null,
+        address: branch?.address || null,
         invoiceNumber: order.orderNumber,
         dateLabel: created.toLocaleDateString("en-GB", {
           year: "numeric",
@@ -943,7 +979,7 @@ export default function Cashier() {
           hour12: false,
           numberingSystem: "latn",
         }),
-        orderTypeLabel: typeLabel,
+        orderTypeLabel: orderTypeLabel(order),
         seatLabel: card.seatLabel,
         kitchenStatusLabel: statusLabel,
         items: (order.items ?? []).map((item: any) => ({
@@ -967,6 +1003,95 @@ export default function Cashier() {
         description: t("pos.printPopupBlocked"),
       });
     }
+  };
+
+  /** Same sales thermal as POS (with prices) after تحصيل / تأكيد واصل */
+  const printCashierSalesReceipt = (
+    order: Order,
+    opts: {
+      paymentMethod: "cash" | "card";
+      cardName?: string;
+      discount: number;
+      total: number;
+      received: number;
+    }
+  ) => {
+    const card = toCard(order, t);
+    const branch = resolveOrderBranch(order);
+    const created = new Date(order.createdAt);
+    const subtotal = Number(order.subtotal) || 0;
+    const deliveryFee = Number((order as any).deliveryFee) || 0;
+    const paymentLabel =
+      opts.paymentMethod === "card"
+        ? opts.cardName
+          ? t("pos.cardNamed", { name: opts.cardName })
+          : t("pos.cardShort")
+        : t("pos.cash");
+    const change =
+      opts.paymentMethod === "cash"
+        ? Math.max(0, opts.received - opts.total)
+        : undefined;
+
+    const seatValue =
+      (order as { table?: { number?: string } }).table?.number?.trim() || "";
+    const seatVisual =
+      seatValue &&
+      (card.seatKind === "table" ||
+        card.seatKind === "room" ||
+        card.seatKind === "person")
+        ? {
+            kind: card.seatKind as "table" | "room" | "person",
+            value: seatValue,
+          }
+        : null;
+
+    printThermalReceipt({
+      restaurantName:
+        appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
+      branchName: branch?.name?.trim() || branchLabel,
+      mobile1: branch?.mobile1 || appSettings?.mobile || null,
+      mobile2: branch?.mobile2 || null,
+      address: branch?.address || null,
+      logoUrl: branch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
+      invoiceNumber: order.orderNumber,
+      dateLabel: created.toLocaleDateString("en-GB", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        numberingSystem: "latn",
+      }),
+      timeLabel: created.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        numberingSystem: "latn",
+      }),
+      orderTypeLabel: orderTypeLabel(order),
+      seatLabel: card.seatLabel,
+      seatVisual,
+      items: (order.items ?? []).map((item: any) => {
+        const qty = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unitPrice) || 0;
+        const lineTotal =
+          Number(item.totalPrice) ||
+          (Number.isFinite(unitPrice) ? unitPrice * qty : 0);
+        return {
+          name: item.menuItem?.nameAr || t("common.item"),
+          quantity: qty,
+          unitPrice,
+          lineTotal,
+        };
+      }),
+      subtotal,
+      discount: opts.discount,
+      deliveryFee,
+      total: opts.total,
+      paymentLabel,
+      received: opts.received,
+      change: change && change > 0 ? change : undefined,
+      formatMoney: formatMoneyAmount,
+      printerName: devicePrinter?.printerName?.trim() || null,
+    });
   };
 
   const paymentSubtotal = Number(paymentDialog?.subtotal) || 0;

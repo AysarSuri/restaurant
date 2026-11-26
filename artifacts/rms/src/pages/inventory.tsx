@@ -14,6 +14,7 @@ import { BranchSwitcher } from "@/components/branch-switcher";
 import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import { printWarehouseStockReportA4 } from "@/lib/print-receipt";
+import { useDeviceA4PrinterName } from "@/lib/device-printer-query";
 import { subscribeStockLive } from "@/lib/stock-live";
 import { subscribeOrdersLive } from "@/lib/orders-live";
 import {
@@ -132,6 +133,7 @@ function MovementTable({
 export default function Inventory() {
   const { t, formatDateTime } = useI18n();
   const { branchLabel, selectedBranchId } = useBranch();
+  const a4PrinterName = useDeviceA4PrinterName(selectedBranchId);
   const [page, setPage] = useState<Page>("hub");
   const [search, setSearch] = useState("");
   const [selectedItemId, setSelectedItemId] = useState<string>("");
@@ -249,6 +251,7 @@ export default function Inventory() {
       formatMoney: fmtMoney,
       lines,
       totalCostSum: lines.reduce((s, l) => s + l.totalCost, 0),
+      a4PrinterName,
     });
     setReportOpen(false);
   };
