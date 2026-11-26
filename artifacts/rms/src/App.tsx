@@ -35,6 +35,7 @@ import { applyBrandPrimary } from "@/lib/brand-theme";
 import { LocaleProvider } from "@/i18n";
 import { EnterAsTab } from "@/components/enter-as-tab";
 import { useDeviceFormsFullscreen } from "@/hooks/use-device-forms-fullscreen";
+import { useDeviceClickSound } from "@/hooks/use-device-click-sound";
 import { VirtualNumericKeypadHost } from "@/components/virtual-numeric-keypad-host";
 import { VirtualKeyboardHost } from "@/components/virtual-keyboard-host";
 import { useGetSettings } from "@workspace/api-client-react";
@@ -105,6 +106,12 @@ function BrandThemeSync() {
 function FormsFullscreenSync() {
   const { user } = useAuth();
   useDeviceFormsFullscreen(Boolean(user));
+  return null;
+}
+
+function ClickSoundSync() {
+  const { user } = useAuth();
+  useDeviceClickSound(Boolean(user));
   return null;
 }
 
@@ -369,6 +376,7 @@ function App() {
                 <EnterAsTab />
                 <BrandThemeSync />
                 <FormsFullscreenSync />
+                <ClickSoundSync />
                 <VirtualNumericKeypadSync />
                 <VirtualKeyboardSync />
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
