@@ -35,6 +35,7 @@ import {
   PencilLine,
   Clock,
   Save,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
@@ -46,6 +47,19 @@ import { Dialog } from "@/components/ui-elements";
 interface CartItem extends MenuItem {
   cartQuantity: number;
   price: number;
+  isReturn?: boolean;
+}
+
+function cartLineKey(item: Pick<CartItem, "id" | "isReturn">) {
+  return `${item.id}:${item.isReturn ? "return" : "sale"}`;
+}
+
+function cartLineSignedQty(item: Pick<CartItem, "cartQuantity" | "isReturn">) {
+  return item.isReturn ? -Math.abs(item.cartQuantity) : item.cartQuantity;
+}
+
+function cartLineAmount(item: Pick<CartItem, "price" | "cartQuantity" | "isReturn">) {
+  return item.price * cartLineSignedQty(item);
 }
 
 type SeatKind = "table" | "room" | "person";
@@ -106,6 +120,7 @@ export default function TableOrder() {
   const [editPickerOpen, setEditPickerOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingOrderNumber, setEditingOrderNumber] = useState<string | null>(null);
+  const [isReturnMode, setIsReturnMode] = useState(false);
 
   const tableId = user?.tableId;
   const tableNumber = user?.tableNumber;
@@ -195,29 +210,44 @@ export default function TableOrder() {
   }, [items, search, activeCategory]);
 
   const addToCart = (item: MenuItem) => {
+    const asReturn = isReturnMode;
     setCart((prev) => {
-      const ex = prev.find((i) => i.id === item.id);
+      const ex = prev.find(
+        (i) => i.id === item.id && Boolean(i.isReturn) === asReturn
+      );
       if (ex) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, cartQuantity: i.cartQuantity + 1 } : i
+          i.id === item.id && Boolean(i.isReturn) === asReturn
+            ? { ...i, cartQuantity: i.cartQuantity + 1 }
+            : i
         );
       }
-      return [...prev, { ...item, price: Number(item.price), cartQuantity: 1 }];
+      return [
+        ...prev,
+        {
+          ...item,
+          price: Number(item.price),
+          cartQuantity: 1,
+          isReturn: asReturn || undefined,
+        },
+      ];
     });
   };
 
-  const updateQty = (id: number, delta: number) => {
+  const updateQty = (id: number, delta: number, isReturn = false) => {
     setCart((prev) =>
       prev
         .map((i) =>
-          i.id === id ? { ...i, cartQuantity: Math.max(0, i.cartQuantity + delta) } : i
+          i.id === id && Boolean(i.isReturn) === isReturn
+            ? { ...i, cartQuantity: Math.max(0, i.cartQuantity + delta) }
+            : i
         )
         .filter((i) => i.cartQuantity > 0)
     );
   };
 
   const totalItems = cart.reduce((s, i) => s + i.cartQuantity, 0);
-  const subtotal = cart.reduce((s, i) => s + i.price * i.cartQuantity, 0);
+  const subtotal = cart.reduce((s, i) => s + cartLineAmount(i), 0);
 
   const loadOrderIntoCart = (order: Order) => {
     const menuById = new Map((items ?? []).map((m) => [m.id, m]));
@@ -225,8 +255,10 @@ export default function TableOrder() {
     for (const line of order.items ?? []) {
       const menuItemId = Number(line.menuItemId);
       if (!Number.isFinite(menuItemId)) continue;
-      const qty = Math.abs(Number(line.quantity) || 0);
+      const signedQty = Number(line.quantity) || 0;
+      const qty = Math.abs(signedQty);
       if (qty === 0) continue;
+      const asReturn = signedQty < 0;
       const unitPrice = Number(line.unitPrice);
       const fromOrder = line.menuItem;
       const fromMenu = menuById.get(menuItemId);
@@ -242,7 +274,9 @@ export default function TableOrder() {
           isAvailable: true,
         } as MenuItem);
 
-      const existing = nextCart.find((c) => c.id === menuItemId);
+      const existing = nextCart.find(
+        (c) => c.id === menuItemId && Boolean(c.isReturn) === asReturn
+      );
       if (existing) {
         existing.cartQuantity += qty;
         continue;
@@ -251,9 +285,11 @@ export default function TableOrder() {
         ...base,
         price: Number.isFinite(unitPrice) ? unitPrice : Number(base.price) || 0,
         cartQuantity: qty,
+        isReturn: asReturn || undefined,
       });
     }
     setCart(nextCart);
+    setIsReturnMode(false);
     setEditingOrderId(order.id);
     setEditingOrderNumber(order.orderNumber || null);
     setOrderNum(order.orderNumber || "");
@@ -294,7 +330,7 @@ export default function TableOrder() {
     }
     const lineItems = cart.map((i) => ({
       menuItemId: i.id,
-      quantity: i.cartQuantity,
+      quantity: cartLineSignedQty(i),
     }));
 
     if (editingOrderId != null) {
@@ -339,6 +375,7 @@ export default function TableOrder() {
     setCart([]);
     setSearch("");
     setActiveCategory("favorites");
+    setIsReturnMode(false);
     clearEditing();
     setStep("menu");
   };
@@ -392,51 +429,92 @@ export default function TableOrder() {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         <AnimatePresence>
-          {cart.map((item) => (
+          {cart.map((item) => {
+            const isReturnLine = Boolean(item.isReturn);
+            const lineAmount = cartLineAmount(item);
+            return (
             <motion.div
-              key={item.id}
+              key={cartLineKey(item)}
               layout
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
-              className="rounded-2xl border border-border/40 bg-background/70 p-3 shadow-sm"
+              className={`rounded-2xl border p-3 shadow-sm ${
+                isReturnLine
+                  ? "border-rose-500/40 bg-rose-500/10"
+                  : "border-border/40 bg-background/70"
+              }`}
             >
               <div className="flex justify-between items-start gap-2 mb-2.5">
                 <button
                   type="button"
-                  onClick={() => updateQty(item.id, -item.cartQuantity)}
+                  onClick={() => updateQty(item.id, -item.cartQuantity, isReturnLine)}
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
-                <p className="font-bold text-sm flex-1 text-end leading-snug">{item.nameAr}</p>
+                <div className="min-w-0 flex-1 text-end">
+                  <p
+                    className={`font-bold text-sm leading-snug ${
+                      isReturnLine ? "text-rose-700 dark:text-rose-300" : ""
+                    }`}
+                  >
+                    {item.nameAr}
+                  </p>
+                  {isReturnLine ? (
+                    <span className="inline-flex mt-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-extrabold text-rose-700 dark:text-rose-300">
+                      {t("pos.returnLine")}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 rounded-xl border border-border/50 bg-secondary/40 p-0.5">
+                <div
+                  className={`flex items-center gap-1 rounded-xl border p-0.5 ${
+                    isReturnLine
+                      ? "border-rose-500/35 bg-rose-500/10"
+                      : "border-border/50 bg-secondary/40"
+                  }`}
+                >
                   <button
                     type="button"
-                    onClick={() => updateQty(item.id, 1)}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-primary/15 rounded-lg text-primary transition-colors"
+                    onClick={() => updateQty(item.id, 1, isReturnLine)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                      isReturnLine
+                        ? "hover:bg-rose-500/20 text-rose-600 dark:text-rose-300"
+                        : "hover:bg-primary/15 text-primary"
+                    }`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
-                  <span className="w-7 text-center font-extrabold text-sm tabular-nums">
-                    {item.cartQuantity}
+                  <span
+                    className={`w-8 text-center font-extrabold text-sm tabular-nums ${
+                      isReturnLine ? "text-rose-700 dark:text-rose-300" : ""
+                    }`}
+                  >
+                    {isReturnLine ? `-${item.cartQuantity}` : item.cartQuantity}
                   </span>
                   <button
                     type="button"
-                    onClick={() => updateQty(item.id, -1)}
+                    onClick={() => updateQty(item.id, -1, isReturnLine)}
                     className="w-8 h-8 flex items-center justify-center hover:bg-secondary rounded-lg transition-colors"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <span className="text-primary font-extrabold font-display text-sm tabular-nums">
-                  {formatIQD(item.price * item.cartQuantity)} {t("common.iqd")}
+                <span
+                  className={`font-extrabold font-display text-sm tabular-nums ${
+                    isReturnLine
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-primary"
+                  }`}
+                >
+                  {formatIQD(lineAmount)} {t("common.iqd")}
                 </span>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </AnimatePresence>
 
         {cart.length === 0 && (
@@ -455,8 +533,40 @@ export default function TableOrder() {
             {t("pos.shiftClosedBlock")}
           </div>
         ) : null}
+        <button
+          type="button"
+          onClick={() => setIsReturnMode((v) => !v)}
+          className={`group relative w-full h-12 inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl border-2 font-extrabold text-sm transition-all active:scale-[0.98] ${
+            isReturnMode
+              ? "border-rose-400/80 bg-gradient-to-l from-rose-600 via-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/35"
+              : "border-rose-500/40 bg-gradient-to-l from-rose-500/12 via-card to-card text-rose-700 dark:text-rose-300 hover:border-rose-500/70"
+          }`}
+          title={t("pos.returnModeOn")}
+          aria-pressed={isReturnMode}
+        >
+          <span
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl border ${
+              isReturnMode
+                ? "border-white/35 bg-white/20 text-white"
+                : "border-rose-500/35 bg-rose-500/15 text-rose-600 dark:text-rose-300"
+            }`}
+          >
+            <RotateCcw
+              className={`w-4 h-4 ${isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""}`}
+              strokeWidth={2.35}
+            />
+          </span>
+          <span>{t("pos.return")}</span>
+          {isReturnMode ? (
+            <span className="h-2 w-2 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.25)]" />
+          ) : null}
+        </button>
         <div className="flex justify-between items-end font-bold">
-          <span className="text-primary font-display text-xl tabular-nums">
+          <span
+            className={`font-display text-xl tabular-nums ${
+              subtotal < 0 ? "text-rose-600 dark:text-rose-400" : "text-primary"
+            }`}
+          >
             {formatIQD(subtotal)} {t("common.iqd")}
           </span>
           <span className="text-sm text-muted-foreground">{t("common.total")}</span>
@@ -539,6 +649,23 @@ export default function TableOrder() {
               </span>
             </div>
           ) : null}
+
+          <button
+            type="button"
+            onClick={() => setIsReturnMode((v) => !v)}
+            className={`relative inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border text-sm font-extrabold transition-colors ${
+              isReturnMode
+                ? "border-rose-400/80 bg-rose-500 text-white shadow-md shadow-rose-500/30"
+                : "border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200 hover:bg-rose-500/20"
+            }`}
+            title={t("pos.returnModeOn")}
+            aria-pressed={isReturnMode}
+          >
+            <RotateCcw
+              className={`w-4 h-4 ${isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""}`}
+            />
+            <span className="hidden sm:inline">{t("pos.return")}</span>
+          </button>
 
           <button
             type="button"
@@ -631,7 +758,9 @@ export default function TableOrder() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3">
                 <AnimatePresence mode="popLayout">
                   {filteredItems.map((item) => {
-                    const inCart = cart.find((c) => c.id === item.id);
+                    const inCart = cart.find(
+                      (c) => c.id === item.id && Boolean(c.isReturn) === isReturnMode
+                    );
                     return (
                       <motion.button
                         key={item.id}
@@ -643,18 +772,26 @@ export default function TableOrder() {
                         whileTap={{ scale: 0.96 }}
                         onClick={() => addToCart(item)}
                         className={`text-start bg-card/85 border rounded-2xl p-3 md:p-3.5 cursor-pointer hover:shadow-lg transition-all relative overflow-hidden ${
-                          inCart
-                            ? "border-primary/55 bg-primary/5 shadow-md shadow-primary/10"
-                            : "border-border/45 hover:border-primary/35"
+                          isReturnMode
+                            ? inCart
+                              ? "border-rose-500/60 bg-rose-500/10 shadow-md shadow-rose-500/15"
+                              : "border-rose-500/35 hover:border-rose-500/55"
+                            : inCart
+                              ? "border-primary/55 bg-primary/5 shadow-md shadow-primary/10"
+                              : "border-border/45 hover:border-primary/35"
                         }`}
                       >
                         {inCart && (
                           <motion.div
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className="absolute top-2 left-2 min-w-6 h-6 md:min-w-7 md:h-7 px-1 bg-primary rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-primary-foreground z-10 shadow-md tabular-nums"
+                            className={`absolute top-2 left-2 min-w-6 h-6 md:min-w-7 md:h-7 px-1 rounded-full flex items-center justify-center text-xs md:text-sm font-bold z-10 shadow-md tabular-nums ${
+                              isReturnMode
+                                ? "bg-rose-500 text-white"
+                                : "bg-primary text-primary-foreground"
+                            }`}
                           >
-                            {inCart.cartQuantity}
+                            {isReturnMode ? `-${inCart.cartQuantity}` : inCart.cartQuantity}
                           </motion.div>
                         )}
                         <div className="aspect-[4/3] rounded-xl bg-gradient-to-br from-secondary/80 to-secondary/40 border border-border/30 flex items-center justify-center mb-2.5 overflow-hidden">
@@ -730,17 +867,28 @@ export default function TableOrder() {
               {t("tableOrder.details", { n: tableNumber ?? tableInfo?.number ?? "" })}
             </p>
             {cart.map((i) => (
-              <div key={i.id} className="flex justify-between text-sm gap-3">
-                <span className="text-primary font-display font-bold tabular-nums">
-                  {formatIQD(i.price * i.cartQuantity)} {t("common.iqd")}
+              <div key={cartLineKey(i)} className="flex justify-between text-sm gap-3">
+                <span
+                  className={`font-display font-bold tabular-nums ${
+                    i.isReturn
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-primary"
+                  }`}
+                >
+                  {formatIQD(cartLineAmount(i))} {t("common.iqd")}
                 </span>
                 <span className="font-medium">
-                  {i.nameAr} × {i.cartQuantity}
+                  {i.isReturn ? `${t("pos.returnLine")} · ` : ""}
+                  {i.nameAr} × {i.isReturn ? `-${i.cartQuantity}` : i.cartQuantity}
                 </span>
               </div>
             ))}
             <div className="flex justify-between font-extrabold pt-2 border-t border-border/50">
-              <span className="text-primary font-display text-lg tabular-nums">
+              <span
+                className={`font-display text-lg tabular-nums ${
+                  subtotal < 0 ? "text-rose-600 dark:text-rose-400" : "text-primary"
+                }`}
+              >
                 {formatIQD(subtotal)} {t("common.iqd")}
               </span>
               <span>{t("common.total")}</span>

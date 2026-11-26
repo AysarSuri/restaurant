@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGetDevicePrinters } from "@workspace/api-client-react";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
 import {
   DEVICE_PRINTERS_QUERY_KEY,
   DEVICE_PRINTERS_REQUEST,
 } from "@/lib/device-printer-query";
+import {
+  getLocalClickSound,
+  hasLocalClickSoundPref,
+  resolveClickSoundEnabled,
+} from "@/lib/device-pad-prefs";
 
 let sharedAudioCtx: AudioContext | null = null;
 
@@ -60,10 +65,11 @@ function isClickableTarget(el: EventTarget | null): boolean {
 
 /**
  * Per-device click sound from Settings → Other.
- * When enabled for this machine, every button / role=button click plays a short tone.
+ * Local preference wins over API so the toggle never silently flips off.
  */
 export function useDeviceClickSound(enabled: boolean) {
   const deviceKey = useMemo(() => getOrCreateDeviceKey(), []);
+  const [localTick, setLocalTick] = useState(0);
   const { data: printers } = useGetDevicePrinters({
     query: {
       queryKey: DEVICE_PRINTERS_QUERY_KEY,
@@ -74,14 +80,25 @@ export function useDeviceClickSound(enabled: boolean) {
     request: DEVICE_PRINTERS_REQUEST,
   });
 
+  useEffect(() => {
+    const sync = () => setLocalTick((n) => n + 1);
+    window.addEventListener("rms-click-sound-changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("rms-click-sound-changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   const wantSound = useMemo(() => {
     if (!enabled) return false;
+    if (hasLocalClickSoundPref()) return getLocalClickSound();
     const mine =
       (printers ?? []).find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
       (printers ?? []).find((p) => p.deviceKey === deviceKey) ??
       null;
-    return mine?.clickSound === true;
-  }, [enabled, printers, deviceKey]);
+    return resolveClickSoundEnabled(mine?.clickSound, deviceKey, mine?.deviceKey ?? null);
+  }, [enabled, printers, deviceKey, localTick]);
 
   const wantSoundRef = useRef(wantSound);
   wantSoundRef.current = wantSound;
@@ -96,7 +113,6 @@ export function useDeviceClickSound(enabled: boolean) {
       playUiClickSound();
     };
 
-    // Unlock AudioContext on first gesture, then keep listening
     const unlock = () => {
       const ctx = getAudioContext();
       if (ctx?.state === "suspended") void ctx.resume();
