@@ -304,6 +304,8 @@ function withSalesDefaults<T extends Record<string, unknown>>(row: T) {
     formsFullscreen: Boolean(row.formsFullscreen),
     virtualNumericKeypad: Boolean(row.virtualNumericKeypad),
     virtualKeyboard: Boolean(row.virtualKeyboard),
+    a4PrinterName: String((row as { a4PrinterName?: string | null }).a4PrinterName ?? ""),
+    clickSound: Boolean((row as { clickSound?: boolean | null }).clickSound),
   };
 }
 
@@ -362,6 +364,7 @@ router.get("/printers", async (_req, res) => {
       deviceKey: devicePrintersTable.deviceKey,
       deviceName: devicePrintersTable.deviceName,
       printerName: devicePrintersTable.printerName,
+      a4PrinterName: devicePrintersTable.a4PrinterName,
       paperSize: devicePrintersTable.paperSize,
       isActive: devicePrintersTable.isActive,
       note: devicePrintersTable.note,
@@ -373,6 +376,7 @@ router.get("/printers", async (_req, res) => {
       formsFullscreen: devicePrintersTable.formsFullscreen,
       virtualNumericKeypad: devicePrintersTable.virtualNumericKeypad,
       virtualKeyboard: devicePrintersTable.virtualKeyboard,
+      clickSound: devicePrintersTable.clickSound,
       createdAt: devicePrintersTable.createdAt,
       updatedAt: devicePrintersTable.updatedAt,
       branchName: branchesTable.name,
@@ -408,6 +412,7 @@ router.post("/printers", async (req, res) => {
     deviceKey,
     deviceName,
     printerName,
+    a4PrinterName,
     branchId,
     note,
     isActive,
@@ -426,6 +431,7 @@ router.post("/printers", async (req, res) => {
 
   const resolvedBranchId = resolveWriteBranchId(scope, branchId != null ? Number(branchId) : null);
   const printer = String(printerName ?? "").trim();
+  const a4Printer = String(a4PrinterName ?? "").trim();
 
   // One printer only per device — update existing (and purge duplicates)
   const existingId = await keepSinglePrinterForDevice(key);
@@ -444,6 +450,8 @@ router.post("/printers", async (req, res) => {
       .set({
         deviceName: name,
         printerName: printer,
+        a4PrinterName:
+          a4PrinterName != null ? a4Printer : existing.a4PrinterName ?? "",
         branchId: resolvedBranchId ?? existing.branchId,
         paperSize: "80x80",
         note: note != null ? String(note).trim() || null : existing.note,
@@ -490,6 +498,7 @@ router.post("/printers", async (req, res) => {
         deviceKey: key,
         deviceName: name,
         printerName: printer,
+        a4PrinterName: a4Printer,
         branchId: resolvedBranchId,
         paperSize: "80x80",
         note: note ? String(note).trim() : null,
@@ -528,6 +537,7 @@ router.post("/printers", async (req, res) => {
       .set({
         deviceName: name,
         printerName: printer,
+        a4PrinterName: a4Printer,
         branchId: resolvedBranchId,
         paperSize: "80x80",
         note: note != null ? String(note).trim() || null : null,
@@ -561,6 +571,7 @@ router.put("/printers/:id", async (req, res) => {
   const {
     deviceName,
     printerName,
+    a4PrinterName,
     branchId,
     note,
     isActive,
@@ -605,6 +616,10 @@ router.put("/printers/:id", async (req, res) => {
     .set({
       deviceName: name,
       printerName: printerName != null ? String(printerName).trim() : existing.printerName,
+      a4PrinterName:
+        a4PrinterName != null
+          ? String(a4PrinterName).trim()
+          : existing.a4PrinterName ?? "",
       branchId:
         branchId === null
           ? null

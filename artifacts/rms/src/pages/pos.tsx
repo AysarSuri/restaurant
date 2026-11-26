@@ -954,6 +954,16 @@ export default function POS() {
 
   const buildDirectReceipt = (paymentLabel: string) => {
     const nowStamp = new Date();
+    const seatType = (selectedTable?.type ?? "table") as SeatEntityType;
+    const seatValue = selectedTable?.number != null ? String(selectedTable.number).trim() : "";
+    const seatVisual =
+      orderType === "dine_in" && seatValue
+        ? {
+            kind:
+              seatType === "room" ? ("room" as const) : seatType === "person" ? ("person" as const) : ("table" as const),
+            value: seatValue,
+          }
+        : null;
     return {
       restaurantName: appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
       branchName: currentBranch?.name?.trim() || branchLabel,
@@ -966,6 +976,7 @@ export default function POS() {
       timeLabel: formatClock(nowStamp),
       orderTypeLabel: orderTypeLabels[orderType],
       seatLabel: orderType === "dine_in" ? seatLabel(selectedTable, t) : null,
+      seatVisual,
       items: cart.map((i) => ({
         name: `${i.isReturn ? `${t("pos.returnLine")} · ` : ""}${menuItemDisplayName(i, locale)}`,
         quantity: cartLineSignedQty(i),

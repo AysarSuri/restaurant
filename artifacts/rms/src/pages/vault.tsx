@@ -21,6 +21,7 @@ import {
   printVaultReportA4,
   printVaultReportThermal,
 } from "@/lib/print-receipt";
+import { useDeviceA4PrinterName } from "@/lib/device-printer-query";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -150,6 +151,7 @@ export default function VaultPage() {
   const { user } = useAuth();
   const isSystemAdmin = user?.role === "admin";
   const { selectedBranchId, branchLabel } = useBranch();
+  const a4PrinterName = useDeviceA4PrinterName(selectedBranchId);
   const queryClient = useQueryClient();
 
   const [from, setFrom] = useState(todayDate);
@@ -303,7 +305,7 @@ export default function VaultPage() {
           typeof selectedBranchId === "number" ? selectedBranchId : undefined,
       });
       const payload = buildReportPayload(statement);
-      if (kind === "a4") printVaultReportA4(payload);
+      if (kind === "a4") printVaultReportA4({ ...payload, a4PrinterName });
       else printVaultReportThermal(payload);
       void queryClient.setQueryData(
         getVaultStatementQueryKey({

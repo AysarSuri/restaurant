@@ -253,6 +253,7 @@ export default function SettingsPage() {
   const [padPrefsTick, setPadPrefsTick] = useState(0);
   const [deviceName, setDeviceName] = useState(() => suggestDeviceName());
   const [printerName, setPrinterName] = useState("");
+  const [a4PrinterName, setA4PrinterName] = useState("");
   const [deviceBranchId, setDeviceBranchId] = useState<number | "">("");
   const [deleteTarget, setDeleteTarget] = useState<DevicePrinter | null>(null);
   const [deliveryFeeInput, setDeliveryFeeInput] = useState("0");
@@ -290,6 +291,7 @@ export default function SettingsPage() {
     if (myDevicePrinter) {
       setDeviceName(myDevicePrinter.deviceName);
       setPrinterName(myDevicePrinter.printerName || "");
+      setA4PrinterName(myDevicePrinter.a4PrinterName || "");
       setDeviceBranchId(
         locked && forcedBranchId != null
           ? forcedBranchId
@@ -571,6 +573,7 @@ export default function SettingsPage() {
         data: {
           deviceName: row.deviceName,
           printerName: row.printerName ?? "",
+          a4PrinterName: row.a4PrinterName ?? "",
           branchId: row.branchId ?? null,
           isActive: row.isActive !== false,
           salesPaymentAt: nextDineIn,
@@ -691,6 +694,7 @@ export default function SettingsPage() {
           deviceKey,
           deviceName: name,
           printerName: printerName.trim(),
+          a4PrinterName: a4PrinterName.trim(),
           branchId:
             locked && forcedBranchId != null
               ? forcedBranchId
@@ -730,6 +734,7 @@ export default function SettingsPage() {
         data: {
           deviceName: patch.deviceName ?? row.deviceName,
           printerName: patch.printerName ?? row.printerName,
+          a4PrinterName: patch.a4PrinterName ?? row.a4PrinterName ?? "",
           branchId,
           isActive: patch.isActive ?? row.isActive,
         },
@@ -1457,6 +1462,21 @@ export default function SettingsPage() {
                   dir="ltr"
                 />
               </div>
+              <div className="md:col-span-2">
+                <ModernCombobox
+                  label={t("settings.a4PrinterName")}
+                  hint={t("settings.a4PrinterHint")}
+                  icon={Printer}
+                  value={a4PrinterName}
+                  onChange={setA4PrinterName}
+                  options={printerOptions}
+                  placeholder={t("settings.pickA4PrinterName")}
+                  searchPlaceholder={t("settings.searchPrinter")}
+                  allowCustom
+                  customPlaceholder={t("settings.customA4PrinterHint")}
+                  dir="ltr"
+                />
+              </div>
             </div>
 
             <Button className="gap-2" isLoading={upserting} onClick={handleRegisterDevice}>
@@ -1513,11 +1533,17 @@ export default function SettingsPage() {
                             <p className="font-extrabold truncate">{row.deviceName}</p>
                             {isMine && <Badge variant="default">{t("settings.thisDevice")}</Badge>}
                             <Badge variant="outline">80×80</Badge>
+                            <Badge variant="outline">{t("settings.a4PrinterBadge")}</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                             <Building2 className="w-3.5 h-3.5" />
                             {row.branchName || t("branch.none")}
                           </p>
+                          {row.a4PrinterName?.trim() ? (
+                            <p className="text-[11px] text-muted-foreground mt-0.5" dir="ltr">
+                              A4: {row.a4PrinterName.trim()}
+                            </p>
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -1577,6 +1603,38 @@ export default function SettingsPage() {
                         searchPlaceholder={t("settings.searchPrinter")}
                         allowCustom
                         customPlaceholder={t("settings.customPrinterName")}
+                        disabled={updatingPrinter}
+                        dir="ltr"
+                      />
+                      <ModernCombobox
+                        label={t("settings.a4PrinterName")}
+                        hint={t("settings.a4PrinterHint")}
+                        icon={Printer}
+                        value={row.a4PrinterName || ""}
+                        onChange={(v) => {
+                          syncPrinters((list) =>
+                            list.map((p) => (p.id === row.id ? { ...p, a4PrinterName: v } : p))
+                          );
+                          handleUpdateRow(row, { a4PrinterName: v });
+                        }}
+                        options={
+                          row.a4PrinterName &&
+                          !printerOptions.some((o) => o.value === row.a4PrinterName)
+                            ? [
+                                {
+                                  value: row.a4PrinterName,
+                                  label: row.a4PrinterName,
+                                  subtitle: t("settings.currentValue"),
+                                  icon: Printer,
+                                },
+                                ...printerOptions,
+                              ]
+                            : printerOptions
+                        }
+                        placeholder={t("settings.pickA4PrinterName")}
+                        searchPlaceholder={t("settings.searchPrinter")}
+                        allowCustom
+                        customPlaceholder={t("settings.customA4PrinterHint")}
                         disabled={updatingPrinter}
                         dir="ltr"
                       />

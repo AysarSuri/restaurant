@@ -596,17 +596,18 @@ export default function Login() {
         </label>
         <div
           className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all
+          dark:bg-black dark:border-neutral-700
           ${
             !showPicker
               ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
               : selectedBranchId != null
-                ? "border-primary bg-primary/5"
+                ? "border-primary bg-primary/5 dark:border-primary"
                 : "border-border bg-secondary/40"
           }`}
         >
-          <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <Building2 className="w-4 h-4 text-muted-foreground dark:text-white flex-shrink-0" />
           <select
-            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground disabled:cursor-not-allowed"
+            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground dark:bg-black dark:text-white disabled:cursor-not-allowed [color-scheme:light] dark:[color-scheme:dark]"
             disabled={!showPicker}
             value={selectedBranchId == null ? "" : String(selectedBranchId)}
             onChange={(e) => {
@@ -617,7 +618,7 @@ export default function Login() {
               setError("");
             }}
           >
-            <option value="">
+            <option value="" className="bg-white text-foreground dark:bg-black dark:text-white">
               {isTableRole
                 ? selectedRole
                   ? t("auth.selectBranchDots")
@@ -627,7 +628,11 @@ export default function Login() {
                   : t("auth.selectEmployeeFirst")}
             </option>
             {branchOptions.map((o) => (
-              <option key={String(o.id)} value={String(o.id)}>
+              <option
+                key={String(o.id)}
+                value={String(o.id)}
+                className="bg-white text-foreground dark:bg-black dark:text-white"
+              >
                 {o.label}
               </option>
             ))}

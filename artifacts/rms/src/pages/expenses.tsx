@@ -28,6 +28,7 @@ import {
   printExpenseThermal,
   printExpenseReportA4Landscape,
 } from "@/lib/print-receipt";
+import { useDeviceA4PrinterName } from "@/lib/device-printer-query";
 import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useOpenShiftGate } from "@/hooks/use-open-shift-gate";
 import { useI18n } from "@/i18n";
@@ -106,6 +107,7 @@ export default function Expenses() {
   const { t, formatDate } = useI18n();
   const queryClient = useQueryClient();
   const { locked, forcedBranchId, filterOptions } = useScopedBranch();
+  const a4PrinterName = useDeviceA4PrinterName(forcedBranchId ?? null);
 
   const [filterInvoice, setFilterInvoice] = useState("");
   const [filterFrom, setFilterFrom] = useState(todayDate);
@@ -476,6 +478,7 @@ export default function Expenses() {
         notes: r.notes,
       })),
       formatMoney: fmtMoney,
+      a4PrinterName,
     });
   };
 
