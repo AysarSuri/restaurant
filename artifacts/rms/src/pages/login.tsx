@@ -120,6 +120,145 @@ function Combobox({ items, value, onChange, disabled, placeholder, isTable }: {
   );
 }
 
+/** Custom branch dropdown — dark mode list is black with white text (native select ignores CSS). */
+function BranchCombobox({
+  options,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}: {
+  options: { id: BranchPick; label: string }[];
+  value: BranchPick | null;
+  onChange: (id: BranchPick | null) => void;
+  disabled: boolean;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dropRect, setDropRect] = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (
+        !ref.current?.contains(e.target as Node) &&
+        !dropRef.current?.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const handleOpen = () => {
+    if (disabled) return;
+    if (!open && btnRef.current) setDropRect(btnRef.current.getBoundingClientRect());
+    setOpen((o) => !o);
+  };
+
+  const selectedLabel =
+    value == null ? "" : options.find((o) => o.id === value)?.label ?? "";
+
+  return (
+    <div ref={ref} className="relative z-30">
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        onClick={handleOpen}
+        className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all text-sm sm:text-base
+          dark:bg-black dark:border-neutral-700 dark:text-white
+          ${
+            disabled
+              ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
+              : "cursor-pointer border-border hover:border-primary/50 bg-secondary/40"
+          }
+          ${open ? "border-primary bg-primary/5 dark:border-primary" : ""}
+          ${value != null && !disabled ? "border-primary bg-primary/5 dark:border-primary" : ""}`}
+      >
+        <Building2 className="w-4 h-4 text-muted-foreground dark:text-white flex-shrink-0" />
+        <span
+          className={`flex-1 text-right truncate font-bold text-sm sm:text-base ${
+            selectedLabel
+              ? "text-foreground dark:text-white"
+              : "text-muted-foreground dark:text-white/70"
+          }`}
+        >
+          {selectedLabel || placeholder}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-muted-foreground dark:text-white flex-shrink-0 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && dropRect && (
+          <motion.div
+            ref={dropRef}
+            initial={{ opacity: 0, scaleY: 0.95 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            exit={{ opacity: 0, scaleY: 0.95 }}
+            style={{
+              position: "fixed",
+              top: dropRect.bottom + 6,
+              left: dropRect.left,
+              width: dropRect.width,
+              transformOrigin: "top",
+              zIndex: 9999,
+            }}
+            className="rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto border border-border bg-card text-foreground dark:bg-black dark:border-neutral-700 dark:text-white"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className={`w-full px-4 py-3 sm:py-3.5 text-right font-bold text-sm sm:text-base transition-colors
+                hover:bg-secondary/60 dark:hover:bg-neutral-900
+                ${value == null ? "bg-primary/10 text-primary dark:bg-neutral-900 dark:text-white" : "text-muted-foreground dark:text-white/80"}`}
+            >
+              {placeholder}
+            </button>
+            {options.map((o) => {
+              const active = value === o.id;
+              return (
+                <button
+                  key={String(o.id)}
+                  type="button"
+                  onClick={() => {
+                    onChange(o.id);
+                    setOpen(false);
+                  }}
+                  className={`w-full px-4 py-3 sm:py-3.5 flex items-center gap-3 text-right transition-colors
+                    hover:bg-secondary/60 dark:hover:bg-neutral-900
+                    ${
+                      active
+                        ? "bg-primary/10 text-primary dark:bg-neutral-800 dark:text-white"
+                        : "text-foreground dark:text-white"
+                    }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary dark:bg-neutral-800 dark:text-white dark:border dark:border-neutral-600 flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="flex-1 font-bold text-sm sm:text-base truncate">
+                    {o.label}
+                  </span>
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 /* ─── Mobile QWERTY Keyboard ─────────────────────────────── */
 function MobileKeyboard({
   value,
@@ -588,56 +727,32 @@ export default function Login() {
       );
     }
 
+    const branchPlaceholder = isTableRole
+      ? selectedRole
+        ? t("auth.selectBranchDots")
+        : t("auth.selectRoleFirstDots")
+      : selectedEmployee
+        ? t("auth.selectBranchOrAll")
+        : t("auth.selectEmployeeFirst");
+
     return (
       <div>
         <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
           {t("common.branch")}{" "}
           {!isTableRole && !selectedEmployee ? "" : <span className="text-destructive">*</span>}
         </label>
-        <div
-          className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all
-          dark:bg-black dark:border-neutral-700
-          ${
-            !showPicker
-              ? "opacity-40 cursor-not-allowed border-border bg-secondary/30"
-              : selectedBranchId != null
-                ? "border-primary bg-primary/5 dark:border-primary"
-                : "border-border bg-secondary/40"
-          }`}
-        >
-          <Building2 className="w-4 h-4 text-muted-foreground dark:text-white flex-shrink-0" />
-          <select
-            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm sm:text-base font-bold text-foreground dark:bg-black dark:text-white disabled:cursor-not-allowed [color-scheme:light] dark:[color-scheme:dark]"
-            disabled={!showPicker}
-            value={selectedBranchId == null ? "" : String(selectedBranchId)}
-            onChange={(e) => {
-              const v = e.target.value;
-              setSelectedBranchId(v === "" ? null : v === "all" ? "all" : Number(v));
-              if (isTableRole) setSelection("");
-              setPin("");
-              setError("");
-            }}
-          >
-            <option value="" className="bg-white text-foreground dark:bg-black dark:text-white">
-              {isTableRole
-                ? selectedRole
-                  ? t("auth.selectBranchDots")
-                  : t("auth.selectRoleFirstDots")
-                : selectedEmployee
-                  ? t("auth.selectBranchOrAll")
-                  : t("auth.selectEmployeeFirst")}
-            </option>
-            {branchOptions.map((o) => (
-              <option
-                key={String(o.id)}
-                value={String(o.id)}
-                className="bg-white text-foreground dark:bg-black dark:text-white"
-              >
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <BranchCombobox
+          options={branchOptions}
+          value={selectedBranchId}
+          disabled={!showPicker}
+          placeholder={branchPlaceholder}
+          onChange={(id) => {
+            setSelectedBranchId(id);
+            if (isTableRole) setSelection("");
+            setPin("");
+            setError("");
+          }}
+        />
       </div>
     );
   })();

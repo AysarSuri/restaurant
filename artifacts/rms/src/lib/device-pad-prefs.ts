@@ -2,6 +2,7 @@ import { getOrCreateDeviceKey } from "@/lib/device-id";
 
 const KEYBOARD_KEY = "rms-virtual-keyboard";
 const NUMERIC_KEY = "rms-virtual-numeric-keypad";
+const CLICK_SOUND_KEY = "rms-click-sound";
 const DEFAULT_LANG_KEY = "rms-keyboard-default-lang";
 
 export type KeyboardDefaultLang = "ar" | "en" | "ku";
@@ -71,6 +72,36 @@ export function resolvePadEnabled(
   const isMine = rowDeviceKey != null && rowDeviceKey === deviceKey;
   if (isMine && hasLocalPadPref(which)) {
     return getLocalPadPrefs(deviceKey)[which];
+  }
+  return Boolean(apiValue);
+}
+
+export function hasLocalClickSoundPref(): boolean {
+  return readFlag(CLICK_SOUND_KEY) != null;
+}
+
+export function getLocalClickSound(): boolean {
+  return readFlag(CLICK_SOUND_KEY) === true;
+}
+
+export function setLocalClickSound(value: boolean) {
+  writeFlag(CLICK_SOUND_KEY, value);
+  try {
+    window.dispatchEvent(new CustomEvent("rms-click-sound-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Prefer local override for this device; fall back to API row. */
+export function resolveClickSoundEnabled(
+  apiValue: boolean | null | undefined,
+  deviceKey: string,
+  rowDeviceKey: string | null | undefined
+): boolean {
+  const isMine = rowDeviceKey != null && rowDeviceKey === deviceKey;
+  if (isMine && hasLocalClickSoundPref()) {
+    return getLocalClickSound();
   }
   return Boolean(apiValue);
 }

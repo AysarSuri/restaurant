@@ -74,6 +74,7 @@ import {
   Calculator,
   Keyboard,
   Languages,
+  Volume2,
 } from "lucide-react";
 import { LOCALES, useI18n, type Locale } from "@/i18n";
 
@@ -505,6 +506,7 @@ export default function SettingsPage() {
       formsFullscreen?: boolean;
       virtualNumericKeypad?: boolean;
       virtualKeyboard?: boolean;
+      clickSound?: boolean;
     },
     opts?: { successKey?: string; errorKey?: string }
   ) => {
@@ -541,6 +543,8 @@ export default function SettingsPage() {
             deviceKey,
             row.deviceKey
           );
+    const nextClickSound =
+      "clickSound" in patch ? Boolean(patch.clickSound) : Boolean(row.clickSound);
 
     const optimistic: DevicePrinter = {
       ...row,
@@ -552,6 +556,7 @@ export default function SettingsPage() {
       formsFullscreen: nextFullscreen,
       virtualNumericKeypad: nextNumericKeypad,
       virtualKeyboard: nextVirtualKeyboard,
+      clickSound: nextClickSound,
     };
 
     // Persist on this browser immediately so toggles never flip back after refetch
@@ -584,6 +589,7 @@ export default function SettingsPage() {
           formsFullscreen: nextFullscreen,
           virtualNumericKeypad: nextNumericKeypad,
           virtualKeyboard: nextVirtualKeyboard,
+          clickSound: nextClickSound,
         },
       },
       {
@@ -626,6 +632,7 @@ export default function SettingsPage() {
                     formsFullscreen: nextFullscreen,
                     virtualNumericKeypad: nextNumericKeypad,
                     virtualKeyboard: nextVirtualKeyboard,
+                    clickSound: nextClickSound,
                   }
                 : p
             )
@@ -2149,6 +2156,20 @@ export default function SettingsPage() {
             </div>
           </Card>
 
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                <Volume2 className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">{t("settings.clickSoundTitle")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("settings.clickSoundHint")}
+                </p>
+              </div>
+            </div>
+          </Card>
+
           {(printers ?? []).length === 0 ? (
             <Card className="p-8 border border-dashed border-border/60 text-center space-y-2">
               <Monitor className="w-10 h-10 mx-auto text-muted-foreground" />
@@ -2162,6 +2183,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               {(printers ?? []).map((row) => {
                 const fullscreenOn = row.formsFullscreen === true;
+                const clickSoundOn = row.clickSound === true;
                 const isMine = row.deviceKey === deviceKey;
                 return (
                   <Card
@@ -2229,6 +2251,56 @@ export default function SettingsPage() {
                           <span
                             className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
                               fullscreenOn ? "start-1" : "end-1"
+                            }`}
+                          />
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={updatingPrinter}
+                      onClick={() =>
+                        handleSaveDeviceSales(
+                          row,
+                          { clickSound: !clickSoundOn },
+                          {
+                            successKey: "settings.savedClickSound",
+                            errorKey: "settings.saveClickSoundFailed",
+                          }
+                        )
+                      }
+                      className={`w-full text-start rounded-2xl border-2 p-4 transition-all touch-manipulation ${
+                        clickSoundOn
+                          ? "border-amber-500/60 bg-amber-500/10"
+                          : "border-border/70 bg-card/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            clickSoundOn ? "bg-amber-500 text-white" : "bg-secondary"
+                          }`}
+                        >
+                          <Volume2 className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold">{t("settings.clickSound")}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {clickSoundOn
+                              ? t("settings.clickSoundOn")
+                              : t("settings.clickSoundOff")}
+                          </p>
+                        </div>
+                        <span
+                          className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full transition-colors ${
+                            clickSoundOn ? "bg-amber-500" : "bg-secondary"
+                          }`}
+                          aria-hidden
+                        >
+                          <span
+                            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                              clickSoundOn ? "start-1" : "end-1"
                             }`}
                           />
                         </span>
