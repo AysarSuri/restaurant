@@ -25,13 +25,14 @@
 
 ## Schema migrate (first deploy / schema changes)
 
-From a machine with `DATABASE_URL` pointed at Railway Postgres:
+On boot the API auto-runs `drizzle-kit push --force` when core tables are missing,
+and seeds the default admin (`Aisar` / pin from system reset).
+
+You can also run manually with `DATABASE_URL` pointed at Railway Postgres:
 
 ```bash
-pnpm --filter @workspace/db push
+pnpm --filter @workspace/db push-force
 ```
-
-Or run the same as a one-off Railway release command / shell.
 
 ## Daily workflow
 

@@ -41,8 +41,8 @@ export async function ensureVaultColumns() {
     } catch (err) {
       ensurePromise = null;
       ensuredVersion = 0;
-      logger.error({ err }, "Failed ensuring vault/payment columns");
-      throw err;
+      // Empty DB / missing tables: schema push handles create; don't crash the process.
+      logger.warn({ err }, "Failed ensuring vault/payment columns (will retry after schema is ready)");
     }
   })();
   return ensurePromise;

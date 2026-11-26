@@ -11,6 +11,7 @@ import { ensureCategoryUploadsDir, UPLOADS_ROOT } from "./lib/category-image";
 import { ensureSalesDeviceColumns } from "./lib/ensure-sales-columns";
 import { ensureEmployeeColumns } from "./lib/ensure-employee-columns";
 import { ensureVaultColumns } from "./lib/ensure-vault-columns";
+import { ensureDatabaseSchema } from "./lib/ensure-schema";
 import {
   attachAuthIfPresent,
   isPublicApiPath,
@@ -21,9 +22,14 @@ import {
 const app: Express = express();
 
 ensureCategoryUploadsDir();
-void ensureSalesDeviceColumns();
-void ensureEmployeeColumns();
-void ensureVaultColumns();
+
+/** Schema push (empty DB) then column ensures — await before listen. */
+export async function initDatabase() {
+  await ensureDatabaseSchema();
+  await ensureSalesDeviceColumns();
+  await ensureEmployeeColumns();
+  await ensureVaultColumns();
+}
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);

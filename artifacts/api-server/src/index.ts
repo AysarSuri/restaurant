@@ -1,4 +1,4 @@
-import app from "./app";
+import app, { initDatabase } from "./app";
 import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
@@ -13,6 +13,13 @@ const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
+try {
+  await initDatabase();
+} catch (err) {
+  logger.error({ err }, "Database initialization failed");
+  process.exit(1);
 }
 
 app.listen(port, (err) => {
