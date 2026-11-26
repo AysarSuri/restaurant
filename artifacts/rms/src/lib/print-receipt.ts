@@ -76,47 +76,58 @@ function thermalBaseStyles() {
     }
     .identity {
       text-align: center;
-      margin: 0 0 3mm;
-      padding-bottom: 2.5mm;
-      border-bottom: 1.6px solid #111;
+      margin: 0 0 3.2mm;
+      padding-bottom: 3mm;
+      border-bottom: 1.8px solid #111;
     }
     .logo-wrap {
       display: flex;
       justify-content: center;
-      margin: 0 0 2.2mm;
+      margin: 0 0 2.6mm;
     }
     .logo {
       display: block;
-      width: 30mm;
-      height: 30mm;
+      width: 38mm;
+      height: 38mm;
       object-fit: contain;
-      border-radius: 4mm;
+      border-radius: 5mm;
+      border: 1.4px solid #111;
+      padding: 1.2mm;
       filter: grayscale(1) contrast(1.22);
+      background: #fff;
     }
     .brand {
       text-align: center;
-      font-size: 17px;
-      font-weight: 800;
-      margin: 0 0 1.5mm;
-      line-height: 1.2;
-      letter-spacing: 0.04em;
+      font-size: 19px;
+      font-weight: 900;
+      margin: 0 0 1.2mm;
+      line-height: 1.15;
+      letter-spacing: 0.06em;
       word-break: break-word;
       text-transform: uppercase;
     }
     .brand-rule {
       display: block;
-      width: 28mm;
+      width: 34mm;
       height: 0;
-      margin: 0 auto 2.2mm;
+      margin: 0 auto 1.2mm;
       border: 0;
-      border-top: 1.5px solid #111;
+      border-top: 1.7px solid #111;
+    }
+    .brand-rule-soft {
+      display: block;
+      width: 18mm;
+      height: 0;
+      margin: 0 auto 2.4mm;
+      border: 0;
+      border-top: 1px solid #555;
     }
     .kicker {
       text-align: center;
       margin: 0 0 2mm;
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
     .sub {
       text-align: center;
@@ -126,27 +137,43 @@ function thermalBaseStyles() {
       word-break: break-word;
     }
     .phone-row {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 5px;
-      margin: 1.8mm auto 0;
+      gap: 6px;
+      margin: 2mm auto 0;
       max-width: 100%;
+      padding: 1.6mm 3.2mm;
+      border: 1.3px solid #111;
+      border-radius: 999px;
       font-size: 12px;
       font-weight: 800;
       direction: ltr;
       unicode-bidi: plaintext;
       font-variant-numeric: tabular-nums;
+      background: #fff;
+    }
+    .phone-ico-wrap {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1.2px solid #111;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
     }
     .phone-ico {
       flex: 0 0 auto;
-      width: 12px;
-      height: 12px;
-      display: inline-block;
+      width: 9px;
+      height: 9px;
+      display: block;
     }
     .phone-num {
       min-width: 0;
       word-break: break-word;
+      letter-spacing: 0.03em;
     }
     .meta {
       margin: 7px 0 8px;
@@ -360,10 +387,13 @@ function thermalBaseStyles() {
   `;
 }
 
+/** Handset icon inside a dark circle — prints cleanly on 80mm thermal */
 function thermalPhoneIconSvg() {
-  return `<svg class="phone-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path fill="#000" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1L6.6 10.8z"/>
-  </svg>`;
+  return `<span class="phone-ico-wrap" aria-hidden="true">
+    <svg class="phone-ico" viewBox="0 0 24 24" focusable="false">
+      <path fill="#fff" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1L6.6 10.8z"/>
+    </svg>
+  </span>`;
 }
 
 /** Side-view dining table (matches POS/cashier DiningTableIcon) with number on cloth */
@@ -527,10 +557,11 @@ function thermalIdentityHtml(opts: {
       ${thermalLogoHtml(opts.logoUrl)}
       <p class="brand">${esc(opts.restaurantName || "المطعم")}</p>
       <hr class="brand-rule" />
+      <hr class="brand-rule-soft" />
       ${opts.kicker?.trim() ? `<div class="kicker">${esc(opts.kicker.trim())}</div>` : ""}
       ${opts.branchName?.trim() ? `<div class="sub">${esc(opts.branchName.trim())}</div>` : ""}
       ${phoneRows}
-      ${opts.address?.trim() ? `<div class="sub" style="margin-top:1.5mm;">${esc(opts.address.trim())}</div>` : ""}
+      ${opts.address?.trim() ? `<div class="sub" style="margin-top:1.8mm;">${esc(opts.address.trim())}</div>` : ""}
     </div>`;
 }
 
