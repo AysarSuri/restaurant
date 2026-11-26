@@ -94,6 +94,10 @@ function serializeSettings(settings: typeof appSettingsTable.$inferSelect) {
     deliveryRequireDriver: settings.deliveryRequireDriver !== false,
     deliveryRequirePhone: settings.deliveryRequirePhone !== false,
     deliveryRequireAddress: settings.deliveryRequireAddress !== false,
+    cashOpeningBalance: Math.max(
+      0,
+      parseFloat(String((settings as { cashOpeningBalance?: string }).cashOpeningBalance ?? "0")) || 0
+    ),
     updatedAt: settings.updatedAt,
   };
 }
@@ -122,6 +126,7 @@ router.put("/", async (req, res) => {
     deliveryRequireDriver,
     deliveryRequirePhone,
     deliveryRequireAddress,
+    cashOpeningBalance,
   } = req.body ?? {};
 
   const nextName =
@@ -234,6 +239,19 @@ router.put("/", async (req, res) => {
   let nextRequireAddress = settings.deliveryRequireAddress !== false;
   if (deliveryRequireAddress != null) nextRequireAddress = Boolean(deliveryRequireAddress);
 
+  let nextCashOpening = Math.max(
+    0,
+    parseFloat(String((settings as { cashOpeningBalance?: string }).cashOpeningBalance ?? "0")) || 0
+  );
+  if (cashOpeningBalance != null) {
+    const n = Number(cashOpeningBalance);
+    if (!Number.isFinite(n) || n < 0) {
+      res.status(400).json({ success: false, message: "رصيد القاصة الافتتاحي غير صالح" });
+      return;
+    }
+    nextCashOpening = n;
+  }
+
   const [updated] = await db
     .update(appSettingsTable)
     .set({
@@ -251,8 +269,9 @@ router.put("/", async (req, res) => {
       deliveryRequireDriver: nextRequireDriver,
       deliveryRequirePhone: nextRequirePhone,
       deliveryRequireAddress: nextRequireAddress,
+      cashOpeningBalance: nextCashOpening.toFixed(2),
       updatedAt: new Date(),
-    })
+    } as any)
     .where(eq(appSettingsTable.id, settings.id))
     .returning();
 

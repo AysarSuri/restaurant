@@ -2363,3 +2363,223 @@ export function printWarehouseStockReportA4(data: WarehouseStockReportData) {
     { landscape: true }
   );
 }
+
+export type VaultReportLine = {
+  dateLabel: string;
+  sourceAr: string;
+  label: string;
+  invoiceNo?: string | null;
+  debit: number;
+  credit: number;
+  balanceAfter: number;
+};
+
+export type VaultReportAccount = {
+  titleAr: string;
+  openingBeforeFrom: number;
+  periodDebit: number;
+  periodCredit: number;
+  closingBalance: number;
+  lines: VaultReportLine[];
+};
+
+export type VaultReportData = {
+  restaurantName: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
+  fromLabel: string;
+  toLabel: string;
+  openingAsOfLabel: string;
+  accounts: VaultReportAccount[];
+  formatMoney: (n: number) => string;
+};
+
+function escVault(s: string) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildVaultA4Html(data: VaultReportData) {
+  const logoSrc = (data.logoUrl?.trim() || "").replace(/"/g, "");
+  const logo = logoSrc ? `<img class="logo" src="${logoSrc}" alt="" />` : "";
+  const phone = data.mobile?.trim() || "";
+  const blocks = data.accounts
+    .map((acc) => {
+      const rows = acc.lines
+        .map(
+          (l, i) => `<tr>
+          <td class="num">${i + 1}</td>
+          <td class="num" dir="ltr">${escVault(l.dateLabel)}</td>
+          <td>${escVault(l.sourceAr)}</td>
+          <td>${escVault(l.label)}</td>
+          <td class="num" dir="ltr">${escVault(l.invoiceNo || "—")}</td>
+          <td class="num" dir="ltr">${escVault(data.formatMoney(l.debit))}</td>
+          <td class="num" dir="ltr">${escVault(data.formatMoney(l.credit))}</td>
+          <td class="num" dir="ltr">${escVault(data.formatMoney(l.balanceAfter))}</td>
+        </tr>`
+        )
+        .join("");
+      return `<section class="acc">
+        <h2>${escVault(acc.titleAr)}</h2>
+        <div class="meta">
+          <span>رصيد قبل الفترة: <b dir="ltr">${escVault(data.formatMoney(acc.openingBeforeFrom))}</b></span>
+          <span>مدين: <b dir="ltr">${escVault(data.formatMoney(acc.periodDebit))}</b></span>
+          <span>دائن: <b dir="ltr">${escVault(data.formatMoney(acc.periodCredit))}</b></span>
+          <span>رصيد ختامي: <b dir="ltr">${escVault(data.formatMoney(acc.closingBalance))}</b></span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>التاريخ</th><th>النوع</th><th>البيان</th><th>رقم</th>
+              <th>مدين</th><th>دائن</th><th>الرصيد</th>
+            </tr>
+          </thead>
+          <tbody>${rows || `<tr><td colspan="8">لا حركات في الفترة</td></tr>`}</tbody>
+        </table>
+      </section>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>تقرير القاصة</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    color: #111; background: #fff; font-size: 13px; font-weight: 700;
+  }
+  .wrap { padding: 4mm; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; border-bottom: 2px solid #111; padding-bottom: 8px; }
+  .logo { width: 54px; height: 54px; object-fit: contain; }
+  h1 { margin: 0; font-size: 18px; font-weight: 800; }
+  .sub { margin-top: 4px; font-size: 12px; font-weight: 700; color: #333; }
+  .acc { margin-top: 14px; page-break-inside: avoid; }
+  .acc h2 { margin: 0 0 6px; font-size: 14px; font-weight: 800; background: #111; color: #fff; padding: 6px 10px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 6px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #222; padding: 4px 6px; text-align: right; vertical-align: top; }
+  th { background: #f2f2f2; font-size: 12px; }
+  .num { text-align: left; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: plaintext; }
+  .footer { margin-top: 12px; font-size: 11px; display: flex; justify-content: space-between; border-top: 1px solid #999; padding-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h1>تقرير القاصة</h1>
+        <div class="sub">${escVault(data.restaurantName)}${phone ? ` · ${escVault(phone)}` : ""}</div>
+        <div class="sub">من ${escVault(data.fromLabel)} إلى ${escVault(data.toLabel)} · رصيد ما قبل ${escVault(data.openingAsOfLabel)}</div>
+      </div>
+      ${logo}
+    </div>
+    ${blocks}
+    <div class="footer">
+      <span>نظام إدارة المطاعم</span>
+      <span>A4 · خط 13 Bold</span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export function printVaultReportA4(data: VaultReportData) {
+  openPrintHtmlDocument(buildVaultA4Html(data), "rms-vault-a4");
+}
+
+function buildVaultThermalHtml(data: VaultReportData) {
+  const blocks = data.accounts
+    .map((acc) => {
+      const lines = acc.lines
+        .map(
+          (l) => `<div class="row">
+          <div class="t">${escVault(l.dateLabel)} · ${escVault(l.sourceAr)}</div>
+          <div>${escVault(l.label)}</div>
+          <div class="nums">
+            <span>م ${escVault(data.formatMoney(l.debit))}</span>
+            <span>د ${escVault(data.formatMoney(l.credit))}</span>
+            <span>ر ${escVault(data.formatMoney(l.balanceAfter))}</span>
+          </div>
+        </div>`
+        )
+        .join("");
+      return `<div class="acc">
+        <div class="title">${escVault(acc.titleAr)}</div>
+        <div class="sum">قبل: ${escVault(data.formatMoney(acc.openingBeforeFrom))}</div>
+        <div class="sum">ختامي: ${escVault(data.formatMoney(acc.closingBalance))}</div>
+        ${lines || `<div class="empty">لا حركات</div>`}
+      </div>`;
+    })
+    .join('<hr class="rule" />');
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>قاصة 80×80</title>
+<style>
+  @page { size: 80mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; width: 76mm; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 12px; font-weight: 700; color: #000; background: #fff;
+  }
+  .wrap { padding: 2mm; }
+  .brand { text-align: center; font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+  .sub { text-align: center; font-size: 11px; margin-bottom: 6px; }
+  .acc { margin: 6px 0; }
+  .title { font-size: 12px; font-weight: 800; border-bottom: 1px dashed #000; padding-bottom: 2px; margin-bottom: 4px; }
+  .sum { font-size: 11px; }
+  .row { margin: 5px 0; border-bottom: 1px dotted #999; padding-bottom: 3px; }
+  .t { font-size: 11px; }
+  .nums { display: flex; justify-content: space-between; gap: 4px; direction: ltr; font-variant-numeric: tabular-nums; font-size: 11px; }
+  .rule { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+  .empty { opacity: 0.7; }
+  .footer { text-align: center; margin-top: 8px; font-size: 10px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">${escVault(data.restaurantName)}</div>
+    <div class="sub">تقرير القاصة · 80×80</div>
+    <div class="sub">${escVault(data.fromLabel)} → ${escVault(data.toLabel)}</div>
+    ${blocks}
+    <div class="footer">خط 12 Bold</div>
+  </div>
+</body>
+</html>`;
+}
+
+export function printVaultReportThermal(data: VaultReportData) {
+  const html = buildVaultThermalHtml(data);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const popup = window.open(url, "rms-vault-thermal", "width=420,height=780,left=80,top=40");
+  if (popup) {
+    let printed = false;
+    const start = () => {
+      if (printed) return;
+      printed = true;
+      printFromWindow(popup);
+      window.setTimeout(() => URL.revokeObjectURL(url), 8000);
+    };
+    popup.onload = start;
+    window.setTimeout(() => {
+      try {
+        if (popup.document?.readyState === "complete") start();
+      } catch {
+        start();
+      }
+    }, 400);
+    return;
+  }
+  URL.revokeObjectURL(url);
+  openPrintHtmlDocument(html, "rms-vault-thermal-iframe");
+}

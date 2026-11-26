@@ -17,6 +17,7 @@ export interface SystemResetGroup {
   key: string;
   labelAr: string;
   descriptionAr: string;
+  tables?: string[];
   tableCount: number;
   rowCount: number;
   seedsAdmin: boolean;
@@ -24,6 +25,13 @@ export interface SystemResetGroup {
 
 export interface SystemResetTablesResponse {
   groups: SystemResetGroup[];
+  /** Sum of rows across unique physical tables (no double-count) */
+  uniqueRowCount?: number;
+  tableCoverage?: {
+    coveredCount: number;
+    uncovered: string[];
+    complete: boolean;
+  };
   adminSeed: {
     name: string;
     role: string;

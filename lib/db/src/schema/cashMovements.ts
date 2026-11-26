@@ -9,6 +9,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { branchesTable } from "./branches";
+import { cardsTable } from "./cards";
 
 /**
  * Cash desk withdrawals & returns (سحوبات ومرجوعات).
@@ -24,6 +25,9 @@ export const cashMovementsTable = pgTable("cash_movements", {
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   notes: text("notes"),
   branchId: integer("branch_id").references(() => branchesTable.id),
+  /** cash = بدون بطاقة | card = بطاقة */
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  cardId: integer("card_id").references(() => cardsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

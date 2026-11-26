@@ -14,6 +14,7 @@ export type ListKey =
   | "tables"
   | "expenses"
   | "cash-movements"
+  | "vault"
   | "suppliers"
   | "inventory"
   | "drivers"
@@ -51,6 +52,7 @@ export const LIST_CATALOG: {
   { key: "suppliers", nameAr: "الموردون", href: "/suppliers", dated: true },
   { key: "expenses", nameAr: "المصروفات", href: "/expenses", dated: true },
   { key: "cash-movements", nameAr: "حركة الصندوق", href: "/cash-movements", dated: true },
+  { key: "vault", nameAr: "القاصة", href: "/vault", dated: false },
   { key: "branches", nameAr: "الفروع", href: "/branches", dated: false },
   { key: "cards", nameAr: "البطاقات", href: "/cards", dated: false },
   { key: "reports", nameAr: "التقارير", href: "/reports", dated: false },

@@ -27,6 +27,8 @@ export interface UpsertExpenseTypeBody {
   notes?: string;
 }
 
+export type ExpensePaymentMethod = "cash" | "card";
+
 export interface ExpenseRow {
   id: number;
   invoiceNo: string;
@@ -42,6 +44,9 @@ export interface ExpenseRow {
   employeeId?: number | null;
   branchId?: number | null;
   branchName?: string;
+  paymentMethod?: ExpensePaymentMethod;
+  cardId?: number | null;
+  cardName?: string;
   createdAt?: string;
 }
 
@@ -55,6 +60,8 @@ export interface UpsertExpenseBody {
   descriptionAr?: string;
   branchId?: number | null;
   employeeId?: number | null;
+  paymentMethod?: ExpensePaymentMethod;
+  cardId?: number | null;
 }
 
 export interface ListExpensesParams {
@@ -63,6 +70,8 @@ export interface ListExpensesParams {
   expenseTypeId?: number;
   filterBranchId?: number;
   invoiceNo?: string;
+  paymentMethod?: ExpensePaymentMethod;
+  cardId?: number;
 }
 
 const base = "/api/expenses";
@@ -79,6 +88,10 @@ function qs(params?: ListExpensesParams) {
     sp.set("filterBranchId", String(params.filterBranchId));
   }
   if (params.invoiceNo?.trim()) sp.set("invoiceNo", params.invoiceNo.trim());
+  if (params.paymentMethod === "cash" || params.paymentMethod === "card") {
+    sp.set("paymentMethod", params.paymentMethod);
+  }
+  if (params.cardId && params.cardId > 0) sp.set("cardId", String(params.cardId));
   const s = sp.toString();
   return s ? `?${s}` : "";
 }

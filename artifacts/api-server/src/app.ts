@@ -6,12 +6,14 @@ import { logger } from "./lib/logger";
 import { ensureCategoryUploadsDir, UPLOADS_ROOT } from "./lib/category-image";
 import { ensureSalesDeviceColumns } from "./lib/ensure-sales-columns";
 import { ensureEmployeeColumns } from "./lib/ensure-employee-columns";
+import { ensureVaultColumns } from "./lib/ensure-vault-columns";
 
 const app: Express = express();
 
 ensureCategoryUploadsDir();
 void ensureSalesDeviceColumns();
 void ensureEmployeeColumns();
+void ensureVaultColumns();
 app.use("/uploads", express.static(UPLOADS_ROOT));
 
 app.use(

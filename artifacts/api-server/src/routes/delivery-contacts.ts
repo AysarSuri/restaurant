@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { deliveryContactsTable, branchesTable } from "@workspace/db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
-import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
 import {
   normalizePhone,
   syncDeliveryContactsFromOrders,
@@ -29,13 +28,21 @@ function serialize(row: typeof deliveryContactsTable.$inferSelect, branchName?: 
 }
 
 router.get("/", async (req, res) => {
-  const scope = parseBranchScope(req);
   const { search } = req.query;
   /** Pull phones saved on delivery orders but missing from this list */
   try {
     await syncDeliveryContactsFromOrders();
   } catch {
     /* listing should still work if sync fails */
+  }
+  /** Make every contact shared so POS sees the same list in all branches */
+  try {
+    await db
+      .update(deliveryContactsTable)
+      .set({ branchId: null })
+      .where(sql`${deliveryContactsTable.branchId} is not null`);
+  } catch {
+    /* ignore */
   }
   const rows = await db
     .select({
@@ -46,10 +53,8 @@ router.get("/", async (req, res) => {
     .leftJoin(branchesTable, eq(deliveryContactsTable.branchId, branchesTable.id))
     .orderBy(desc(deliveryContactsTable.updatedAt));
 
+  /** Always return the full shared list (no branch filter) */
   let list = rows.map((r) => serialize(r.contact, r.branchName));
-  if (scope.mode === "one") {
-    list = list.filter((c) => !c.branchId || c.branchId === scope.branchId);
-  }
   if (search && String(search).trim()) {
     const q = String(search).trim().toLowerCase();
     const qDigits = normalizePhone(q);
@@ -83,7 +88,6 @@ router.get("/by-phone", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const scope = parseBranchScope(req);
   const {
     phone,
     address,
@@ -92,7 +96,6 @@ router.post("/", async (req, res) => {
     longitude,
     gpsLabel,
     note,
-    branchId,
   } = req.body ?? {};
 
   const normalized = normalizePhone(String(phone ?? ""));
@@ -102,14 +105,6 @@ router.post("/", async (req, res) => {
   }
 
   const addr = String(address ?? "").trim();
-  /** Explicit null = shared across all branches (POS). Else resolve from body/scope. */
-  const resolvedBranchId =
-    branchId === null
-      ? null
-      : resolveWriteBranchId(
-          scope,
-          branchId != null ? Number(branchId) : null
-        );
 
   const [existing] = await db
     .select()
@@ -130,8 +125,7 @@ router.post("/", async (req, res) => {
             ? String(gpsLabel).trim() || null
             : existing.gpsLabel,
         note: note !== undefined ? String(note).trim() || null : existing.note,
-        branchId:
-          branchId === null ? null : resolvedBranchId ?? existing.branchId,
+        branchId: null,
         updatedAt: new Date(),
       })
       .where(eq(deliveryContactsTable.id, existing.id))
@@ -150,7 +144,7 @@ router.post("/", async (req, res) => {
       longitude: parseCoord(longitude),
       gpsLabel: gpsLabel ? String(gpsLabel).trim() : null,
       note: note ? String(note).trim() : null,
-      branchId: resolvedBranchId,
+      branchId: null,
     })
     .returning();
 
@@ -167,7 +161,6 @@ router.put("/:id", async (req, res) => {
     longitude,
     gpsLabel,
     note,
-    branchId,
   } = req.body ?? {};
 
   const [existing] = await db
@@ -216,12 +209,7 @@ router.put("/:id", async (req, res) => {
       gpsLabel:
         gpsLabel !== undefined ? String(gpsLabel ?? "").trim() || null : existing.gpsLabel,
       note: note !== undefined ? String(note ?? "").trim() || null : existing.note,
-      branchId:
-        branchId === null
-          ? null
-          : branchId != null
-            ? Number(branchId)
-            : existing.branchId,
+      branchId: null,
       updatedAt: new Date(),
     })
     .where(eq(deliveryContactsTable.id, id))

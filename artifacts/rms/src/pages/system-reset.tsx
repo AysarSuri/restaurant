@@ -217,10 +217,10 @@ export default function SystemResetPage() {
   };
 
   const groups = data?.groups ?? [];
-  const totalRows = useMemo(
-    () => groups.reduce((sum, g) => sum + (g.rowCount || 0), 0),
-    [groups]
-  );
+  const totalRows = useMemo(() => {
+    if (typeof data?.uniqueRowCount === "number") return data.uniqueRowCount;
+    return groups.reduce((sum, g) => sum + (g.rowCount || 0), 0);
+  }, [data?.uniqueRowCount, groups]);
 
   const confirmReady = confirmText.trim() === CONFIRM_WORD;
   const isAdmin = user?.role === "admin";

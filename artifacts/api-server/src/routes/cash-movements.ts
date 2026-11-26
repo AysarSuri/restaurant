@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { cashMovementsTable, branchesTable } from "@workspace/db/schema";
+import { cashMovementsTable, branchesTable, cardsTable } from "@workspace/db/schema";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 
@@ -43,6 +43,28 @@ function normalizeTime(v: unknown): string {
   return raw;
 }
 
+function parsePaymentFields(body: any): {
+  paymentMethod: "cash" | "card";
+  cardId: number | null;
+  error?: string;
+} {
+  const paymentMethodRaw = String(body?.paymentMethod ?? body?.payMethod ?? "cash")
+    .trim()
+    .toLowerCase();
+  const paymentMethod: "cash" | "card" =
+    paymentMethodRaw === "card" || paymentMethodRaw === "بطاقة" ? "card" : "cash";
+  const cardIdRaw = Number(body?.cardId);
+  let cardId =
+    paymentMethod === "card" && Number.isFinite(cardIdRaw) && cardIdRaw > 0
+      ? cardIdRaw
+      : null;
+  if (paymentMethod === "card" && !cardId) {
+    return { paymentMethod, cardId: null, error: "اختر البطاقة" };
+  }
+  if (paymentMethod === "cash") cardId = null;
+  return { paymentMethod, cardId };
+}
+
 function normalizeKind(v: unknown): "withdrawal" | "return" {
   const raw = String(v ?? "").trim().toLowerCase();
   if (raw === "return" || raw === "مرجوع") return "return";
@@ -51,8 +73,9 @@ function normalizeKind(v: unknown): "withdrawal" | "return" {
 
 function mapRow(
   row: typeof cashMovementsTable.$inferSelect,
-  branchName = ""
+  extras?: { branchName?: string; cardName?: string }
 ) {
+  const branchName = extras?.branchName ?? "";
   return {
     id: row.id,
     invoiceNo: row.invoiceNo,
@@ -63,6 +86,9 @@ function mapRow(
     notes: row.notes,
     branchId: row.branchId,
     branchName,
+    paymentMethod: row.paymentMethod === "card" ? "card" : "cash",
+    cardId: row.cardId,
+    cardName: extras?.cardName || "",
     createdAt: row.createdAt,
   };
 }
@@ -79,12 +105,23 @@ async function nextInvoiceNo(): Promise<string> {
 
 async function enrich(rows: (typeof cashMovementsTable.$inferSelect)[]) {
   const branchIds = [...new Set(rows.map((r) => r.branchId).filter(Boolean))] as number[];
+  const cardIds = [...new Set(rows.map((r) => r.cardId).filter(Boolean))] as number[];
   const branches =
     branchIds.length === 0
       ? []
       : await db.select().from(branchesTable).where(inArray(branchesTable.id, branchIds));
-  const map = new Map(branches.map((b) => [b.id, b.name]));
-  return rows.map((r) => mapRow(r, r.branchId ? map.get(r.branchId) || "" : ""));
+  const cards =
+    cardIds.length === 0
+      ? []
+      : await db.select().from(cardsTable).where(inArray(cardsTable.id, cardIds));
+  const branchMap = new Map(branches.map((b) => [b.id, b.name]));
+  const cardMap = new Map(cards.map((c) => [c.id, c.name]));
+  return rows.map((r) =>
+    mapRow(r, {
+      branchName: r.branchId ? branchMap.get(r.branchId) || "" : "",
+      cardName: r.cardId ? cardMap.get(r.cardId) || "" : "",
+    })
+  );
 }
 
 router.get("/", async (req, res) => {
@@ -109,6 +146,20 @@ router.get("/", async (req, res) => {
   }
   if (invoiceNo) {
     conditions.push(sql`lower(${cashMovementsTable.invoiceNo}) like ${`%${invoiceNo}%`}`);
+  }
+
+  const paymentMethodFilter = String(req.query.paymentMethod ?? "")
+    .trim()
+    .toLowerCase();
+  const cardIdFilter = Number(req.query.cardId);
+  if (Number.isFinite(cardIdFilter) && cardIdFilter > 0) {
+    conditions.push(eq(cashMovementsTable.cardId, cardIdFilter));
+  } else if (paymentMethodFilter === "card") {
+    conditions.push(eq(cashMovementsTable.paymentMethod, "card"));
+  } else if (paymentMethodFilter === "cash") {
+    conditions.push(
+      sql`coalesce(${cashMovementsTable.paymentMethod}, 'cash') <> 'card'`
+    );
   }
 
   const rows = await db
@@ -137,6 +188,9 @@ router.post("/", async (req, res) => {
   }
   if (!invoiceNo) invoiceNo = await nextInvoiceNo();
 
+  const payment = parsePaymentFields(req.body);
+  if (payment.error) return res.status(400).json({ message: payment.error });
+
   const [row] = await db
     .insert(cashMovementsTable)
     .values({
@@ -147,6 +201,8 @@ router.post("/", async (req, res) => {
       amount: money(amount),
       notes,
       branchId: resolvedBranchId,
+      paymentMethod: payment.paymentMethod,
+      cardId: payment.cardId,
     })
     .returning();
 
@@ -186,6 +242,9 @@ router.put("/:id", async (req, res) => {
     return res.status(400).json({ message: "اختر فرعاً قبل حفظ السحب أو المرجوع" });
   }
 
+  const payment = parsePaymentFields(req.body);
+  if (payment.error) return res.status(400).json({ message: payment.error });
+
   const [row] = await db
     .update(cashMovementsTable)
     .set({
@@ -196,6 +255,8 @@ router.put("/:id", async (req, res) => {
       amount: money(amount),
       notes,
       branchId: resolvedBranchId,
+      paymentMethod: payment.paymentMethod,
+      cardId: payment.cardId,
     })
     .where(eq(cashMovementsTable.id, id))
     .returning();

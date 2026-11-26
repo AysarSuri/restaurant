@@ -4,6 +4,7 @@ import {
   expensesTable,
   expenseTypesTable,
   branchesTable,
+  cardsTable,
 } from "@workspace/db/schema";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
@@ -36,9 +37,31 @@ function dateAtNoon(isoDay: string) {
   return new Date(`${isoDay}T12:00:00`);
 }
 
+function parsePaymentFields(body: any): {
+  paymentMethod: "cash" | "card";
+  cardId: number | null;
+  error?: string;
+} {
+  const paymentMethodRaw = String(body?.paymentMethod ?? body?.payMethod ?? "cash")
+    .trim()
+    .toLowerCase();
+  const paymentMethod: "cash" | "card" =
+    paymentMethodRaw === "card" || paymentMethodRaw === "بطاقة" ? "card" : "cash";
+  const cardIdRaw = Number(body?.cardId);
+  let cardId =
+    paymentMethod === "card" && Number.isFinite(cardIdRaw) && cardIdRaw > 0
+      ? cardIdRaw
+      : null;
+  if (paymentMethod === "card" && !cardId) {
+    return { paymentMethod, cardId: null, error: "اختر البطاقة" };
+  }
+  if (paymentMethod === "cash") cardId = null;
+  return { paymentMethod, cardId };
+}
+
 function mapExpense(
   row: typeof expensesTable.$inferSelect,
-  extras?: { typeName?: string; branchName?: string }
+  extras?: { typeName?: string; branchName?: string; cardName?: string }
 ) {
   const expenseDate =
     row.expenseDate ||
@@ -60,6 +83,9 @@ function mapExpense(
     employeeId: row.employeeId,
     branchId: row.branchId,
     branchName: extras?.branchName || "",
+    paymentMethod: row.paymentMethod === "card" ? "card" : "cash",
+    cardId: row.cardId,
+    cardName: extras?.cardName || "",
     createdAt: row.createdAt,
   };
 }
@@ -77,6 +103,7 @@ async function nextExpenseInvoiceNo(): Promise<string> {
 async function enrichExpenses(rows: (typeof expensesTable.$inferSelect)[]) {
   const typeIds = [...new Set(rows.map((r) => r.expenseTypeId).filter(Boolean))] as number[];
   const branchIds = [...new Set(rows.map((r) => r.branchId).filter(Boolean))] as number[];
+  const cardIds = [...new Set(rows.map((r) => r.cardId).filter(Boolean))] as number[];
 
   const types =
     typeIds.length === 0
@@ -86,14 +113,20 @@ async function enrichExpenses(rows: (typeof expensesTable.$inferSelect)[]) {
     branchIds.length === 0
       ? []
       : await db.select().from(branchesTable).where(inArray(branchesTable.id, branchIds));
+  const cards =
+    cardIds.length === 0
+      ? []
+      : await db.select().from(cardsTable).where(inArray(cardsTable.id, cardIds));
 
   const typeMap = new Map(types.map((t) => [t.id, t.name]));
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
+  const cardMap = new Map(cards.map((c) => [c.id, c.name]));
 
   return rows.map((r) =>
     mapExpense(r, {
       typeName: r.expenseTypeId ? typeMap.get(r.expenseTypeId) : r.category,
       branchName: r.branchId ? branchMap.get(r.branchId) : "",
+      cardName: r.cardId ? cardMap.get(r.cardId) || "" : "",
     })
   );
 }
@@ -238,6 +271,20 @@ router.get("/", async (req, res) => {
     conditions.push(sql`lower(${expensesTable.invoiceNo}) like ${`%${invoiceNo}%`}`);
   }
 
+  const paymentMethodFilter = String(req.query.paymentMethod ?? "")
+    .trim()
+    .toLowerCase();
+  const cardIdFilter = Number(req.query.cardId);
+  if (Number.isFinite(cardIdFilter) && cardIdFilter > 0) {
+    conditions.push(eq(expensesTable.cardId, cardIdFilter));
+  } else if (paymentMethodFilter === "card") {
+    conditions.push(eq(expensesTable.paymentMethod, "card"));
+  } else if (paymentMethodFilter === "cash") {
+    conditions.push(
+      sql`coalesce(${expensesTable.paymentMethod}, 'cash') <> 'card'`
+    );
+  }
+
   const rows = await db
     .select()
     .from(expensesTable)
@@ -280,6 +327,9 @@ router.post("/", async (req, res) => {
 
   if (!invoiceNo) invoiceNo = await nextExpenseInvoiceNo();
 
+  const payment = parsePaymentFields(req.body);
+  if (payment.error) return res.status(400).json({ message: payment.error });
+
   const [row] = await db
     .insert(expensesTable)
     .values({
@@ -294,6 +344,8 @@ router.post("/", async (req, res) => {
       date: dateAtNoon(expenseDate),
       employeeId: req.body?.employeeId ? Number(req.body.employeeId) : null,
       branchId: resolvedBranchId,
+      paymentMethod: payment.paymentMethod,
+      cardId: payment.cardId,
     })
     .returning();
 
@@ -347,6 +399,9 @@ router.put("/:id", async (req, res) => {
     return res.status(400).json({ message: "اختر فرعاً" });
   }
 
+  const payment = parsePaymentFields(req.body);
+  if (payment.error) return res.status(400).json({ message: payment.error });
+
   const [row] = await db
     .update(expensesTable)
     .set({
@@ -360,6 +415,8 @@ router.put("/:id", async (req, res) => {
       expenseDate,
       date: dateAtNoon(expenseDate),
       branchId: resolvedBranchId,
+      paymentMethod: payment.paymentMethod,
+      cardId: payment.cardId,
     })
     .where(eq(expensesTable.id, id))
     .returning();

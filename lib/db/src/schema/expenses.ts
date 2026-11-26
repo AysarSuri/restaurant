@@ -11,6 +11,7 @@ import { z } from "zod/v4";
 import { employeesTable } from "./employees";
 import { branchesTable } from "./branches";
 import { expenseTypesTable } from "./expenseTypes";
+import { cardsTable } from "./cards";
 
 export const expensesTable = pgTable("expenses", {
   id: serial("id").primaryKey(),
@@ -30,6 +31,9 @@ export const expensesTable = pgTable("expenses", {
   date: timestamp("date").notNull().defaultNow(),
   employeeId: integer("employee_id").references(() => employeesTable.id),
   branchId: integer("branch_id").references(() => branchesTable.id),
+  /** cash = بدون بطاقة | card = بطاقة */
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  cardId: integer("card_id").references(() => cardsTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -40,6 +40,8 @@ export interface AppSettings {
   deliveryRequirePhone?: boolean;
   /** Require address on delivery orders */
   deliveryRequireAddress?: boolean;
+  /** Cash vault opening balance (بدون بطاقة) */
+  cashOpeningBalance?: number;
   updatedAt?: string;
 }
 
@@ -58,6 +60,7 @@ export interface UpdateAppSettingsBody {
   deliveryRequireDriver?: boolean;
   deliveryRequirePhone?: boolean;
   deliveryRequireAddress?: boolean;
+  cashOpeningBalance?: number;
 }
 
 export type DeviceSalesPaymentAt = "pos" | "cashier";

@@ -17,6 +17,8 @@ type RequestOpts = CustomFetchOptions;
 
 export type CashMovementKind = "withdrawal" | "return";
 
+export type CashMovementPaymentMethod = "cash" | "card";
+
 export interface CashMovementRow {
   id: number;
   invoiceNo: string;
@@ -27,6 +29,9 @@ export interface CashMovementRow {
   notes?: string | null;
   branchId?: number | null;
   branchName?: string;
+  paymentMethod?: CashMovementPaymentMethod;
+  cardId?: number | null;
+  cardName?: string;
   createdAt?: string;
 }
 
@@ -38,6 +43,8 @@ export interface UpsertCashMovementBody {
   amount: number;
   notes?: string;
   branchId?: number | null;
+  paymentMethod?: CashMovementPaymentMethod;
+  cardId?: number | null;
 }
 
 export interface ListCashMovementsParams {
@@ -46,6 +53,8 @@ export interface ListCashMovementsParams {
   kind?: CashMovementKind | "";
   invoiceNo?: string;
   filterBranchId?: number;
+  paymentMethod?: CashMovementPaymentMethod;
+  cardId?: number;
 }
 
 const base = "/api/cash-movements";
@@ -60,6 +69,10 @@ function qs(params?: ListCashMovementsParams) {
     sp.set("filterBranchId", String(params.filterBranchId));
   }
   if (params.invoiceNo?.trim()) sp.set("invoiceNo", params.invoiceNo.trim());
+  if (params.paymentMethod === "cash" || params.paymentMethod === "card") {
+    sp.set("paymentMethod", params.paymentMethod);
+  }
+  if (params.cardId && params.cardId > 0) sp.set("cardId", String(params.cardId));
   const s = sp.toString();
   return s ? `?${s}` : "";
 }

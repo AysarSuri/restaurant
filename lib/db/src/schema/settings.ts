@@ -43,6 +43,10 @@ export const appSettingsTable = pgTable("app_settings", {
   deliveryRequirePhone: boolean("delivery_require_phone").default(true).notNull(),
   /** When true, POS delivery orders require a delivery address */
   deliveryRequireAddress: boolean("delivery_require_address").default(true).notNull(),
+  /** Program-wide cash vault (قاصة بدون بطاقة) opening balance */
+  cashOpeningBalance: numeric("cash_opening_balance", { precision: 14, scale: 2 })
+    .default("0")
+    .notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

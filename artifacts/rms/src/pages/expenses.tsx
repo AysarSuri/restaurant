@@ -10,12 +10,14 @@ import {
   useUpdateExpenseType,
   useDeleteExpenseType,
   useGetBranches,
+  useGetCards,
   useGetSettings,
   getGetExpenseTypesQueryKey,
   getListExpensesQueryKey,
   getGetSettingsQueryKey,
   type ExpenseRow,
   type ExpenseTypeRow,
+  type ExpensePaymentMethod,
 } from "@workspace/api-client-react";
 import { CrudTable } from "@/components/crud-table";
 import { Button, Input, Dialog } from "@/components/ui-elements";
@@ -40,6 +42,7 @@ import {
   Tags,
   Trash2,
   Wallet,
+  CreditCard,
 } from "lucide-react";
 
 const fmtMoney = (n: number) =>
@@ -68,6 +71,8 @@ type ExpenseFormState = {
   branchId: string;
   amount: number | "";
   notes: string;
+  paymentMethod: ExpensePaymentMethod;
+  cardId: string;
 };
 
 type TypeFormState = { name: string; notes: string };
@@ -79,7 +84,22 @@ const emptyExpenseForm = (): ExpenseFormState => ({
   branchId: "",
   amount: "",
   notes: "",
+  paymentMethod: "cash",
+  cardId: "",
 });
+
+function cardPayFilterToParams(value: string): {
+  paymentMethod?: ExpensePaymentMethod;
+  cardId?: number;
+} {
+  const v = value.trim();
+  if (!v) return {};
+  if (v === "cash") return { paymentMethod: "cash" };
+  if (v === "card") return { paymentMethod: "card" };
+  const id = Number(v);
+  if (Number.isFinite(id) && id > 0) return { cardId: id };
+  return {};
+}
 
 export default function Expenses() {
   const { t, formatDate } = useI18n();
@@ -91,6 +111,7 @@ export default function Expenses() {
   const [filterTo, setFilterTo] = useState(todayDate);
   const [filterTypeId, setFilterTypeId] = useState("");
   const [filterBranchId, setFilterBranchId] = useState("");
+  const [filterCardPay, setFilterCardPay] = useState("");
 
   const [applied, setApplied] = useState(() => ({
     invoiceNo: "",
@@ -98,6 +119,8 @@ export default function Expenses() {
     to: todayDate(),
     expenseTypeId: 0,
     filterBranchId: 0,
+    paymentMethod: undefined as ExpensePaymentMethod | undefined,
+    cardId: 0,
   }));
 
   useEffect(() => {
@@ -119,6 +142,8 @@ export default function Expenses() {
       to: applied.to || undefined,
       expenseTypeId: applied.expenseTypeId || undefined,
       filterBranchId: applied.filterBranchId || undefined,
+      paymentMethod: applied.paymentMethod,
+      cardId: applied.cardId > 0 ? applied.cardId : undefined,
     }),
     [applied]
   );
@@ -126,6 +151,7 @@ export default function Expenses() {
   const { data: expenses, isLoading } = useListExpenses(listParams);
   const { data: expenseTypes } = useGetExpenseTypes();
   const { data: branches } = useGetBranches();
+  const { data: cards } = useGetCards();
   const { data: appSettings, refetch: refetchSettings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
@@ -193,6 +219,37 @@ export default function Expenses() {
     [branchOptions, locked, t]
   );
 
+  const formBranchCardOptions = useMemo<ComboboxOption[]>(() => {
+    const branchId = Number(form.branchId) || 0;
+    return (cards ?? [])
+      .filter((c) => c.isActive !== false)
+      .filter((c) => (branchId ? (c.branchIds ?? []).includes(branchId) : false))
+      .map((c) => ({
+        value: String(c.id),
+        label: c.name,
+        subtitle: fmtMoney(Number(c.balance) || 0),
+        icon: CreditCard,
+      }));
+  }, [cards, form.branchId]);
+
+  const filterCardPayOptions = useMemo<ComboboxOption[]>(() => {
+    const branchId = Number(filterBranchId) || 0;
+    const cardOpts = (cards ?? [])
+      .filter((c) => c.isActive !== false)
+      .filter((c) => (branchId ? (c.branchIds ?? []).includes(branchId) : true))
+      .map((c) => ({
+        value: String(c.id),
+        label: c.name,
+        icon: CreditCard,
+      }));
+    return [
+      { value: "", label: t("expenses.allFilters") },
+      { value: "cash", label: "بدون بطاقة", icon: Wallet },
+      { value: "card", label: "بطاقة", icon: CreditCard },
+      ...cardOpts,
+    ];
+  }, [cards, filterBranchId, t]);
+
   const nextInvoicePreview = useMemo(() => {
     const rows = expenses ?? [];
     let max = 0;
@@ -234,6 +291,8 @@ export default function Expenses() {
             : "",
       amount: item.amount,
       notes: item.notes || "",
+      paymentMethod: item.paymentMethod === "card" ? "card" : "cash",
+      cardId: item.cardId ? String(item.cardId) : "",
     });
     setFormError("");
     setFormErrorKind("");
@@ -268,6 +327,11 @@ export default function Expenses() {
       setFormError(t("expenses.dateRequired"));
       return;
     }
+    if (form.paymentMethod === "card" && !form.cardId) {
+      setFormErrorKind("general");
+      setFormError("اختر البطاقة");
+      return;
+    }
 
     const body = {
       expenseTypeId,
@@ -276,6 +340,9 @@ export default function Expenses() {
       notes: form.notes.trim() || undefined,
       branchId,
       invoiceNo: editing ? form.invoiceNo : undefined,
+      paymentMethod: form.paymentMethod,
+      cardId:
+        form.paymentMethod === "card" ? Number(form.cardId) || null : null,
     };
 
     if (editing) {
@@ -386,12 +453,15 @@ export default function Expenses() {
   };
 
   const applyFilters = () => {
+    const pay = cardPayFilterToParams(filterCardPay);
     setApplied({
       invoiceNo: filterInvoice.trim(),
       from: filterFrom || todayDate(),
       to: filterTo || todayDate(),
       expenseTypeId: Number(filterTypeId) || 0,
       filterBranchId: Number(filterBranchId) || 0,
+      paymentMethod: pay.paymentMethod,
+      cardId: pay.cardId ?? 0,
     });
   };
 
@@ -494,6 +564,22 @@ export default function Expenses() {
       ),
     },
     {
+      key: "payment",
+      header: "الدفع",
+      render: (item: ExpenseRow) =>
+        item.paymentMethod === "card" ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200 px-2.5 py-1 text-[13px] font-extrabold">
+            <CreditCard className="w-3.5 h-3.5" />
+            {item.cardName?.trim() || "بطاقة"}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 px-2.5 py-1 text-[13px] font-extrabold">
+            <Wallet className="w-3.5 h-3.5" />
+            بدون بطاقة
+          </span>
+        ),
+    },
+    {
       key: "notes",
       header: t("common.notes"),
       render: (item: ExpenseRow) => (
@@ -540,7 +626,7 @@ export default function Expenses() {
           </>
         }
         toolbar={
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 items-end">
             <div>
               <label className="text-[14px] font-bold text-muted-foreground mb-1.5 block">
                 {t("expenses.invoiceNo")}
@@ -592,7 +678,10 @@ export default function Expenses() {
             ) : (
               <ModernCombobox
                 value={filterBranchId}
-                onChange={setFilterBranchId}
+                onChange={(branchId) => {
+                  setFilterBranchId(branchId);
+                  setFilterCardPay("");
+                }}
                 options={filterBranchOptions}
                 label={t("common.branch")}
                 placeholder={t("expenses.allBranches")}
@@ -602,6 +691,18 @@ export default function Expenses() {
                 valueClassName="text-[16px] font-bold"
               />
             )}
+            <ModernCombobox
+              value={filterCardPay}
+              onChange={setFilterCardPay}
+              options={filterCardPayOptions}
+              label="البحث حسب البطاقة"
+              placeholder={t("expenses.allFilters")}
+              icon={CreditCard}
+              searchable
+              searchPlaceholder="ابحث عن البطاقة..."
+              labelClassName="text-[14px] font-bold text-muted-foreground"
+              valueClassName="text-[16px] font-bold"
+            />
             <Button
               type="button"
               className="min-h-14 h-14 rounded-2xl text-[16px] font-bold touch-manipulation"
@@ -682,7 +783,7 @@ export default function Expenses() {
                 <ModernCombobox
                   value={form.branchId}
                   onChange={(branchId) => {
-                    setForm((f) => ({ ...f, branchId }));
+                    setForm((f) => ({ ...f, branchId, cardId: "" }));
                     clearFormError();
                   }}
                   options={branchOptions}
@@ -692,6 +793,74 @@ export default function Expenses() {
                   labelClassName="text-[17px] font-bold text-foreground mb-0.5"
                   valueClassName="text-[17px] font-bold"
                 />
+              )}
+            </div>
+            <div className="min-w-0 sm:col-span-2">
+              <label className="text-[17px] font-bold text-foreground mb-2 block">
+                طريقة الدفع
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 p-1.5 h-14 rounded-2xl border-2 border-border bg-secondary/40">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, paymentMethod: "cash", cardId: "" }))
+                  }
+                  className={`rounded-xl flex items-center justify-center gap-2 font-extrabold text-[15px] touch-manipulation transition-all ${
+                    form.paymentMethod === "cash"
+                      ? "bg-gradient-to-l from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                  }`}
+                >
+                  <Wallet className="w-4 h-4 shrink-0" />
+                  بدون بطاقة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, paymentMethod: "card" }))}
+                  className={`rounded-xl flex items-center justify-center gap-2 font-extrabold text-[15px] touch-manipulation transition-all ${
+                    form.paymentMethod === "card"
+                      ? "bg-gradient-to-l from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4 shrink-0" />
+                  بطاقة
+                </button>
+              </div>
+            </div>
+            <div className="min-w-0 sm:col-span-2">
+              {form.paymentMethod === "card" ? (
+                <ModernCombobox
+                  value={form.cardId}
+                  onChange={(cardId) => {
+                    setForm((f) => ({ ...f, cardId }));
+                    clearFormError();
+                  }}
+                  options={formBranchCardOptions}
+                  label="البطاقة *"
+                  placeholder={
+                    form.branchId ? "اختر البطاقة حسب الفرع" : "اختر الفرع أولاً"
+                  }
+                  icon={CreditCard}
+                  searchable
+                  searchPlaceholder="ابحث عن البطاقة..."
+                  emptyText={
+                    form.branchId
+                      ? "لا توجد بطاقة لهذا الفرع"
+                      : "اختر الفرع أولاً لعرض البطاقات"
+                  }
+                  labelClassName="text-[17px] font-bold text-foreground mb-0.5"
+                  valueClassName="text-[17px] font-bold"
+                />
+              ) : (
+                <>
+                  <label className="text-[17px] font-bold text-foreground mb-2 block">
+                    البطاقة
+                  </label>
+                  <div className="min-h-14 h-14 rounded-2xl border-2 border-border/50 bg-secondary/40 px-4 flex items-center text-[16px] font-bold text-muted-foreground">
+                    بدون بطاقة
+                  </div>
+                </>
               )}
             </div>
             <div className="sm:col-span-2">

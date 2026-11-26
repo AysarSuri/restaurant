@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetDeliveryContacts,
@@ -9,8 +9,6 @@ import {
   type DeliveryContact,
 } from "@workspace/api-client-react";
 import { Button, Dialog } from "@/components/ui-elements";
-import { BranchSwitcher } from "@/components/branch-switcher";
-import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import {
   Plus,
@@ -101,13 +99,12 @@ function SheetInput({
 
 export default function DeliveryContactsPage() {
   const { t } = useI18n();
-  const { selectedBranchId, branchLabel } = useBranch();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const { data: contacts, isLoading, isFetching, refetch } = useGetDeliveryContacts({
     search: search.trim() || undefined,
     query: {
-      queryKey: [...getGetDeliveryContactsQueryKey(), search.trim(), selectedBranchId],
+      queryKey: [...getGetDeliveryContactsQueryKey(), "all-branches", search.trim()],
       staleTime: 800,
     },
   });
@@ -153,11 +150,6 @@ export default function DeliveryContactsPage() {
     setError("");
     setGpsMsg("");
   };
-
-  useEffect(() => {
-    cancelEdit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranchId]);
 
   const patchDraft = (patch: Partial<SheetRow>) =>
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -223,7 +215,8 @@ export default function DeliveryContactsPage() {
       longitude: draft.longitude.trim() ? Number(draft.longitude) : null,
       gpsLabel: draft.gpsLabel.trim() || undefined,
       note: draft.note.trim() || undefined,
-      branchId: selectedBranchId === "all" ? undefined : selectedBranchId,
+      /** Shared across every branch (POS + this sheet) */
+      branchId: null,
     };
   };
 
@@ -454,11 +447,10 @@ export default function DeliveryContactsPage() {
             {t("delivery.title")}
           </h2>
           <p className="text-sm text-muted-foreground mt-1 font-semibold">
-            جدول احترافي كالورقة الحسابية · {branchLabel}
+            جدول احترافي كالورقة الحسابية · مشتركة لكل الفروع
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <BranchSwitcher />
           <Button
             type="button"
             variant="outline"

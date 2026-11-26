@@ -17,6 +17,7 @@ import reportsRouter from "./reports";
 import shiftsRouter from "./shifts";
 import suppliersRouter from "./suppliers";
 import systemResetRouter from "./system-reset";
+import vaultRouter from "./vault";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use("/reports", reportsRouter);
 router.use("/shifts", shiftsRouter);
 router.use("/suppliers", suppliersRouter);
 router.use("/system-reset", systemResetRouter);
+router.use("/vault", vaultRouter);
 
 export default router;
