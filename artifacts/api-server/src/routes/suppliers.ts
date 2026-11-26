@@ -798,6 +798,15 @@ router.put("/purchases/:id", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
 
+  const shiftErrPurchasePut = await requireOpenShiftForBranch(
+    parsed.branchId ?? existing.branchId
+  );
+  if (shiftErrPurchasePut) {
+    return res
+      .status(400)
+      .json({ message: shiftErrPurchasePut, error: shiftErrPurchasePut });
+  }
+
   const oldLines = await loadPurchaseCostLines(id);
   const newLines = parsed.items.map((it) => ({
     menuItemId: it.menuItemId,
@@ -844,6 +853,19 @@ router.put("/purchases/:id", async (req, res) => {
 router.delete("/purchases/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const [existing] = await db
+    .select({ id: supplierPurchasesTable.id, branchId: supplierPurchasesTable.branchId })
+    .from(supplierPurchasesTable)
+    .where(eq(supplierPurchasesTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "فاتورة الشراء غير موجودة" });
+  const shiftErrPurchaseDel = await requireOpenShiftForBranch(existing.branchId);
+  if (shiftErrPurchaseDel) {
+    return res
+      .status(400)
+      .json({ message: shiftErrPurchaseDel, error: shiftErrPurchaseDel });
+  }
 
   const oldLines = await loadPurchaseCostLines(id);
   /** 4) Delete purchase line(s): (Q*C - q*p) / (Q - q) while stock still includes them */
@@ -1032,6 +1054,13 @@ router.put("/returns/:id", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
 
+  const shiftErrReturnPut = await requireOpenShiftForBranch(
+    parsed.branchId ?? existing.branchId
+  );
+  if (shiftErrReturnPut) {
+    return res.status(400).json({ message: shiftErrReturnPut, error: shiftErrReturnPut });
+  }
+
   const oldLines = await loadReturnCostLines(id);
   const newLines = parsed.items.map((it) => ({
     menuItemId: it.menuItemId,
@@ -1076,6 +1105,17 @@ router.put("/returns/:id", async (req, res) => {
 router.delete("/returns/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+
+  const [existing] = await db
+    .select({ id: supplierReturnsTable.id, branchId: supplierReturnsTable.branchId })
+    .from(supplierReturnsTable)
+    .where(eq(supplierReturnsTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "فاتورة المرجوع غير موجودة" });
+  const shiftErrReturnDel = await requireOpenShiftForBranch(existing.branchId);
+  if (shiftErrReturnDel) {
+    return res.status(400).json({ message: shiftErrReturnDel, error: shiftErrReturnDel });
+  }
 
   const oldLines = await loadReturnCostLines(id);
   /** 2) Delete return line(s): (Q*C + q*p) / (Q + q) while return still in stock calc */
@@ -1273,6 +1313,13 @@ router.put("/movements/:id", async (req, res) => {
   const payment = parseMovementPayment(req.body, amountType);
   if (!payment.ok) return res.status(payment.status).json({ message: payment.message });
 
+  const shiftErrMovPut = await requireOpenShiftForBranch(
+    payment.branchId ?? existing.branchId
+  );
+  if (shiftErrMovPut) {
+    return res.status(400).json({ message: shiftErrMovPut, error: shiftErrMovPut });
+  }
+
   const [supplier] = await db
     .select()
     .from(suppliersTable)
@@ -1304,6 +1351,16 @@ router.put("/movements/:id", async (req, res) => {
 router.delete("/movements/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+  const [existing] = await db
+    .select({ id: supplierMovementsTable.id, branchId: supplierMovementsTable.branchId })
+    .from(supplierMovementsTable)
+    .where(eq(supplierMovementsTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "الحركة غير موجودة" });
+  const shiftErrMovDel = await requireOpenShiftForBranch(existing.branchId);
+  if (shiftErrMovDel) {
+    return res.status(400).json({ message: shiftErrMovDel, error: shiftErrMovDel });
+  }
   const [row] = await db
     .delete(supplierMovementsTable)
     .where(eq(supplierMovementsTable.id, id))

@@ -3,8 +3,8 @@ import { useBranch, type BranchSelection } from "@/lib/branch-context";
 
 /**
  * Branch scoping for forms/filters:
- * - admin / manager: can pick freely (returns null forced id)
- * - everyone else: branch is fixed to their assigned selected branch
+ * - admin / manager (مدير النظام / مدير): can pick freely
+ * - everyone else: branch field locked to their assigned branch
  */
 export function useScopedBranch() {
   const {
@@ -16,7 +16,7 @@ export function useScopedBranch() {
   } = useBranch();
 
   const locked = !canViewAllBranches;
-  const canPickBranch = canSwitchBranch;
+  const canPickBranch = canSwitchBranch && !locked;
 
   const forcedBranchId = useMemo(() => {
     if (!locked) return null;

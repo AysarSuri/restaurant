@@ -29,6 +29,7 @@ import {
   printExpenseReportA4Landscape,
 } from "@/lib/print-receipt";
 import { useScopedBranch } from "@/hooks/use-scoped-branch";
+import { useOpenShiftGate } from "@/hooks/use-open-shift-gate";
 import { useI18n } from "@/i18n";
 import {
   AlertCircle,
@@ -123,6 +124,12 @@ export default function Expenses() {
     cardId: 0,
   }));
 
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ExpenseRow | null>(null);
+  const [form, setForm] = useState<ExpenseFormState>(emptyExpenseForm);
+  const [formError, setFormError] = useState("");
+  const [formErrorKind, setFormErrorKind] = useState<"branch" | "general" | "">("");
+
   useEffect(() => {
     if (!locked || forcedBranchId == null) return;
     const id = String(forcedBranchId);
@@ -163,11 +170,15 @@ export default function Expenses() {
   const updateType = useUpdateExpenseType();
   const deleteType = useDeleteExpenseType();
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<ExpenseRow | null>(null);
-  const [form, setForm] = useState<ExpenseFormState>(emptyExpenseForm);
-  const [formError, setFormError] = useState("");
-  const [formErrorKind, setFormErrorKind] = useState<"branch" | "general" | "">("");
+  const gateBranchId =
+    forcedBranchId ??
+    (Number(form.branchId) ||
+      Number(filterBranchId) ||
+      applied.filterBranchId ||
+      null);
+  const { shiftClosed, blockReason, blockReasonFor } = useOpenShiftGate(
+    gateBranchId && gateBranchId > 0 ? gateBranchId : null
+  );
 
   const [typesOpen, setTypesOpen] = useState(false);
   const [typeFormOpen, setTypeFormOpen] = useState(false);
@@ -267,13 +278,17 @@ export default function Expenses() {
     queryClient.invalidateQueries({ queryKey: getGetExpenseTypesQueryKey() });
 
   const openAdd = () => {
+    const branchForGate =
+      forcedBranchId ??
+      (Number(filterBranchId) || applied.filterBranchId || null);
+    const blocked = branchForGate ? blockReasonFor(branchForGate) : null;
     setEditing(null);
     setForm({
       ...emptyExpenseForm(),
       branchId: forcedBranchId != null ? String(forcedBranchId) : "",
     });
-    setFormError("");
-    setFormErrorKind("");
+    setFormError(blocked || "");
+    setFormErrorKind(blocked ? "general" : "");
     setFormOpen(true);
   };
 
@@ -310,6 +325,12 @@ export default function Expenses() {
     if (!branchId) {
       setFormErrorKind("branch");
       setFormError(t("expenses.branchRequiredHint"));
+      return;
+    }
+    const shiftBlock = blockReasonFor(branchId);
+    if (shiftBlock) {
+      setFormErrorKind("general");
+      setFormError(shiftBlock);
       return;
     }
     if (!Number.isFinite(expenseTypeId) || expenseTypeId <= 0) {
@@ -381,6 +402,12 @@ export default function Expenses() {
 
   const confirmDeleteExpense = () => {
     if (!deleteTarget) return;
+    const delBranch = forcedBranchId ?? deleteTarget.branchId ?? null;
+    const shiftBlock = blockReasonFor(delBranch);
+    if (shiftBlock) {
+      setDeleteError(shiftBlock);
+      return;
+    }
     deleteExpense.mutate(deleteTarget.id, {
       onSuccess: () => {
         setDeleteTarget(null);
@@ -592,6 +619,12 @@ export default function Expenses() {
 
   return (
     <div className="space-y-4 touch-ui">
+      {shiftClosed && blockReason ? (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-extrabold text-amber-800 dark:text-amber-200 flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <span>{blockReason}</span>
+        </div>
+      ) : null}
       <CrudTable
         title={t("expenses.log")}
         titleEn={t("expenses.kicker")}

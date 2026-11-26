@@ -244,6 +244,8 @@ router.put("/:id", async (req, res) => {
   if (!resolvedBranchId) {
     return res.status(400).json({ message: "اختر فرعاً قبل حفظ السحب أو المرجوع" });
   }
+  const shiftErr = await requireOpenShiftForBranch(resolvedBranchId);
+  if (shiftErr) return res.status(400).json({ message: shiftErr, error: shiftErr });
 
   const payment = parsePaymentFields(req.body);
   if (payment.error) return res.status(400).json({ message: payment.error });
@@ -271,6 +273,14 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: "معرف غير صالح" });
+  const [existing] = await db
+    .select({ id: cashMovementsTable.id, branchId: cashMovementsTable.branchId })
+    .from(cashMovementsTable)
+    .where(eq(cashMovementsTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ message: "السجل غير موجود" });
+  const shiftErr = await requireOpenShiftForBranch(existing.branchId);
+  if (shiftErr) return res.status(400).json({ message: shiftErr, error: shiftErr });
   const [row] = await db
     .delete(cashMovementsTable)
     .where(eq(cashMovementsTable.id, id))

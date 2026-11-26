@@ -39,6 +39,7 @@ import { Button, Input, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { LockedBranchField } from "@/components/locked-branch-field";
 import { useScopedBranch } from "@/hooks/use-scoped-branch";
+import { useOpenShiftGate } from "@/hooks/use-open-shift-gate";
 import { YmdDateInput } from "@/components/ymd-date-input";
 import {
   printSupplierPurchaseThermal,
@@ -226,6 +227,12 @@ export default function SuppliersPage() {
   const { selectedBranchId, branchLabel } = useBranch();
   const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const [section, setSection] = useState<Section>("hub");
+  const suppliersGateBranchId =
+    forcedBranchId ??
+    (selectedBranchId !== "all" ? selectedBranchId : null);
+  const { shiftClosed, blockReason, blockReasonFor } = useOpenShiftGate(
+    suppliersGateBranchId
+  );
 
   const { data: suppliers, isLoading: loadingSuppliers } = useGetSuppliers({
     query: {
@@ -776,6 +783,12 @@ export default function SuppliersPage() {
   const savePurchase = () => {
     if (!purchaseForm.supplierId) return setPurchaseError("اختر المورد");
     if (!purchaseForm.branchId) return setPurchaseError("اختر الفرع");
+    const purchaseBranchId =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : Number(purchaseForm.branchId) || null;
+    const purchaseShiftBlock = blockReasonFor(purchaseBranchId);
+    if (purchaseShiftBlock) return setPurchaseError(purchaseShiftBlock);
     if (purchaseForm.paymentMethod === "card" && !purchaseForm.cardId) {
       return setPurchaseError("اختر البطاقة");
     }
@@ -970,6 +983,12 @@ export default function SuppliersPage() {
   const saveMovement = () => {
     if (!movementForm.supplierId) return setMovementError("اختر المورد");
     if (!movementForm.branchId) return setMovementError("اختر الفرع");
+    const movementBranchId =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : Number(movementForm.branchId) || null;
+    const shiftBlock = blockReasonFor(movementBranchId);
+    if (shiftBlock) return setMovementError(shiftBlock);
     if (movementForm.amount === "" || !(Number(movementForm.amount) > 0)) {
       return setMovementError("أدخل مبلغاً أكبر من صفر");
     }
@@ -1287,6 +1306,12 @@ export default function SuppliersPage() {
           ) : null}
         </div>
       </div>
+
+      {shiftClosed && blockReason ? (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-extrabold text-amber-800 dark:text-amber-200">
+          {blockReason}
+        </div>
+      ) : null}
 
       {section === "hub" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">

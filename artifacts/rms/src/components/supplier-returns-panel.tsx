@@ -19,6 +19,8 @@ import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobo
 import { YmdDateInput } from "@/components/ymd-date-input";
 import { printSupplierPurchaseThermal } from "@/lib/print-receipt";
 import { bumpStockLive } from "@/lib/stock-live";
+import { useScopedBranch } from "@/hooks/use-scoped-branch";
+import { useOpenShiftGate } from "@/hooks/use-open-shift-gate";
 import { useI18n } from "@/i18n";
 import {
   Building2,
@@ -106,6 +108,7 @@ export function SupplierReturnsPanel({
 }: Props) {
   const { formatDate } = useI18n();
   const queryClient = useQueryClient();
+  const { locked, forcedBranchId } = useScopedBranch();
   const { data: returns, isLoading: loadingReturns } = useGetSupplierReturns();
   const { data: branches } = useGetBranches();
   const { data: cards } = useGetCards();
@@ -121,10 +124,15 @@ export function SupplierReturnsPanel({
     notes: "",
     paidAmount: 0,
     discountAmount: 0,
-    branchId: "",
+    branchId: forcedBranchId != null ? String(forcedBranchId) : "",
     paymentMethod: "cash" as SupplierPaymentMethod,
     cardId: "",
   });
+  const returnGateBranchId =
+    forcedBranchId ?? (Number(form.branchId) || null);
+  const { blockReasonFor, shiftClosed, blockReason } = useOpenShiftGate(
+    returnGateBranchId
+  );
   const [lines, setLines] = useState<ReturnLine[]>([EMPTY_LINE()]);
   const [formError, setFormError] = useState("");
   const [editingReturnId, setEditingReturnId] = useState<number | null>(null);
@@ -324,6 +332,12 @@ export function SupplierReturnsPanel({
   const saveReturn = () => {
     if (!form.supplierId) return setFormError("اختر المورد");
     if (!form.branchId) return setFormError("اختر الفرع");
+    const returnBranchId =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : Number(form.branchId) || null;
+    const shiftBlock = blockReasonFor(returnBranchId);
+    if (shiftBlock) return setFormError(shiftBlock);
     if (form.paymentMethod === "card" && !form.cardId) {
       return setFormError("اختر البطاقة");
     }
@@ -413,8 +427,19 @@ export function SupplierReturnsPanel({
     });
   };
 
+  useEffect(() => {
+    if (forcedBranchId == null) return;
+    const id = String(forcedBranchId);
+    setForm((f) => (f.branchId === id ? f : { ...f, branchId: id }));
+  }, [forcedBranchId]);
+
   return (
     <div className="space-y-3">
+      {shiftClosed && blockReason ? (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-extrabold text-amber-800 dark:text-amber-200">
+          {blockReason}
+        </div>
+      ) : null}
       <Card className="px-3 py-1.5 sm:px-4 sm:py-2 border-2 border-destructive/35 bg-gradient-to-l from-destructive/10 via-card to-card space-y-1.5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="text-base sm:text-lg font-extrabold leading-none flex items-center gap-2 text-destructive">
@@ -1002,6 +1027,13 @@ export function SupplierReturnsPanel({
                             title="حذف"
                             onClick={() => {
                               if (!confirm("حذف فاتورة المرجوع؟")) return;
+                              const shiftBlock = blockReasonFor(
+                                forcedBranchId ?? p.branchId ?? null
+                              );
+                              if (shiftBlock) {
+                                setFormError(shiftBlock);
+                                return;
+                              }
                               if (editingReturnId === p.id) resetForm();
                               deleteReturn({ id: p.id }, { onSuccess: invalidateReturns });
                             }}
@@ -1076,6 +1108,13 @@ export function SupplierReturnsPanel({
                       className="h-11 w-11 text-destructive touch-manipulation"
                       onClick={() => {
                         if (!confirm("حذف فاتورة المرجوع؟")) return;
+                        const shiftBlock = blockReasonFor(
+                          forcedBranchId ?? p.branchId ?? null
+                        );
+                        if (shiftBlock) {
+                          setFormError(shiftBlock);
+                          return;
+                        }
                         if (editingReturnId === p.id) resetForm();
                         deleteReturn({ id: p.id }, { onSuccess: invalidateReturns });
                       }}

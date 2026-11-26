@@ -53,10 +53,9 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     query: { enabled: Boolean(user), queryKey: ["branches", "scoped"] },
   });
 
+  /** Only system admin + manager may view/switch all branches. */
   const canViewAllBranches =
-    user?.role === "admin" ||
-    user?.role === "manager" ||
-    Boolean(user?.allBranches);
+    user?.role === "admin" || user?.role === "manager";
 
   const allowedBranchIds: number[] | "all" = canViewAllBranches
     ? "all"
@@ -64,9 +63,8 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
 
   const forcedBranchForUser = (u: AuthUser | null | undefined): BranchSelection => {
     if (!u) return "all";
-    const all =
-      u.role === "admin" || u.role === "manager" || Boolean(u.allBranches);
-    if (all) return u.selectedBranchId ?? "all";
+    const canPickAny = u.role === "admin" || u.role === "manager";
+    if (canPickAny) return u.selectedBranchId ?? "all";
     const ids = u.branchIds ?? [];
     if (typeof u.selectedBranchId === "number" && ids.includes(u.selectedBranchId)) {
       return u.selectedBranchId;
@@ -87,7 +85,7 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     const next = forcedBranchForUser(user);
     setSelectedState((prev) => (prev === next ? prev : next));
     if (
-      !(user.role === "admin" || user.role === "manager" || user.allBranches) &&
+      !(user.role === "admin" || user.role === "manager") &&
       typeof next === "number" &&
       user.selectedBranchId !== next
     ) {

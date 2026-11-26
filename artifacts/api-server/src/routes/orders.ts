@@ -496,6 +496,11 @@ router.put("/:id", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
+  const shiftErrPut = await requireOpenShiftForBranch(existing.branchId);
+  if (shiftErrPut) {
+    res.status(400).json({ error: shiftErrPut, message: shiftErrPut });
+    return;
+  }
 
   if (items) {
     await db.delete(orderItemsTable).where(eq(orderItemsTable.orderId, id));
@@ -576,6 +581,11 @@ router.patch("/:id/status", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
+  const shiftErrStatus = await requireOpenShiftForBranch(order.branchId);
+  if (shiftErrStatus) {
+    res.status(400).json({ error: shiftErrStatus, message: shiftErrStatus });
+    return;
+  }
 
   const patch: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -651,6 +661,11 @@ router.post("/:id/pay", async (req, res) => {
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
   if (!order) {
     res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const shiftErrPay = await requireOpenShiftForBranch(order.branchId);
+  if (shiftErrPay) {
+    res.status(400).json({ error: shiftErrPay, message: shiftErrPay });
     return;
   }
 

@@ -109,7 +109,8 @@ export default function ShiftsPage() {
   const { format: fmtMoney } = useCurrency();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
-  const { locked, forcedBranchId, filterOptions } = useScopedBranch();
+  const { locked, forcedBranchId, filterOptions, resolveWriteBranchId, canPickBranch } =
+    useScopedBranch();
   const { data: shifts, isLoading } = useGetShifts();
   const { data: branches } = useGetBranches();
   const { mutate: createShift, isPending: isCreating } = useCreateShift();
@@ -119,6 +120,9 @@ export default function ShiftsPage() {
   const [filterFrom, setFilterFrom] = useState(todayYmd);
   const [filterTo, setFilterTo] = useState(todayYmd);
   const [filterKind, setFilterKind] = useState<ShiftKind | "all">("all");
+  const [filterBranchId, setFilterBranchId] = useState(() =>
+    selectedBranchId !== "all" ? String(selectedBranchId) : ""
+  );
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
   const [closeTarget, setCloseTarget] = useState<Shift | null>(null);
@@ -141,7 +145,17 @@ export default function ShiftsPage() {
   useEffect(() => {
     if (!locked || forcedBranchId == null) return;
     setBranchId(forcedBranchId);
+    setFilterBranchId(String(forcedBranchId));
   }, [locked, forcedBranchId]);
+
+  useEffect(() => {
+    if (locked) return;
+    if (selectedBranchId === "all") {
+      setFilterBranchId("");
+      return;
+    }
+    setFilterBranchId(String(selectedBranchId));
+  }, [locked, selectedBranchId]);
 
   const branchOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -153,16 +167,27 @@ export default function ShiftsPage() {
     [activeBranches]
   );
 
+  const filterBranchOptions = useMemo<ComboboxOption[]>(
+    () =>
+      locked
+        ? branchOptions
+        : [{ value: "", label: t("expenses.allBranches"), icon: Building2 }, ...branchOptions],
+    [branchOptions, locked, t]
+  );
+
   const syncShifts = (next: Shift[]) => {
     queryClient.setQueryData<Shift[]>(getGetShiftsQueryKey(), next);
   };
 
   const filtered = useMemo(() => {
     const list = shifts ?? [];
-    const scoped =
-      selectedBranchId === "all"
-        ? list
-        : list.filter((s) => s.branchId === selectedBranchId);
+    const branchFilter =
+      locked && forcedBranchId != null
+        ? forcedBranchId
+        : Number(filterBranchId) || 0;
+    const scoped = branchFilter
+      ? list.filter((s) => s.branchId === branchFilter)
+      : list;
 
     const from = filterFrom || todayYmd();
     const to = filterTo || todayYmd();
@@ -174,7 +199,15 @@ export default function ShiftsPage() {
     return filterKind === "all"
       ? byDate
       : byDate.filter((s) => s.kind === filterKind);
-  }, [shifts, selectedBranchId, filterFrom, filterTo, filterKind]);
+  }, [
+    shifts,
+    locked,
+    forcedBranchId,
+    filterBranchId,
+    filterFrom,
+    filterTo,
+    filterKind,
+  ]);
 
   const stats = useMemo(() => {
     const list = filtered;
@@ -195,7 +228,7 @@ export default function ShiftsPage() {
           ? activeBranches[0].id
           : "");
     setKind("morning");
-    setBranchId(defaultBranch);
+    setBranchId(locked && forcedBranchId != null ? forcedBranchId : defaultBranch);
     setOpenDate(todayYmd());
     setNotes("");
     setSubmitError("");
@@ -215,8 +248,7 @@ export default function ShiftsPage() {
       setSubmitError(t("shifts.errKind"));
       return;
     }
-    const writeBranchId =
-      locked && forcedBranchId != null ? forcedBranchId : Number(branchId);
+    const writeBranchId = resolveWriteBranchId(branchId);
     if (!writeBranchId || !Number.isFinite(writeBranchId)) {
       setSubmitError(t("shifts.errBranch"));
       return;
@@ -428,7 +460,7 @@ export default function ShiftsPage() {
       </div>
 
       <div className="rounded-3xl border border-border/60 bg-card/80 p-4 sm:p-5 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <div>
             <p className="text-[11px] font-bold text-muted-foreground mb-1.5">
               {t("expenses.fromDate")}
@@ -449,7 +481,25 @@ export default function ShiftsPage() {
               className="h-11 rounded-xl"
             />
           </div>
-          <div className="sm:col-span-2">
+          <div>
+            {!canPickBranch || locked ? (
+              <LockedBranchField label={t("common.branch")} />
+            ) : (
+              <ModernCombobox
+                value={filterBranchId}
+                onChange={setFilterBranchId}
+                options={filterBranchOptions}
+                label={t("common.branch")}
+                placeholder={t("expenses.allBranches")}
+                icon={Building2}
+                searchable
+                size="sm"
+                labelClassName="text-[11px] font-bold text-muted-foreground"
+                valueClassName="text-sm font-extrabold"
+              />
+            )}
+          </div>
+          <div>
             <p className="text-[11px] font-bold text-muted-foreground mb-1.5">
               {t("shifts.filterKind")}
             </p>
@@ -718,51 +768,55 @@ export default function ShiftsPage() {
           </div>
 
           <div>
-            <p className="text-sm font-extrabold mb-2.5">{t("common.branch")}</p>
-            {locked ? (
-              <LockedBranchField />
-            ) : activeBranches.length > 0 && activeBranches.length <= 6 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {activeBranches.map((b) => {
-                  const selected = branchId === b.id;
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => setBranchId(b.id)}
-                      className={`min-h-14 touch-manipulation rounded-2xl border-2 px-4 py-3 text-start transition-all active:scale-[0.98] ${
-                        selected
-                          ? "border-primary bg-primary/10 shadow-md shadow-primary/15"
-                          : "border-border/60 bg-card/70 hover:border-primary/35"
-                      }`}
-                    >
-                      <span className="flex items-center gap-3">
-                        <span
-                          className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            {!canPickBranch || locked ? (
+              <LockedBranchField label={t("common.branch")} />
+            ) : (
+              <>
+                <p className="text-sm font-extrabold mb-2.5">{t("common.branch")}</p>
+                {activeBranches.length > 0 && activeBranches.length <= 6 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {activeBranches.map((b) => {
+                      const selected = branchId === b.id;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          onClick={() => setBranchId(b.id)}
+                          className={`min-h-14 touch-manipulation rounded-2xl border-2 px-4 py-3 text-start transition-all active:scale-[0.98] ${
                             selected
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-secondary text-muted-foreground"
+                              ? "border-primary bg-primary/10 shadow-md shadow-primary/15"
+                              : "border-border/60 bg-card/70 hover:border-primary/35"
                           }`}
                         >
-                          <Building2 className="w-5 h-5" />
-                        </span>
-                        <span className="font-extrabold text-sm sm:text-base truncate">
-                          {b.name}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <ModernCombobox
-                icon={Building2}
-                value={branchId === "" ? "" : String(branchId)}
-                onChange={(v) => setBranchId(v ? Number(v) : "")}
-                options={branchOptions}
-                placeholder={t("shifts.chooseBranch")}
-                searchPlaceholder={t("branch.search")}
-              />
+                          <span className="flex items-center gap-3">
+                            <span
+                              className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                selected
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-secondary text-muted-foreground"
+                              }`}
+                            >
+                              <Building2 className="w-5 h-5" />
+                            </span>
+                            <span className="font-extrabold text-sm sm:text-base truncate">
+                              {b.name}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <ModernCombobox
+                    icon={Building2}
+                    value={branchId === "" ? "" : String(branchId)}
+                    onChange={(v) => setBranchId(v ? Number(v) : "")}
+                    options={branchOptions}
+                    placeholder={t("shifts.chooseBranch")}
+                    searchPlaceholder={t("branch.search")}
+                  />
+                )}
+              </>
             )}
             {openShiftForBranch ? (
               <div className="mt-2.5 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-3.5 py-3 text-sm font-bold text-amber-800 dark:text-amber-200">
