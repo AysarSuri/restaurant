@@ -46,32 +46,30 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      // Same-origin / server-to-server / health checks often omit Origin.
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (corsOrigins.length === 0) {
-        if (process.env.NODE_ENV === "production") {
-          callback(new Error("CORS_ORIGIN is not configured"));
-          return;
-        }
-        callback(null, true);
-        return;
-      }
-      if (corsOrigins.includes(origin) || corsOrigins.includes("*")) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
-    },
-    credentials: true,
-  })
-);
+function isAllowedCorsOrigin(origin: string | undefined, req: Request): boolean {
+  if (!origin) return true;
+  try {
+    const originHost = new URL(origin).host;
+    const rawHost = String(
+      req.headers["x-forwarded-host"] || req.headers.host || ""
+    )
+      .split(",")[0]
+      .trim();
+    // Always allow same-host (custom domain / Railway) so SPA assets & API work
+    // even if CORS_ORIGIN was left on localhost.
+    if (originHost && rawHost && originHost === rawHost) return true;
+  } catch {
+    /* ignore bad Origin */
+  }
+  if (corsOrigins.includes("*") || corsOrigins.includes(origin)) return true;
+  if (corsOrigins.length === 0 && process.env.NODE_ENV !== "production") {
+    return true;
+  }
+  return false;
+}
 
+// Static uploads/SPA must NOT go through CORS rejection — browsers send Origin on
+// module scripts; a wrong CORS_ORIGIN was returning 403 and blanking the UI.
 app.use("/uploads", express.static(UPLOADS_ROOT));
 
 app.use(
@@ -105,6 +103,19 @@ app.use(
 
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+app.use("/api", (req, res, next) => {
+  cors({
+    origin(origin, callback) {
+      if (isAllowedCorsOrigin(origin, req)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+    credentials: true,
+  })(req, res, next);
+});
 
 const generalLimiter = rateLimit({
   windowMs: 60_000,
