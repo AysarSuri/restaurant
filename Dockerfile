@@ -3,7 +3,8 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# Match local lockfile tooling (pnpm 9 rejects overrides written by pnpm 12).
+RUN corepack enable && corepack prepare pnpm@12.18.0 --activate
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY patches ./patches
@@ -31,7 +32,7 @@ ENV PORT=8080
 ENV BASE_PATH=/
 ENV STATIC_DIR=/app/public
 
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate \
+RUN corepack enable && corepack prepare pnpm@12.18.0 --activate \
   && apt-get update && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
