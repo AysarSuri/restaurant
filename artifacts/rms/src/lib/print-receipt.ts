@@ -685,17 +685,29 @@ function printFromWindow(win: Window) {
 }
 
 /**
- * Silent thermal print via a hidden iframe — no report preview window.
- * Document title uses the device printer name from Settings when provided
- * so the OS print dialog can match the correct 80mm printer.
+ * Silent thermal print via a hidden off-screen iframe — never opens a report
+ * preview tab/window. Uses a real 80mm box (not 0×0) so Chrome/Edge still print.
+ * Document title uses the Settings thermal printer name when provided.
  */
 function openThermalHtmlDocument(html: string, _windowName: string, title: string) {
+  // Remove any previous thermal iframe still hanging around
+  document
+    .querySelectorAll("iframe[data-rms-thermal-print='1']")
+    .forEach((el) => {
+      try {
+        el.remove();
+      } catch {
+        /* ignore */
+      }
+    });
+
   const iframe = document.createElement("iframe");
   iframe.title = title;
   iframe.setAttribute("aria-hidden", "true");
   iframe.setAttribute("data-rms-thermal-print", "1");
+  // Off-screen with real paper size — 0×0 iframes often fail or flash a preview in Chromium
   iframe.style.cssText =
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;visibility:hidden;z-index:-1;";
+    "position:fixed;left:-12000px;top:0;width:80mm;min-width:80mm;height:2400px;border:0;opacity:0;pointer-events:none;visibility:hidden;z-index:-1;";
   document.body.appendChild(iframe);
 
   const win = iframe.contentWindow;
@@ -710,6 +722,7 @@ function openThermalHtmlDocument(html: string, _windowName: string, title: strin
   doc.close();
 
   let finished = false;
+  let printed = false;
   const cleanup = () => {
     if (finished) return;
     finished = true;
@@ -719,12 +732,14 @@ function openThermalHtmlDocument(html: string, _windowName: string, title: strin
       } catch {
         /* ignore */
       }
-    }, 1200);
+    }, 1800);
   };
 
   const runPrint = () => {
+    if (printed) return;
+    printed = true;
     try {
-      win.focus();
+      // No focus/popup — print stays in the hidden iframe (no report window)
       win.print();
     } catch {
       /* ignore */
@@ -736,8 +751,10 @@ function openThermalHtmlDocument(html: string, _windowName: string, title: strin
   win.onafterprint = cleanup;
 
   void waitForImages(doc).then(() => {
-    window.setTimeout(runPrint, 60);
+    window.setTimeout(runPrint, 80);
   });
+  // Safety net if images hang
+  window.setTimeout(runPrint, 2200);
 }
 
 /**

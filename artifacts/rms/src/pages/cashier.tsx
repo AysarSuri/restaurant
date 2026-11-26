@@ -46,7 +46,7 @@ import {
   resolveDevicePrinter,
 } from "@/lib/device-printer-query";
 import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
-import { printKitchenTicketThermal, printThermalReceipt } from "@/lib/print-receipt";
+import { printThermalReceipt } from "@/lib/print-receipt";
 import { NumericKeypad } from "@/components/numeric-keypad";
 import { toast } from "@/hooks/use-toast";
 import { bumpOrdersLive, subscribeOrdersLive } from "@/lib/orders-live";
@@ -282,7 +282,6 @@ function OrderTicket({
   onOpen,
   onPrimary,
   onPrint,
-  primaryLabel,
   t,
 }: {
   card: OrderCardModel;
@@ -290,7 +289,6 @@ function OrderTicket({
   onOpen: () => void;
   onPrimary?: () => void;
   onPrint?: () => void;
-  primaryLabel?: string;
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   const tone = seatTone(card.seatKind);
@@ -808,25 +806,17 @@ export default function Cashier() {
     }
   };
 
-  const confirmCashierCollect = () => {
-    if (!paymentDialog) return;
-    const orderSnapshot = paymentDialog;
-    const subtotal = Number(orderSnapshot.subtotal) || 0;
-    const discount = Math.max(
-      0,
-      Math.min(checkoutDiscount, subtotal > 0 ? subtotal : checkoutDiscount)
-    );
-    const total = orderPayableAmount({ ...orderSnapshot, discount });
-    if (checkoutPayMethod === "cash" && checkoutReceived < total) return;
-    if (checkoutPayMethod === "card" && !checkoutCardId) return;
-
-    const paymentMethod = checkoutPayMethod === "card" ? "card" : "cash";
-    const receivedSnapshot = checkoutReceived;
-    const cardIdSnapshot = checkoutCardId;
-    const cardName =
-      paymentMethod === "card"
-        ? branchPaymentCards.find((c) => c.id === cardIdSnapshot)?.name?.trim() || ""
-        : "";
+  const finishCashierPaid = (
+    orderSnapshot: Order,
+    opts: {
+      paymentMethod: "cash" | "card";
+      cardId?: number | null;
+      cardName?: string;
+      discount: number;
+      total: number;
+      received: number;
+    }
+  ) => {
     // Cashier collect = واصل only — never send to kitchen from this screen
     const keepKitchen =
       orderSnapshot.status === "preparing" || orderSnapshot.status === "ready"
@@ -838,24 +828,22 @@ export default function Cashier() {
         id: orderSnapshot.id,
         data: {
           status: keepKitchen,
-          paymentMethod,
-          cardId: paymentMethod === "card" ? cardIdSnapshot : null,
-          discount,
+          paymentMethod: opts.paymentMethod,
+          cardId: opts.paymentMethod === "card" ? opts.cardId ?? null : null,
+          discount: opts.discount,
         } as any,
       },
       {
         onSuccess: () => {
-          // Same sales thermal receipt as POS (with prices) after تحصيل / تأكيد واصل
           try {
             printCashierSalesReceipt(orderSnapshot, {
-              paymentMethod,
-              cardName,
-              discount,
-              total,
-              received: paymentMethod === "cash" ? receivedSnapshot : total,
+              paymentMethod: opts.paymentMethod,
+              cardName: opts.cardName,
+              discount: opts.discount,
+              total: opts.total,
+              received: opts.received,
             });
           } catch {
-            /* save already succeeded — toast print failure below */
             toast({
               variant: "destructive",
               title: t("cashier.printFailed"),
@@ -882,6 +870,46 @@ export default function Cashier() {
         },
       }
     );
+  };
+
+  const confirmCashierCollect = () => {
+    if (!paymentDialog) return;
+    const orderSnapshot = paymentDialog;
+    const subtotal = Number(orderSnapshot.subtotal) || 0;
+    const discount = Math.max(
+      0,
+      Math.min(checkoutDiscount, subtotal > 0 ? subtotal : checkoutDiscount)
+    );
+    const total = orderPayableAmount({ ...orderSnapshot, discount });
+    if (checkoutPayMethod === "cash" && checkoutReceived < total) return;
+    if (checkoutPayMethod === "card" && !checkoutCardId) return;
+
+    const paymentMethod = checkoutPayMethod === "card" ? "card" : "cash";
+    const cardName =
+      paymentMethod === "card"
+        ? branchPaymentCards.find((c) => c.id === checkoutCardId)?.name?.trim() || ""
+        : "";
+
+    finishCashierPaid(orderSnapshot, {
+      paymentMethod,
+      cardId: checkoutCardId,
+      cardName,
+      discount,
+      total,
+      received: paymentMethod === "cash" ? checkoutReceived : total,
+    });
+  };
+
+  /** One-tap تأكيد واصل from details: cash + full amount + silent priced thermal */
+  const confirmPaidCashQuick = (order: Order) => {
+    const discount = Math.max(0, Number(order.discount) || 0);
+    const total = orderPayableAmount({ ...order, discount });
+    finishCashierPaid(order, {
+      paymentMethod: "cash",
+      discount,
+      total,
+      received: total,
+    });
   };
 
   const confirmMoveToUnpaid = () => {
@@ -926,8 +954,6 @@ export default function Cashier() {
     );
   };
 
-  const primaryPayLabel = t("cashier.collectPaid");
-
   const resolveOrderBranch = (order: Order) =>
     (order.branchId != null
       ? (branches ?? []).find((b) => b.id === order.branchId)
@@ -943,58 +969,33 @@ export default function Cashier() {
         ? t("order.takeaway")
         : t("order.dineIn");
 
-  /** Print button on invoice card → kitchen thermal (no prices) */
+  /**
+   * Print on unpaid/paid lists + details → same POS sales thermal (with prices),
+   * silent via hidden iframe (no report preview window).
+   */
   const printCashierReceipt = (order: Order) => {
-    const card = toCard(order, t);
-    const branch = resolveOrderBranch(order);
-    const created = new Date(order.createdAt);
-    const statusLabel =
-      order.status === "ready"
-        ? t("kds.colReady")
-        : order.status === "served"
-          ? t("kds.colServed")
-          : order.status === "preparing"
-            ? t("kds.colPreparing")
-            : t("cashier.colUnpaid");
+    const discount = Math.max(0, Number(order.discount) || 0);
+    const total = orderPayableAmount({ ...order, discount });
+    const paymentMethod = order.paymentMethod === "card" ? "card" : "cash";
+    const cardName =
+      paymentMethod === "card"
+        ? branchPaymentCards.find((c) => c.id === (order as { cardId?: number }).cardId)
+            ?.name?.trim() || ""
+        : "";
 
     try {
-      printKitchenTicketThermal({
-        restaurantName:
-          appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
-        branchName: branch?.name?.trim() || branchLabel,
-        logoUrl: branch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
-        mobile1: branch?.mobile1 || appSettings?.mobile || null,
-        mobile2: branch?.mobile2 || null,
-        address: branch?.address || null,
-        invoiceNumber: order.orderNumber,
-        dateLabel: created.toLocaleDateString("en-GB", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          numberingSystem: "latn",
-        }),
-        timeLabel: created.toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-          numberingSystem: "latn",
-        }),
-        orderTypeLabel: orderTypeLabel(order),
-        seatLabel: card.seatLabel,
-        kitchenStatusLabel: statusLabel,
-        items: (order.items ?? []).map((item: any) => ({
-          name: item.menuItem?.nameAr || t("common.item"),
-          quantity: item.quantity,
-          notes: item.notes,
-        })),
-        orderNotes: order.notes,
-        printerName: devicePrinter?.printerName?.trim() || null,
+      printCashierSalesReceipt(order, {
+        paymentMethod,
+        cardName,
+        discount,
+        total,
+        received: total,
       });
       toast({
         title: t("cashier.printOk"),
         description: devicePrinter?.printerName?.trim()
           ? t("pos.printNamed", { name: devicePrinter.printerName.trim() })
-          : t("kds.printTicketHint"),
+          : t("pos.printGeneric"),
       });
     } catch {
       toast({
@@ -1344,7 +1345,6 @@ export default function Cashier() {
                       onOpen={() => setSelectedOrder(card.order)}
                       onPrimary={() => openPaymentDialog(card.order)}
                       onPrint={() => printCashierReceipt(card.order)}
-                      primaryLabel={primaryPayLabel}
                     />
                   ))}
                 </AnimatePresence>
@@ -1490,27 +1490,35 @@ export default function Cashier() {
               </div>
             </div>
 
-            <div
-              className={`grid gap-2.5 ${
-                !isOrderReceived(selectedOrder) ? "grid-cols-2" : "grid-cols-1"
-              }`}
-            >
+            <div className="space-y-2.5">
               <Button
                 variant="outline"
-                className="h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation"
+                className="w-full h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation"
                 onClick={() => printCashierReceipt(selectedOrder)}
               >
                 <Printer className="w-5 h-5 shrink-0" />
                 <span className="truncate">{t("cashier.printReceipt")}</span>
               </Button>
               {!isOrderReceived(selectedOrder) ? (
-                <Button
-                  className="h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation"
-                  onClick={() => openPaymentDialog(selectedOrder)}
-                >
-                  <CheckCircle2 className="w-5 h-5 shrink-0" />
-                  <span className="truncate">{primaryPayLabel}</span>
-                </Button>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <Button
+                    variant="outline"
+                    className="h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation border-2 border-amber-500/45 bg-amber-500/10 text-amber-900 dark:text-amber-100 hover:bg-amber-500/15"
+                    onClick={() => openPaymentDialog(selectedOrder)}
+                  >
+                    <Wallet className="w-5 h-5 shrink-0" />
+                    <span className="truncate">{t("cashier.collectShort")}</span>
+                  </Button>
+                  <Button
+                    className="h-14 min-h-14 gap-2 font-extrabold rounded-2xl text-sm touch-manipulation"
+                    isLoading={isUpdating}
+                    disabled={isUpdating}
+                    onClick={() => confirmPaidCashQuick(selectedOrder)}
+                  >
+                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                    <span className="truncate">{t("cashier.confirmPaid")}</span>
+                  </Button>
+                </div>
               ) : null}
             </div>
           </div>
@@ -1854,7 +1862,7 @@ export default function Cashier() {
               onClick={confirmCashierCollect}
             >
               <CheckCircle2 className="w-5 h-5" />
-              {t("cashier.collectPaid")}
+              {t("cashier.confirmPaid")}
             </Button>
           </div>
         ) : null}

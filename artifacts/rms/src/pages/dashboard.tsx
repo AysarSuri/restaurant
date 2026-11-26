@@ -171,12 +171,12 @@ export default function Dashboard() {
               <span
                 className="
                   w-16 h-16 sm:w-[4.75rem] sm:h-[4.75rem] rounded-2xl
-                  bg-primary text-primary-foreground
+                  bg-primary text-white
                   flex items-center justify-center shadow-md shadow-primary/25
                   transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-3
                 "
               >
-                <Icon className="w-9 h-9 sm:w-10 sm:h-10" strokeWidth={2.25} />
+                <Icon className="w-9 h-9 sm:w-10 sm:h-10 text-white" strokeWidth={2.25} />
               </span>
               <span className="text-[13px] sm:text-[15px] font-extrabold text-center leading-snug line-clamp-2">
                 {label}

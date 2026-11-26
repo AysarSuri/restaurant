@@ -60,9 +60,9 @@
   --popover: 240 10% 6%;
   --popover-foreground: 0 0% 98%;
 
-  /* Premium Amber / Gold */
+  /* Premium Amber / Gold — white icons/text on primary in dark mode */
   --primary: 38 92% 50%;
-  --primary-foreground: 240 10% 4%;
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 240 10% 12%;
   --secondary-foreground: 0 0% 98%;
