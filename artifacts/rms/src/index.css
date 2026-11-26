@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Vazirmatn/Noto Arabic for RTL; Noto Sans for Badini Latin + English */
+  /* Vazirmatn/Noto Arabic for Arabic + Badini (Arabic script); Noto Sans for English */
   --font-sans: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
   --font-display: 'Vazirmatn', 'Noto Sans Arabic', 'Noto Sans', sans-serif;
 

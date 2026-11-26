@@ -63,7 +63,7 @@ function applyDocumentLocale(locale: Locale) {
     locale === "en"
       ? "Smart Restaurant Manager 2026"
       : locale === "ku"
-        ? "Rêveberiya Restorana Zîrek 2026"
+        ? "سیستەمێ رێڤەبەریا رێستۆرانێن زیریرەک ۲۰۲۶"
         : "نظام إدارة المطاعم الذكي 2026";
 }
 

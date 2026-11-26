@@ -21,7 +21,7 @@ export interface MultilingualKeyboardProps {
 const LANGS: { id: KeyboardLang; labelKey: string; short: string; dir: "rtl" | "ltr" }[] = [
   { id: "ar", labelKey: "lang.ar", short: "ع", dir: "rtl" },
   { id: "en", labelKey: "lang.en", short: "EN", dir: "ltr" },
-  { id: "ku", labelKey: "lang.ku", short: "KU", dir: "ltr" },
+  { id: "ku", labelKey: "lang.ku", short: "ک", dir: "rtl" },
 ];
 
 /** Arabic — common PC / phone letter rows */
@@ -55,26 +55,26 @@ const EN_SHIFT = [
 ];
 
 /**
- * Badini Kurdish (Kurmanji Latin / Hawar) — used in Duhok–Zakho
- * Extra letters: ê î û ş ç ḧ ẍ
+ * Badini Kurdish in Arabic script (Duhok–Zakho) — not Latin Hawar.
+ * Extra letters: ە ێ ۆ پ ڤ گ چ ژ ڕ ڵ ۊ ئ
  */
-const CKB_ROWS = [
-  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-  ["q", "w", "e", "r", "t", "y", "u", "î", "o", "p", "û"],
-  ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ê", "ş"],
-  ["z", "x", "c", "v", "b", "n", "m", "ç", "ḧ", "ẍ"],
+const KU_ROWS = [
+  ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "٠"],
+  ["ق", "و", "ە", "ر", "ت", "ی", "ئ", "ح", "ۆ", "پ", "ۊ"],
+  ["ا", "س", "د", "ف", "گ", "ه", "ژ", "ک", "ل", "ێ"],
+  ["ز", "خ", "ج", "ڤ", "ب", "ن", "م", "چ", "ڕ", "ڵ"],
 ];
 
-const CKB_SHIFT = [
-  ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
-  ["Q", "W", "E", "R", "T", "Y", "U", "Î", "O", "P", "Û"],
-  ["A", "S", "D", "F", "G", "H", "J", "K", "L", "Ê", "Ş"],
-  ["Z", "X", "C", "V", "B", "N", "M", "Ç", "Ḧ", "Ẍ"],
+const KU_SHIFT = [
+  ["!", "@", "#", "$", "٪", "^", "&", "*", ")", "("],
+  ["`", "،", ".", "؛", "؟", "'", '"', "\\", "/", "}"],
+  ["{", "]", "[", "ـ", "،", ":", "؛", "«", "»", "ـ"],
+  ["~", "ْ", "}", "{", "لآ", "آ", "'", ",", ".", "؟"],
 ];
 
 function rowsFor(lang: KeyboardLang, shift: boolean) {
   if (lang === "en") return shift ? EN_SHIFT : EN_ROWS;
-  if (lang === "ku") return shift ? CKB_SHIFT : CKB_ROWS;
+  if (lang === "ku") return shift ? KU_SHIFT : KU_ROWS;
   return shift ? AR_SHIFT : AR_ROWS;
 }
 
@@ -126,7 +126,7 @@ export function MultilingualKeyboard({
 
   const press = (key: string) => {
     updateText((prev) => prev + key);
-    if (shift && (lang === "en" || lang === "ku")) setShift(false);
+    if (shift && lang === "en") setShift(false);
     focusInput();
   };
 

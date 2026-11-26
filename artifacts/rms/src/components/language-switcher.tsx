@@ -40,7 +40,7 @@ export function LanguageSwitcher({ compact = false, className = "" }: Props) {
                 : "text-muted-foreground hover:text-foreground hover:bg-background/70"
             }`}
           >
-            {item.id === "ar" ? "ع" : item.id === "ku" ? "KU" : "EN"}
+            {item.id === "ar" ? "ع" : item.id === "ku" ? "ک" : "EN"}
           </button>
         );
       })}

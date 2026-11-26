@@ -13,7 +13,7 @@ export const LOCALES: {
   dateLocale: string;
 }[] = [
   { id: "ar", label: "Arabic", nativeLabel: "العربية", dir: "rtl", htmlLang: "ar", dateLocale: "ar-IQ" },
-  { id: "ku", label: "Kurdish (Badini)", nativeLabel: "Kurdî Badînî", dir: "ltr", htmlLang: "ku", dateLocale: "ku" },
+  { id: "ku", label: "Kurdish (Badini)", nativeLabel: "کوردی بادینی", dir: "rtl", htmlLang: "ku-Arab-IQ", dateLocale: "ku" },
   { id: "en", label: "English", nativeLabel: "English", dir: "ltr", htmlLang: "en", dateLocale: "en-US" },
 ];
 
