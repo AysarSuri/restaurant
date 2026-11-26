@@ -44,43 +44,43 @@ type ReportPageId = "sales" | "profit" | "discounts" | "expenses" | "inventory";
 
 const PAGES: {
   id: ReportPageId;
-  title: string;
-  subtitle: string;
+  titleKey: string;
+  subtitleKey: string;
   icon: React.ComponentType<{ className?: string }>;
   ready: boolean;
 }[] = [
   {
     id: "sales",
-    title: "المبيعات",
-    subtitle: "حسب التاريخ · الصنف · الفئة",
+    titleKey: "reports.pageSales",
+    subtitleKey: "reports.pageSalesSub",
     icon: ShoppingBag,
     ready: true,
   },
   {
     id: "profit",
-    title: "أرباح من مبيعات",
-    subtitle: "أصناف بتكلفة · ربح تفصيلي",
+    titleKey: "reports.pageProfit",
+    subtitleKey: "reports.pageProfitSub",
     icon: PiggyBank,
     ready: true,
   },
   {
     id: "discounts",
-    title: "خصومات من مبيعات",
-    subtitle: "حسب التاريخين · فواتير بخصم",
+    titleKey: "reports.pageDiscounts",
+    subtitleKey: "reports.pageDiscountsSub",
     icon: BadgePercent,
     ready: true,
   },
   {
     id: "expenses",
-    title: "المصاريف",
-    subtitle: "قريباً",
+    titleKey: "reports.pageExpenses",
+    subtitleKey: "reports.pageExpensesSub",
     icon: BarChart3,
     ready: false,
   },
   {
     id: "inventory",
-    title: "المخزون",
-    subtitle: "قريباً",
+    titleKey: "reports.pageInventory",
+    subtitleKey: "reports.pageInventorySub",
     icon: Package,
     ready: false,
   },
@@ -88,16 +88,16 @@ const PAGES: {
 
 const GROUP_OPTS: {
   id: SalesBreakdownGroupBy;
-  label: string;
+  labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
-  { id: "date", label: "حسب التاريخ", icon: CalendarDays },
-  { id: "item", label: "حسب الصنف", icon: Tags },
-  { id: "category", label: "حسب الفئة", icon: Layers },
+  { id: "date", labelKey: "reports.groupByDate", icon: CalendarDays },
+  { id: "item", labelKey: "reports.groupByItem", icon: Tags },
+  { id: "category", labelKey: "reports.groupByCategory", icon: Layers },
 ];
 
 function SalesReportPage() {
-  const { formatDate } = useI18n();
+  const { formatDate, t } = useI18n();
   const { selectedBranchId, branchLabel } = useBranch();
 
   const [from, setFrom] = useState(todayDate);
@@ -149,10 +149,10 @@ function SalesReportPage() {
   const summary = data?.summary;
   const dimLabel =
     applied.groupBy === "date"
-      ? "التاريخ"
+      ? t("reports.dimDate")
       : applied.groupBy === "item"
-        ? "الصنف"
-        : "الفئة";
+        ? t("reports.dimItem")
+        : t("reports.dimCategory");
 
   return (
     <div className="space-y-4">
@@ -160,29 +160,29 @@ function SalesReportPage() {
         <div className="xl:col-span-8 rounded-[1.5rem] border border-border/55 bg-background/90 p-4 sm:p-5 space-y-3 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[12px] font-black text-muted-foreground tracking-wide">
-              فلاتر تقرير المبيعات
+              {t("reports.salesFilters")}
             </p>
             <span className="text-[11px] font-bold text-muted-foreground">
-              الفرع: {branchLabel || "كل الفروع"}
+              {t("reports.branchPrefix")}: {branchLabel || t("reports.allBranches")}
             </span>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
             <div>
               <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
-                من تاريخ
+                {t("reports.fromDate")}
               </label>
               <YmdDateInput value={from} onChange={setFrom} className="h-11 rounded-xl" />
             </div>
             <div>
               <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
-                إلى تاريخ
+                {t("reports.toDate")}
               </label>
               <YmdDateInput value={to} onChange={setTo} className="h-11 rounded-xl" />
             </div>
             <div className="col-span-2">
               <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
-                تصفية فئة (اختياري)
+                {t("reports.filterCategoryOptional")}
               </label>
               <select
                 className="w-full h-11 rounded-xl border border-border/60 bg-background px-3 text-[13px] font-extrabold outline-none focus:ring-2 focus:ring-primary/30"
@@ -191,7 +191,7 @@ function SalesReportPage() {
                   setCategoryId(e.target.value ? Number(e.target.value) : "")
                 }
               >
-                <option value="">كل الفئات</option>
+                <option value="">{t("reports.allCategories")}</option>
                 {(categories ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nameAr || c.name}
@@ -217,7 +217,7 @@ function SalesReportPage() {
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               );
             })}
@@ -229,7 +229,7 @@ function SalesReportPage() {
               className="h-11 rounded-full px-6 font-extrabold"
               onClick={apply}
             >
-              عرض التقرير
+              {t("reports.showReport")}
             </Button>
             <Button
               type="button"
@@ -243,7 +243,7 @@ function SalesReportPage() {
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              تحديث
+              {t("reports.refresh")}
             </Button>
           </div>
         </div>
@@ -251,7 +251,7 @@ function SalesReportPage() {
         <div className="xl:col-span-4 grid grid-cols-2 xl:grid-cols-1 gap-2.5">
           <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3.5">
             <p className="text-[12px] font-black text-emerald-800 dark:text-emerald-200 mb-1">
-              إجمالي المبيعات
+              {t("reports.totalSales")}
             </p>
             <p className="font-display text-[22px] font-black tabular-nums" dir="ltr">
               {fmtMoney(summary?.totalAmount ?? 0)}
@@ -259,7 +259,7 @@ function SalesReportPage() {
           </div>
           <div className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.07] px-4 py-3.5">
             <p className="text-[12px] font-black text-sky-800 dark:text-sky-200 mb-1">
-              عدد الفواتير
+              {t("reports.invoiceCount")}
             </p>
             <p className="font-display text-[22px] font-black tabular-nums" dir="ltr">
               {fmtQty(summary?.orderCount ?? 0)}
@@ -267,14 +267,14 @@ function SalesReportPage() {
           </div>
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3.5">
             <p className="text-[12px] font-black text-amber-900 dark:text-amber-200 mb-1">
-              الكمية
+              {t("common.quantity")}
             </p>
             <p className="font-display text-[22px] font-black tabular-nums" dir="ltr">
               {fmtQty(summary?.totalQty ?? 0)}
             </p>
           </div>
           <div className="rounded-2xl border border-border/55 bg-background/90 px-4 py-3.5">
-            <p className="text-[12px] font-black text-muted-foreground mb-1">الصفوف</p>
+            <p className="text-[12px] font-black text-muted-foreground mb-1">{t("reports.rows")}</p>
             <p className="font-display text-[22px] font-black tabular-nums" dir="ltr">
               {fmtQty(summary?.rowCount ?? 0)}
             </p>
@@ -286,13 +286,15 @@ function SalesReportPage() {
         <div className="px-4 sm:px-5 py-4 border-b border-border/50 bg-gradient-to-l from-secondary/35 to-transparent flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className="text-lg font-black">
-              {GROUP_OPTS.find((g) => g.id === applied.groupBy)?.label ?? "المبيعات"}
+              {t(
+                GROUP_OPTS.find((g) => g.id === applied.groupBy)?.labelKey ??
+                  "reports.pageSales"
+              )}
             </h3>
             <p className="text-[12px] font-bold text-muted-foreground mt-0.5">
-              من {formatDate(applied.from)} إلى {formatDate(applied.to)}
-              {applied.categoryId
-                ? ` · فئة محددة`
-                : ""}
+              {t("reports.fromDate")} {formatDate(applied.from)} {t("reports.toDate")}{" "}
+              {formatDate(applied.to)}
+              {applied.categoryId ? ` · ${t("reports.categorySelected")}` : ""}
             </p>
           </div>
         </div>
@@ -1010,6 +1012,7 @@ function SalesDiscountsPage() {
 }
 
 function ComingSoonPage({ title }: { title: string }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-[1.6rem] border border-dashed border-border/70 bg-background/70 px-6 py-20 text-center">
       <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-secondary flex items-center justify-center">
@@ -1017,7 +1020,7 @@ function ComingSoonPage({ title }: { title: string }) {
       </div>
       <h3 className="text-xl font-black mb-2">{title}</h3>
       <p className="text-sm font-semibold text-muted-foreground max-w-md mx-auto">
-        هذه الصفحة جاهزة للإضافة لاحقاً ضمن فورم التقارير.
+        {t("reports.soonBody")}
       </p>
     </div>
   );
@@ -1049,7 +1052,7 @@ export default function Reports() {
                 {t("reports.title")}
               </h1>
               <p className="text-sm font-semibold text-muted-foreground max-w-2xl">
-                صفحات تقارير منظمة — ابدأ بتقرير المبيعات حسب التاريخين والصنف والفئة.
+                {t("reports.intro")}
               </p>
             </div>
             <BranchSwitcher />
@@ -1073,7 +1076,7 @@ export default function Reports() {
               >
                 <div className="flex items-center gap-2 font-extrabold text-[13px]">
                   <Icon className="w-4 h-4" />
-                  {p.title}
+                  {t(p.titleKey)}
                   {!p.ready ? (
                     <span
                       className={`ms-auto text-[10px] font-black rounded-full px-2 py-0.5 ${
@@ -1082,12 +1085,12 @@ export default function Reports() {
                           : "bg-amber-500/15 text-amber-800 dark:text-amber-200"
                       }`}
                     >
-                      قريباً
+                      {t("reports.soon")}
                     </span>
                   ) : null}
                 </div>
                 <p className={`mt-1 text-[11px] font-bold ${on ? "opacity-90" : "text-muted-foreground"}`}>
-                  {p.subtitle}
+                  {t(p.subtitleKey)}
                 </p>
               </button>
             );
@@ -1102,7 +1105,9 @@ export default function Reports() {
           <SalesDiscountsPage />
         ) : (
           <ComingSoonPage
-            title={PAGES.find((p) => p.id === page)?.title || "تقرير"}
+            title={t(
+              PAGES.find((p) => p.id === page)?.titleKey || "reports.fallbackTitle"
+            )}
           />
         )}
       </div>

@@ -694,11 +694,11 @@ export default function Login() {
               const isActive = selectedRole === role.value;
               return (
                 <motion.button key={role.value} whileTap={{ scale: 0.92 }} onClick={() => handleRoleSelect(role.value)}
-                  className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all
+                  className={`flex flex-col items-center py-2.5 px-1 rounded-xl border-2 transition-all
                     ${isActive ? `bg-gradient-to-br ${role.color} ${role.ring} ring-2 shadow-lg text-white` : `bg-card/40 ${role.fade} text-foreground`}`}>
-                  <span className="text-lg mb-0.5">{role.icon}</span>
-                  <span className="font-bold text-[9px] leading-tight text-center">{t(role.labelKey)}</span>
-                  <span className={`text-[8px] tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>{role.labelEn}</span>
+                  <span className="text-2xl mb-1">{role.icon}</span>
+                  <span className="font-extrabold text-[14px] leading-tight text-center">{t(role.labelKey)}</span>
+                  <span className={`text-[11px] font-semibold tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>{role.labelEn}</span>
                 </motion.button>
               );
             })}
@@ -840,11 +840,11 @@ export default function Login() {
                 const isActive = selectedRole === role.value;
                 return (
                   <motion.button key={role.value} whileTap={{ scale: 0.92 }} onClick={() => handleRoleSelect(role.value)}
-                    className={`flex flex-col items-center py-2 px-1 rounded-xl border-2 transition-all
+                    className={`flex flex-col items-center py-2.5 px-1.5 rounded-xl border-2 transition-all
                       ${isActive ? `bg-gradient-to-br ${role.color} ${role.ring} ring-2 shadow-lg text-white` : `bg-card/40 ${role.fade} text-foreground`}`}>
-                    <span className="text-xl mb-0.5">{role.icon}</span>
-                    <span className="font-bold text-[10px] leading-tight text-center">{t(role.labelKey)}</span>
-                    <span className={`text-[8px] tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>{role.labelEn}</span>
+                    <span className="text-3xl mb-1">{role.icon}</span>
+                    <span className="font-extrabold text-[15px] leading-tight text-center">{t(role.labelKey)}</span>
+                    <span className={`text-[12px] font-semibold tracking-wider mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>{role.labelEn}</span>
                   </motion.button>
                 );
               })}

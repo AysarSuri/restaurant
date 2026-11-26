@@ -73,8 +73,9 @@ import {
   Maximize2,
   Calculator,
   Keyboard,
+  Languages,
 } from "lucide-react";
-import { useI18n } from "@/i18n";
+import { LOCALES, useI18n, type Locale } from "@/i18n";
 
 type TabId =
   | "restaurant"
@@ -168,7 +169,7 @@ const PRINTER_PRESETS = [
 ];
 
 export default function SettingsPage() {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
   const { locked, forcedBranchId, filterOptions } = useScopedBranch();
@@ -1769,7 +1770,7 @@ export default function SettingsPage() {
                 [
                   { id: "ar" as const, short: "ع", labelKey: "lang.ar" },
                   { id: "en" as const, short: "EN", labelKey: "lang.en" },
-                  { id: "ku" as const, short: "KU", labelKey: "lang.ku" },
+                  { id: "ku" as const, short: "ک", labelKey: "lang.ku" },
                 ] as const
               ).map((opt) => {
                 void padPrefsTick;
@@ -2018,6 +2019,64 @@ export default function SettingsPage() {
 
       {tab === "other" && (
         <div className="space-y-5 max-w-4xl">
+          <Card className="p-5 sm:p-6 border border-border/60 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                <Languages className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-lg">{t("settings.appLanguage")}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t("settings.appLanguageHint")}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {LOCALES.map((opt) => {
+                const active = locale === opt.id;
+                const short =
+                  opt.id === "ar" ? "ع" : opt.id === "ku" ? "ک" : "EN";
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setLocale(opt.id as Locale);
+                      notifySaveOk(t("settings.savedAppLanguage"));
+                    }}
+                    className={`rounded-2xl border-2 p-3.5 sm:p-4 transition-all touch-manipulation text-center ${
+                      active
+                        ? "border-emerald-500/60 bg-emerald-500/10"
+                        : "border-border/70 bg-card/50 hover:border-border"
+                    }`}
+                  >
+                    <span
+                      className={`mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl text-sm font-extrabold ${
+                        active
+                          ? "bg-emerald-500 text-white"
+                          : "bg-secondary text-foreground"
+                      }`}
+                    >
+                      {short}
+                    </span>
+                    <p className="font-extrabold text-sm leading-tight">
+                      {opt.nativeLabel}
+                    </p>
+                    <p
+                      className={`text-[11px] font-semibold mt-1 ${
+                        active
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {t(`lang.${opt.id}`)}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
           <Card className="p-5 sm:p-6 border border-border/60 space-y-3">
             <div className="flex items-start gap-3">
               <span className="w-11 h-11 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
