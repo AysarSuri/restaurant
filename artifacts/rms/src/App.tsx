@@ -119,6 +119,22 @@ function VirtualKeyboardSync() {
 // ─── Auth ─────────────────────────────────────────────────
 export type UserRole = "admin" | "manager" | "cashier" | "kitchen" | "table";
 
+export type AuthMenuPermissions = {
+  access: boolean;
+  create: boolean;
+  editNew: boolean;
+  editOld: boolean;
+  deleteNew: boolean;
+  deleteOld: boolean;
+};
+
+export type AuthListPerm = {
+  access: boolean;
+  create: boolean;
+  edit: "none" | "1d" | "2d" | "all";
+  delete: "none" | "1d" | "2d" | "all";
+};
+
 export interface AuthUser {
   name: string;
   role: UserRole;
@@ -132,6 +148,10 @@ export interface AuthUser {
   /** active working scope: one branch or all (admin/manager) */
   selectedBranchId?: number | "all";
   branchName?: string;
+  /** @deprecated prefer listPermissions.menu */
+  menuPermissions?: AuthMenuPermissions;
+  /** Per-list permissions for non-admin roles */
+  listPermissions?: Partial<Record<string, AuthListPerm>>;
 }
 
 interface AuthContextType {
@@ -237,8 +257,28 @@ function Router() {
   // If logged in but on a page not allowed for role → redirect
   useEffect(() => {
     if (user && location !== "/login") {
+      if (user.role === "admin" || user.role === "manager") {
+        const allowed = ROLE_ALLOWED[location];
+        if (allowed && !allowed.includes(user.role)) {
+          navigate(ROLE_DEFAULT_PATH[user.role] ?? "/");
+        }
+        return;
+      }
+      // Non-admin: allow route if role allows OR list permission grants access
+      const pathKey = location.replace(/^\//, "") || "";
+      const listKey =
+        pathKey === "delivery-contacts"
+          ? "delivery-contacts"
+          : pathKey === "cash-movements"
+            ? "cash-movements"
+            : pathKey;
+      const listOk = Boolean(
+        user.listPermissions?.[listKey]?.access ||
+          (listKey === "menu" && user.menuPermissions?.access)
+      );
       const allowed = ROLE_ALLOWED[location];
-      if (allowed && !allowed.includes(user.role)) {
+      const roleOk = allowed ? allowed.includes(user.role) : true;
+      if (!roleOk && !listOk) {
         navigate(ROLE_DEFAULT_PATH[user.role] ?? "/");
       }
     }

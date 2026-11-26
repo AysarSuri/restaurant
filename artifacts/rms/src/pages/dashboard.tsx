@@ -61,10 +61,23 @@ const HOME_ITEMS: HomeItem[] = [
   { href: "/reports", labelKey: "nav.reports", icon: LineChart, roles: ["admin", "manager"] },
 ];
 
-function canAccess(role: UserRole | undefined, item: HomeItem) {
+function canAccess(
+  user: {
+    role?: UserRole;
+    menuPermissions?: { access?: boolean };
+    listPermissions?: Record<string, { access?: boolean }>;
+  } | null | undefined,
+  item: HomeItem
+) {
   if (!item.roles || item.roles.length === 0) return true;
-  if (!role) return false;
-  return item.roles.includes(role);
+  if (!user?.role) return false;
+  if (user.role === "admin" || user.role === "manager") {
+    return item.roles.includes(user.role);
+  }
+  const key = item.href.replace(/^\//, "");
+  if (user.listPermissions?.[key]?.access) return true;
+  if (key === "menu" && user.menuPermissions?.access) return true;
+  return item.roles.includes(user.role);
 }
 
 export default function Dashboard() {
@@ -74,11 +87,11 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
-  const items = HOME_ITEMS.filter((item) => canAccess(user?.role, item));
+  const items = HOME_ITEMS.filter((item) => canAccess(user, item));
 
   useEffect(() => {
     if (
-      canAccess(user?.role, {
+      canAccess(user, {
         href: "/branches",
         labelKey: "nav.branches",
         icon: Building2,
@@ -87,7 +100,7 @@ export default function Dashboard() {
     ) {
       void queryClient.prefetchQuery(getGetBranchesQueryOptions());
     }
-  }, [queryClient, user?.role]);
+  }, [queryClient, user]);
 
   const handleLogout = () => {
     logout();

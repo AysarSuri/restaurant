@@ -17,6 +17,10 @@ interface CrudTableProps<T> {
   onAdd?: () => void;
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
+  /** When set, hide edit for rows that return false */
+  canEdit?: (item: T) => boolean;
+  /** When set, hide delete for rows that return false */
+  canDelete?: (item: T) => boolean;
   /** Optional thermal / print action per row */
   onPrint?: (item: T) => void;
   searchKey?: keyof T;
@@ -30,7 +34,7 @@ interface CrudTableProps<T> {
 }
 
 export function CrudTable<T extends { id: number }>({
-  title, titleEn, data, columns, onAdd, onEdit, onDelete, onPrint, searchKey, isLoading, hideSearch, headerActions, toolbar
+  title, titleEn, data, columns, onAdd, onEdit, onDelete, canEdit, canDelete, onPrint, searchKey, isLoading, hideSearch, headerActions, toolbar
 }: CrudTableProps<T>) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
@@ -119,7 +123,7 @@ export function CrudTable<T extends { id: number }>({
                       <Printer className="w-5 h-5" /> {t("common.print")}
                     </Button>
                   )}
-                  {onEdit && (
+                  {onEdit && (canEdit?.(item) !== false) && (
                     <Button
                       variant="outline"
                       className="flex-1 min-h-14 h-14 text-[16px] font-bold gap-2 touch-manipulation"
@@ -128,7 +132,7 @@ export function CrudTable<T extends { id: number }>({
                       <Edit className="w-5 h-5" /> {t("common.edit")}
                     </Button>
                   )}
-                  {onDelete && (
+                  {onDelete && (canDelete?.(item) !== false) && (
                     <Button
                       variant="ghost"
                       className="flex-1 min-h-14 h-14 text-[16px] font-bold gap-2 text-destructive hover:bg-destructive/10 touch-manipulation"
@@ -202,7 +206,7 @@ export function CrudTable<T extends { id: number }>({
                             <Printer className="w-6 h-6" />
                           </Button>
                         )}
-                        {onEdit && (
+                        {onEdit && (canEdit?.(item) !== false) && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -212,7 +216,7 @@ export function CrudTable<T extends { id: number }>({
                             <Edit className="w-6 h-6" />
                           </Button>
                         )}
-                        {onDelete && (
+                        {onDelete && (canDelete?.(item) !== false) && (
                           <Button
                             variant="ghost"
                             size="icon"

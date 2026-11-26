@@ -6,6 +6,11 @@ import { useAuth, useTheme } from "@/App";
 import { useLocation } from "wouter";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/i18n";
+import {
+  fullListPermissionsMap,
+  listPermissionsFromEmployee,
+  toLegacyMenuPermissions,
+} from "@/lib/list-permissions";
 type BranchPick = number | "all";
 
 type ComboItem = { id: number; label: string; sublabel?: string; icon?: string };
@@ -473,6 +478,14 @@ export default function Login() {
       });
     } else {
       const emp = selectedEmployee;
+      const isFullAdmin =
+        selectedRole === "admin" ||
+        selectedRole === "manager" ||
+        emp?.role === "admin" ||
+        emp?.role === "manager";
+      const listPermissions = isFullAdmin
+        ? fullListPermissionsMap()
+        : listPermissionsFromEmployee(emp ?? { role: selectedRole });
       login({
         name: selection.trim(),
         role: selectedRole,
@@ -481,6 +494,8 @@ export default function Login() {
         branchIds: employeeCanAllBranches ? [] : emp?.branchIds ?? [],
         selectedBranchId: selectedBranchId!,
         branchName,
+        listPermissions,
+        menuPermissions: toLegacyMenuPermissions(listPermissions),
       });
     }
     navigate(roleConfig!.redirect);

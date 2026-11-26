@@ -22,6 +22,12 @@ import { Dialog, Input, Button } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { LockedBranchField } from "@/components/locked-branch-field";
 import { useScopedBranch } from "@/hooks/use-scoped-branch";
+import { useAuth } from "@/App";
+import {
+  canCreateInList,
+  canDeleteRecord,
+  canEditRecord,
+} from "@/lib/list-permissions";
 import {
   BadgeDollarSign,
   Building2,
@@ -101,6 +107,8 @@ function CategoryImageThumb({
 }
 
 export default function Menu() {
+  const { user } = useAuth();
+  const canCreateMenu = canCreateInList(user, "menu");
   const { locked, forcedBranchId, filterOptions } = useScopedBranch();
   const { data: items, isLoading, refetch } = useGetMenuItems();
   const { data: categories, refetch: refetchCategories } = useGetMenuCategories();
@@ -327,6 +335,11 @@ export default function Menu() {
     formData.majorUnit.trim() === LOCKED_MINOR_UNIT;
 
   const handleOpen = (item?: MenuItem) => {
+    if (item) {
+      if (!canEditRecord(user, "menu", item.createdAt)) return;
+    } else if (!canCreateMenu) {
+      return;
+    }
     setFormError("");
     if (item) {
       const hasCost =
@@ -667,6 +680,7 @@ export default function Menu() {
   };
 
   const handleDeleteCategory = (cat: MenuCategory) => {
+    if (!canDeleteRecord(user, "menu", cat.createdAt)) return;
     if (!confirm(`حذف التصنيف «${cat.nameAr}»؟`)) return;
     deleteCategory(
       { id: cat.id },
@@ -779,9 +793,12 @@ export default function Menu() {
         data={filteredItems}
         columns={columns}
         isLoading={isLoading}
-        onAdd={() => handleOpen()}
+        onAdd={canCreateMenu ? () => handleOpen() : undefined}
         onEdit={handleOpen}
+        canEdit={(item) => canEditRecord(user, "menu", item.createdAt)}
+        canDelete={(item) => canDeleteRecord(user, "menu", item.createdAt)}
         onDelete={(item) => {
+          if (!canDeleteRecord(user, "menu", item.createdAt)) return;
           if (confirm("هل أنت متأكد من الحذف؟")) {
             remove({ id: item.id }, { onSuccess: () => refetch() });
           }
@@ -1317,28 +1334,31 @@ export default function Menu() {
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setShowAddCategory((v) => !v);
-                setEditingCategoryId(null);
-                setCategoryForm(EMPTY_CATEGORY_FORM);
-                setCategoryError("");
-              }}
-              className="rounded-full h-12 px-5 text-[16px] font-bold flex-shrink-0 touch-manipulation"
-            >
-              {showAddCategory ? (
-                <>
-                  <X className="w-4 h-4 me-1" />
-                  إغلاق
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 me-1" />
-                  إضافة
-                </>
-              )}
-            </Button>
+            {canCreateMenu || showAddCategory ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!showAddCategory && !canCreateMenu) return;
+                  setShowAddCategory((v) => !v);
+                  setEditingCategoryId(null);
+                  setCategoryForm(EMPTY_CATEGORY_FORM);
+                  setCategoryError("");
+                }}
+                className="rounded-full h-12 px-5 text-[16px] font-bold flex-shrink-0 touch-manipulation"
+              >
+                {showAddCategory ? (
+                  <>
+                    <X className="w-4 h-4 me-1" />
+                    إغلاق
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 me-1" />
+                    إضافة
+                  </>
+                )}
+              </Button>
+            ) : null}
           </div>
 
           {showAddCategory && (
@@ -1528,27 +1548,31 @@ export default function Menu() {
                             )}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-12 w-12 text-muted-foreground hover:text-primary touch-manipulation"
-                              onClick={() => startEditCategory(cat)}
-                              aria-label="تعديل التصنيف"
-                            >
-                              <Pencil className="w-5 h-5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-12 w-12 text-muted-foreground hover:text-destructive touch-manipulation"
-                              disabled={isDeletingCategory}
-                              onClick={() => handleDeleteCategory(cat)}
-                              aria-label="حذف التصنيف"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </Button>
+                            {canEditRecord(user, "menu", cat.createdAt) ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-12 w-12 text-muted-foreground hover:text-primary touch-manipulation"
+                                onClick={() => startEditCategory(cat)}
+                                aria-label="تعديل التصنيف"
+                              >
+                                <Pencil className="w-5 h-5" />
+                              </Button>
+                            ) : null}
+                            {canDeleteRecord(user, "menu", cat.createdAt) ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-12 w-12 text-muted-foreground hover:text-destructive touch-manipulation"
+                                disabled={isDeletingCategory}
+                                onClick={() => handleDeleteCategory(cat)}
+                                aria-label="حذف التصنيف"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       )}
