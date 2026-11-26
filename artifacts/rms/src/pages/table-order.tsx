@@ -387,7 +387,6 @@ export default function TableOrder() {
     setCart([]);
     setSearch("");
     setActiveCategory("favorites");
-    setIsReturnMode(false);
     clearEditing();
     setStep("menu");
   };
