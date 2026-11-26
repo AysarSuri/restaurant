@@ -784,7 +784,13 @@ export default function POS() {
         quantity: cartLineSignedQty(i),
       }));
       const afterCashierSave = () => {
-        void persistDeliveryContactIfNeeded({ notify: false });
+        const phoneSnapshot = deliveryPhone;
+        const addressSnapshot = deliveryAddress;
+        void persistDeliveryContactIfNeeded({
+          notify: false,
+          phone: phoneSnapshot,
+          address: addressSnapshot,
+        });
         invalidateOrdersQueries();
         setOrderSuccess(true);
         setIsCheckoutOpen(true);
@@ -883,19 +889,24 @@ export default function POS() {
   }, [deliveryPhone, orderType]);
 
   /**
-   * If phone is not in «أرقام التوصيل», save phone + address there after
+   * Save phone (+ address when present) into «أرقام التوصيل» after
    * delivery details are confirmed / order is saved.
    */
-  const persistDeliveryContactIfNeeded = async (opts?: { notify?: boolean }) => {
+  const persistDeliveryContactIfNeeded = async (opts?: {
+    notify?: boolean;
+    phone?: string;
+    address?: string;
+  }) => {
     if (orderType !== "delivery") return false;
-    const digits = deliveryPhone.replace(/\D/g, "");
-    const address = deliveryAddress.trim();
-    if (digits.length < 7 || !address) return false;
+    const phone = (opts?.phone ?? deliveryPhone).trim();
+    const address = (opts?.address ?? deliveryAddress).trim();
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 7) return false;
 
     let known = phoneKnown;
     if (known == null) {
       try {
-        const res = await lookupDeliveryPhone(deliveryPhone);
+        const res = await lookupDeliveryPhone(phone);
         known = Boolean(res.found);
         setPhoneKnown(known);
       } catch {
@@ -907,9 +918,10 @@ export default function POS() {
     const wasNew = known === false;
     try {
       await upsertDeliveryContact({
-        phone: deliveryPhone,
+        phone,
         address,
-        branchId: selectedBranchId === "all" ? undefined : selectedBranchId,
+        /** Shared across all branches */
+        branchId: null,
       });
       setPhoneKnown(true);
       void queryClient.invalidateQueries({ queryKey: getGetDeliveryContactsQueryKey() });
@@ -921,6 +933,13 @@ export default function POS() {
       }
       return true;
     } catch {
+      if (opts?.notify !== false) {
+        toast({
+          variant: "destructive",
+          title: t("common.saveFailed"),
+          description: t("pos.deliveryContactSavedDesc"),
+        });
+      }
       return false;
     }
   };
@@ -998,7 +1017,13 @@ export default function POS() {
     }));
 
     const afterSaveSuccess = () => {
-      void persistDeliveryContactIfNeeded({ notify: false });
+      const phoneSnapshot = deliveryPhone;
+      const addressSnapshot = deliveryAddress;
+      void persistDeliveryContactIfNeeded({
+        notify: false,
+        phone: phoneSnapshot,
+        address: addressSnapshot,
+      });
       invalidateOrdersQueries();
       setOrderSuccess(true);
       if (opts?.print && receiptData) {
@@ -3061,7 +3086,13 @@ export default function POS() {
                 toast({ title: blocked, variant: "destructive" });
                 return;
               }
-              void persistDeliveryContactIfNeeded({ notify: true });
+              const phoneSnapshot = deliveryPhone;
+              const addressSnapshot = deliveryAddress;
+              void persistDeliveryContactIfNeeded({
+                notify: true,
+                phone: phoneSnapshot,
+                address: addressSnapshot,
+              });
               setIsDeliveryFormOpen(false);
             }}
           >

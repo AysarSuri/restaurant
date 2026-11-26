@@ -18,6 +18,7 @@ import {
   isOrderPaymentReceived,
   syncRestaurantSeatFromOrders,
 } from "../lib/seat-sync";
+import { upsertDeliveryContactFromOrder } from "../lib/upsert-delivery-contact";
 
 type SalesPaymentAt = "pos" | "cashier";
 type OrderTypeKey = "dine_in" | "takeaway" | "delivery";
@@ -461,6 +462,18 @@ router.post("/", async (req, res) => {
   // Seat: غير واصل dine-in → occupied; واصل at create → available
   if (type === "dine_in" && tableId) {
     await syncRestaurantSeatFromOrders(tableId);
+  }
+
+  /** Persist phone + address into «أرقام التوصيل» (shared across all branches) */
+  if (type === "delivery") {
+    try {
+      await upsertDeliveryContactFromOrder({
+        phone: deliveryPhone,
+        address: deliveryAddress,
+      });
+    } catch {
+      /* order already saved — contact sync failure must not fail checkout */
+    }
   }
 
   const full = await getOrderWithDetails(order.id);

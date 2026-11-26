@@ -3,17 +3,14 @@ import { db } from "@workspace/db";
 import { deliveryContactsTable, branchesTable } from "@workspace/db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
+import {
+  normalizePhone,
+  syncDeliveryContactsFromOrders,
+} from "../lib/upsert-delivery-contact";
 
 const router: IRouter = Router();
 
-/** Keep digits only (and leading + if present). */
-export function normalizePhone(phone: string): string {
-  const raw = String(phone ?? "").trim();
-  if (!raw) return "";
-  const hasPlus = raw.startsWith("+");
-  const digits = raw.replace(/\D/g, "");
-  return hasPlus ? `+${digits}` : digits;
-}
+export { normalizePhone };
 
 function parseCoord(value: unknown): string | null {
   if (value == null || value === "") return null;
@@ -34,6 +31,12 @@ function serialize(row: typeof deliveryContactsTable.$inferSelect, branchName?: 
 router.get("/", async (req, res) => {
   const scope = parseBranchScope(req);
   const { search } = req.query;
+  /** Pull phones saved on delivery orders but missing from this list */
+  try {
+    await syncDeliveryContactsFromOrders();
+  } catch {
+    /* listing should still work if sync fails */
+  }
   const rows = await db
     .select({
       contact: deliveryContactsTable,
@@ -99,10 +102,14 @@ router.post("/", async (req, res) => {
   }
 
   const addr = String(address ?? "").trim();
-  const resolvedBranchId = resolveWriteBranchId(
-    scope,
-    branchId != null ? Number(branchId) : null
-  );
+  /** Explicit null = shared across all branches (POS). Else resolve from body/scope. */
+  const resolvedBranchId =
+    branchId === null
+      ? null
+      : resolveWriteBranchId(
+          scope,
+          branchId != null ? Number(branchId) : null
+        );
 
   const [existing] = await db
     .select()
@@ -123,7 +130,8 @@ router.post("/", async (req, res) => {
             ? String(gpsLabel).trim() || null
             : existing.gpsLabel,
         note: note !== undefined ? String(note).trim() || null : existing.note,
-        branchId: resolvedBranchId ?? existing.branchId,
+        branchId:
+          branchId === null ? null : resolvedBranchId ?? existing.branchId,
         updatedAt: new Date(),
       })
       .where(eq(deliveryContactsTable.id, existing.id))
