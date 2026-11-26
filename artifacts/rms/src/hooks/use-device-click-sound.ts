@@ -26,26 +26,43 @@ function getAudioContext(): AudioContext | null {
   return sharedAudioCtx;
 }
 
-/** Short crisp click — no external audio asset required. */
+function beep(ctx: AudioContext) {
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(1100, now);
+  osc.frequency.exponentialRampToValueAtTime(520, now + 0.07);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.28, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.1);
+}
+
+/** Short crisp click — resumes AudioContext before playing (required by browsers). */
 export function playUiClickSound() {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
-    if (ctx.state === "suspended") void ctx.resume();
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.setValueAtTime(980, now);
-    osc.frequency.exponentialRampToValueAtTime(420, now + 0.045);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.09, now + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.06);
+    if (ctx.state === "suspended") {
+      void ctx
+        .resume()
+        .then(() => {
+          try {
+            beep(ctx);
+          } catch {
+            /* ignore */
+          }
+        })
+        .catch(() => {
+          /* ignore */
+        });
+      return;
+    }
+    beep(ctx);
   } catch {
     /* ignore autoplay / audio errors */
   }
@@ -54,7 +71,7 @@ export function playUiClickSound() {
 function isClickableTarget(el: EventTarget | null): boolean {
   if (!(el instanceof Element)) return false;
   const hit = el.closest(
-    "button, [role='button'], input[type='button'], input[type='submit'], input[type='reset'], a[href]"
+    "button, [role='button'], input[type='button'], input[type='submit'], input[type='reset'], a[href], summary"
   );
   if (!hit) return false;
   if (hit instanceof HTMLButtonElement && hit.disabled) return false;
@@ -106,24 +123,18 @@ export function useDeviceClickSound(enabled: boolean) {
   useEffect(() => {
     if (!wantSound) return;
 
-    const onPointerDown = (e: PointerEvent) => {
+    const onActivate = (e: Event) => {
       if (!wantSoundRef.current) return;
-      if (e.button !== 0) return;
+      if (e instanceof PointerEvent && e.button !== 0) return;
       if (!isClickableTarget(e.target)) return;
       playUiClickSound();
     };
 
-    const unlock = () => {
-      const ctx = getAudioContext();
-      if (ctx?.state === "suspended") void ctx.resume();
-    };
-
-    window.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("pointerdown", unlock, { once: true, capture: true });
+    // pointerdown only — avoids double-beep with click
+    window.addEventListener("pointerdown", onActivate, true);
 
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("pointerdown", onActivate, true);
     };
   }, [wantSound]);
 }

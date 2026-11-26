@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon, Delete, Building2, Maximize2, Minimize2 } from "lucide-react";
 import { useGetEmployees, useGetTables, useGetBranches } from "@workspace/api-client-react";
@@ -54,8 +55,95 @@ function Combobox({ items, value, onChange, disabled, placeholder, isTable }: {
 
   const active = items.find(i => i.label === value);
 
+  const dropdown =
+    open && dropRect
+      ? createPortal(
+          <AnimatePresence>
+            <motion.div
+              ref={dropRef}
+              key="login-combo-drop"
+              initial={{ opacity: 0, scaleY: 0.95 }}
+              animate={{ opacity: 1, scaleY: 1 }}
+              exit={{ opacity: 0, scaleY: 0.95 }}
+              style={{
+                position: "fixed",
+                top: dropRect.bottom + 6,
+                left: dropRect.left,
+                width: dropRect.width,
+                transformOrigin: "top",
+                zIndex: 10050,
+              }}
+              className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto dark:bg-black dark:border-neutral-700 dark:text-white"
+            >
+              {items.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-muted-foreground text-center dark:text-white/70">
+                  {isTable ? t("auth.noTables") : t("auth.noEmployeesForRole")}
+                </div>
+              ) : isTable ? (
+                <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        onChange(item.label);
+                        setOpen(false);
+                      }}
+                      className={`flex flex-col items-center p-2.5 rounded-xl border-2 transition-all text-center
+                      ${
+                        value === item.label
+                          ? "bg-green-600/20 border-green-500 text-green-400"
+                          : "border-border bg-secondary/40 hover:border-green-500/50 hover:bg-green-500/10 text-foreground dark:border-neutral-600 dark:bg-neutral-900 dark:text-white dark:hover:bg-neutral-800"
+                      }`}
+                    >
+                      <span className="text-lg mb-0.5">🍽️</span>
+                      <span className="font-bold text-xs">{item.label}</span>
+                      {item.sublabel && (
+                        <span className="text-[9px] text-muted-foreground mt-0.5 leading-tight dark:text-white/60">
+                          {item.sublabel}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(item.label);
+                      setOpen(false);
+                    }}
+                    className={`w-full px-4 py-3 sm:py-4 flex items-center gap-3 hover:bg-secondary/60 dark:hover:bg-neutral-900 transition-colors text-right
+                    ${
+                      value === item.label
+                        ? "bg-primary/10 text-primary dark:bg-neutral-800 dark:text-white"
+                        : "text-foreground dark:text-white"
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-full bg-primary/15 text-primary dark:bg-neutral-800 dark:text-white dark:border dark:border-neutral-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      {item.label.charAt(0)}
+                    </div>
+                    <div className="flex-1 text-right">
+                      <div className="font-bold text-base">{item.label}</div>
+                      {item.sublabel && (
+                        <div className="text-xs text-muted-foreground dark:text-white/60">
+                          {item.sublabel}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </motion.div>
+          </AnimatePresence>,
+          document.body
+        )
+      : null;
+
   return (
-    <div ref={ref} className="relative z-30">
+    <div ref={ref} className={`relative ${open ? "z-[80]" : "z-10"}`}>
       <button
         ref={btnRef} type="button" disabled={disabled} onClick={handleOpen}
         className={`w-full h-12 sm:h-14 px-3 sm:px-4 rounded-xl border-2 flex items-center gap-2 transition-all text-sm sm:text-base
@@ -73,49 +161,7 @@ function Combobox({ items, value, onChange, disabled, placeholder, isTable }: {
         )}
         <ChevronDown className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-
-      <AnimatePresence>
-        {open && dropRect && (
-          <motion.div
-            ref={dropRef}
-            initial={{ opacity: 0, scaleY: 0.95 }} animate={{ opacity: 1, scaleY: 1 }} exit={{ opacity: 0, scaleY: 0.95 }}
-            style={{ position: "fixed", top: dropRect.bottom + 6, left: dropRect.left, width: dropRect.width, transformOrigin: "top", zIndex: 9999 }}
-            className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto"
-          >
-            {items.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-muted-foreground text-center">
-                {isTable ? t("auth.noTables") : t("auth.noEmployeesForRole")}
-              </div>
-            ) : isTable ? (
-              <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {items.map(item => (
-                  <button key={item.id} type="button" onClick={() => { onChange(item.label); setOpen(false); }}
-                    className={`flex flex-col items-center p-2.5 rounded-xl border-2 transition-all text-center
-                      ${value === item.label ? "bg-green-600/20 border-green-500 text-green-400" : "border-border bg-secondary/40 hover:border-green-500/50 hover:bg-green-500/10 text-foreground"}`}>
-                    <span className="text-lg mb-0.5">🍽️</span>
-                    <span className="font-bold text-xs">{item.label}</span>
-                    {item.sublabel && <span className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.sublabel}</span>}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              items.map(item => (
-                <button key={item.id} type="button" onClick={() => { onChange(item.label); setOpen(false); }}
-                  className={`w-full px-4 py-3 sm:py-4 flex items-center gap-3 hover:bg-secondary/60 transition-colors text-right
-                    ${value === item.label ? "bg-primary/10 text-primary" : "text-foreground"}`}>
-                  <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
-                    {item.label.charAt(0)}
-                  </div>
-                  <div className="flex-1 text-right">
-                    <div className="font-bold text-base">{item.label}</div>
-                    {item.sublabel && <div className="text-xs text-muted-foreground">{item.sublabel}</div>}
-                  </div>
-                </button>
-              ))
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {dropdown}
     </div>
   );
 }
@@ -162,8 +208,73 @@ function BranchCombobox({
   const selectedLabel =
     value == null ? "" : options.find((o) => o.id === value)?.label ?? "";
 
+  const dropdown =
+    open && dropRect
+      ? createPortal(
+          <AnimatePresence>
+            <motion.div
+              ref={dropRef}
+              key="login-branch-drop"
+              initial={{ opacity: 0, scaleY: 0.95 }}
+              animate={{ opacity: 1, scaleY: 1 }}
+              exit={{ opacity: 0, scaleY: 0.95 }}
+              style={{
+                position: "fixed",
+                top: dropRect.bottom + 6,
+                left: dropRect.left,
+                width: dropRect.width,
+                transformOrigin: "top",
+                zIndex: 10050,
+              }}
+              className="rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto border border-border bg-card text-foreground dark:bg-black dark:border-neutral-700 dark:text-white"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+                className={`w-full px-4 py-3 sm:py-3.5 text-right font-bold text-sm sm:text-base transition-colors
+                hover:bg-secondary/60 dark:hover:bg-neutral-900
+                ${value == null ? "bg-primary/10 text-primary dark:bg-neutral-900 dark:text-white" : "text-muted-foreground dark:text-white/80"}`}
+              >
+                {placeholder}
+              </button>
+              {options.map((o) => {
+                const active = value === o.id;
+                return (
+                  <button
+                    key={String(o.id)}
+                    type="button"
+                    onClick={() => {
+                      onChange(o.id);
+                      setOpen(false);
+                    }}
+                    className={`w-full px-4 py-3 sm:py-3.5 flex items-center gap-3 text-right transition-colors
+                    hover:bg-secondary/60 dark:hover:bg-neutral-900
+                    ${
+                      active
+                        ? "bg-primary/10 text-primary dark:bg-neutral-800 dark:text-white"
+                        : "text-foreground dark:text-white"
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary dark:bg-neutral-800 dark:text-white dark:border dark:border-neutral-600 flex items-center justify-center flex-shrink-0">
+                      <Building2 className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="flex-1 font-bold text-sm sm:text-base truncate">
+                      {o.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </motion.div>
+          </AnimatePresence>,
+          document.body
+        )
+      : null;
+
   return (
-    <div ref={ref} className="relative z-30">
+    <div ref={ref} className={`relative ${open ? "z-[80]" : "z-10"}`}>
       <button
         ref={btnRef}
         type="button"
@@ -195,66 +306,7 @@ function BranchCombobox({
           }`}
         />
       </button>
-
-      <AnimatePresence>
-        {open && dropRect && (
-          <motion.div
-            ref={dropRef}
-            initial={{ opacity: 0, scaleY: 0.95 }}
-            animate={{ opacity: 1, scaleY: 1 }}
-            exit={{ opacity: 0, scaleY: 0.95 }}
-            style={{
-              position: "fixed",
-              top: dropRect.bottom + 6,
-              left: dropRect.left,
-              width: dropRect.width,
-              transformOrigin: "top",
-              zIndex: 9999,
-            }}
-            className="rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto border border-border bg-card text-foreground dark:bg-black dark:border-neutral-700 dark:text-white"
-          >
-            <button
-              type="button"
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              className={`w-full px-4 py-3 sm:py-3.5 text-right font-bold text-sm sm:text-base transition-colors
-                hover:bg-secondary/60 dark:hover:bg-neutral-900
-                ${value == null ? "bg-primary/10 text-primary dark:bg-neutral-900 dark:text-white" : "text-muted-foreground dark:text-white/80"}`}
-            >
-              {placeholder}
-            </button>
-            {options.map((o) => {
-              const active = value === o.id;
-              return (
-                <button
-                  key={String(o.id)}
-                  type="button"
-                  onClick={() => {
-                    onChange(o.id);
-                    setOpen(false);
-                  }}
-                  className={`w-full px-4 py-3 sm:py-3.5 flex items-center gap-3 text-right transition-colors
-                    hover:bg-secondary/60 dark:hover:bg-neutral-900
-                    ${
-                      active
-                        ? "bg-primary/10 text-primary dark:bg-neutral-800 dark:text-white"
-                        : "text-foreground dark:text-white"
-                    }`}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary dark:bg-neutral-800 dark:text-white dark:border dark:border-neutral-600 flex items-center justify-center flex-shrink-0">
-                    <Building2 className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="flex-1 font-bold text-sm sm:text-base truncate">
-                    {o.label}
-                  </span>
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {dropdown}
     </div>
   );
 }

@@ -16,11 +16,14 @@ import {
 import { DEVICE_PRINTERS_QUERY_KEY } from "@/lib/device-printer-query";
 import {
   getKeyboardDefaultLang,
+  resolveClickSoundEnabled,
   resolvePadEnabled,
   setKeyboardDefaultLang,
+  setLocalClickSound,
   setLocalPadPrefs,
   type KeyboardDefaultLang,
 } from "@/lib/device-pad-prefs";
+import { playUiClickSound } from "@/hooks/use-device-click-sound";
 import { Button, Input, Badge, Card, Dialog } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
 import { LockedBranchField } from "@/components/locked-branch-field";
@@ -567,6 +570,10 @@ export default function SettingsPage() {
       if ("virtualNumericKeypad" in patch) {
         setLocalPadPrefs({ virtualNumericKeypad: nextNumericKeypad });
       }
+      if ("clickSound" in patch) {
+        setLocalClickSound(nextClickSound);
+        if (nextClickSound) playUiClickSound();
+      }
     }
 
     // Optimistic UI so choices stick immediately
@@ -650,6 +657,9 @@ export default function SettingsPage() {
               setLocalPadPrefs({
                 virtualNumericKeypad: Boolean(row.virtualNumericKeypad),
               });
+            }
+            if ("clickSound" in patch) {
+              setLocalClickSound(Boolean(row.clickSound));
             }
           }
           notifySaveErr(
@@ -2183,7 +2193,11 @@ export default function SettingsPage() {
             <div className="space-y-3">
               {(printers ?? []).map((row) => {
                 const fullscreenOn = row.formsFullscreen === true;
-                const clickSoundOn = row.clickSound === true;
+                const clickSoundOn = resolveClickSoundEnabled(
+                  row.clickSound,
+                  deviceKey,
+                  row.deviceKey
+                );
                 const isMine = row.deviceKey === deviceKey;
                 return (
                   <Card
