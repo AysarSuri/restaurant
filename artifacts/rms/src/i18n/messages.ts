@@ -127,6 +127,8 @@ const ar: Messages = {
   "auth.welcome": "مرحباً بك",
   "auth.enterSystem": "دخول النظام",
   "auth.loginSubtitle": "اختر دورك وأدخل بياناتك",
+  "auth.fullscreen": "FULLSCREEN",
+  "auth.unfullscreen": "UNFULLSCREEN",
   "auth.tableN": "طاولة {n}",
   "auth.tableCapacity": "{location} — سعة {capacity}",
 
@@ -1348,6 +1350,8 @@ const en: Messages = {
   "auth.welcome": "Welcome",
   "auth.enterSystem": "Enter system",
   "auth.loginSubtitle": "Choose your role and enter your details",
+  "auth.fullscreen": "FULLSCREEN",
+  "auth.unfullscreen": "UNFULLSCREEN",
   "auth.tableN": "Table {n}",
   "auth.tableCapacity": "{location} — capacity {capacity}",
 
@@ -2563,6 +2567,8 @@ const ku: Messages = {
   "auth.welcome": "بخێرهاتی",
   "auth.enterSystem": "چوونا سیستەمی",
   "auth.loginSubtitle": "رۆلێ خۆ هەلبژێرە و پێزانینێن خۆ بنڤیسە",
+  "auth.fullscreen": "FULLSCREEN",
+  "auth.unfullscreen": "UNFULLSCREEN",
   "auth.tableN": "مێز {n}",
   "auth.tableCapacity": "{location} — گنجایش {capacity}",
   "home.title": "پەرا سەرەکی",

@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon, Delete, Building2 } from "lucide-react";
+import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon, Delete, Building2, Maximize2, Minimize2 } from "lucide-react";
 import { useGetEmployees, useGetTables, useGetBranches } from "@workspace/api-client-react";
 import { useAuth, useTheme } from "@/App";
 import { useLocation } from "wouter";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/i18n";
+import { useBrowserFullscreen } from "@/hooks/use-device-forms-fullscreen";
 import {
   fullListPermissionsMap,
   listPermissionsFromEmployee,
@@ -286,6 +287,7 @@ export default function Login() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { isFullscreen, toggleFullscreen } = useBrowserFullscreen();
   const { t } = useI18n();
   const employeesQuery = useGetEmployees();
   const tablesQuery = useGetTables();
@@ -654,6 +656,26 @@ export default function Login() {
           </motion.span>
           <Sun className="w-4 h-4 text-amber-400 ms-2 opacity-60" />
           <Moon className="w-4 h-4 text-slate-400 me-2 ms-auto opacity-60" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void toggleFullscreen()}
+          title={isFullscreen ? t("auth.unfullscreen") : t("auth.fullscreen")}
+          aria-pressed={isFullscreen}
+          className={`inline-flex h-10 sm:h-12 items-center gap-1.5 rounded-full border px-3 sm:px-3.5 text-[11px] sm:text-xs font-extrabold tracking-wide transition-all ${
+            isFullscreen
+              ? "border-indigo-500/60 bg-indigo-500/15 text-indigo-700 dark:text-indigo-200"
+              : "border-border bg-secondary text-foreground hover:border-primary/40"
+          }`}
+        >
+          {isFullscreen ? (
+            <Minimize2 className="w-4 h-4 flex-shrink-0" />
+          ) : (
+            <Maximize2 className="w-4 h-4 flex-shrink-0" />
+          )}
+          <span className="whitespace-nowrap">
+            {isFullscreen ? t("auth.unfullscreen") : t("auth.fullscreen")}
+          </span>
         </button>
       </div>
 
