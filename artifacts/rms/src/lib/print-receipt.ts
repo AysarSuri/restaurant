@@ -2805,7 +2805,7 @@ function buildVaultThermalHtml(data: VaultReportData) {
 <body>
   ${logo}
   <p class="brand">${escVault(data.restaurantName)}</p>
-  <div class="kicker">تقرير القاصة · 80×80</div>
+  <div class="kicker">تقرير القاصة</div>
   ${phone ? `<div class="sub" dir="ltr">${escVault(phone)}</div>` : ""}
 
   <div class="meta">
