@@ -1057,7 +1057,7 @@ export default function SuppliersPage() {
       title
     )}</title>
       <style>
-        body{font-family:Tahoma,Arial,sans-serif;padding:24px;color:#111}
+        body{font-family:Tahoma,Arial,sans-serif;padding:72px 24px 24px;color:#111}
         h1{font-size:20px;margin:0 0 8px}
         .meta{color:#555;margin-bottom:16px;font-size:13px;line-height:1.6}
         table{width:100%;border-collapse:collapse;font-size:13px}
@@ -1067,8 +1067,17 @@ export default function SuppliersPage() {
         .neg{color:#047857;font-weight:700}
         .type-blue{color:#0284c7;font-weight:800}
         .type-red{color:#dc2626;font-weight:800}
-        @media print{button{display:none}}
+        .rms-a4-preview-bar{position:fixed;top:0;left:0;right:0;z-index:99999;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:10px 14px;background:#111;color:#fff;font-size:13px;font-weight:700}
+        .rms-a4-preview-bar button{cursor:pointer;border:0;border-radius:8px;padding:8px 16px;font:inherit;font-weight:800}
+        .rms-a4-preview-bar .print-btn{background:#f59e0b;color:#111}
+        .rms-a4-preview-bar .close-btn{background:#374151;color:#fff}
+        @media print{.rms-a4-preview-bar,button{display:none!important}body{padding-top:24px!important}}
       </style></head><body>
+      <div class="rms-a4-preview-bar" role="toolbar">
+        <span>معاينة تقرير A4 — بدون طباعة مباشرة</span>
+        <button type="button" class="print-btn" onclick="window.print()">طباعة</button>
+        <button type="button" class="close-btn" onclick="window.close()">إغلاق</button>
+      </div>
       <h1>${escHtml(title)}</h1>
       ${html}
       </body></html>`;
@@ -1077,54 +1086,18 @@ export default function SuppliersPage() {
     const url = URL.createObjectURL(blob);
     const popup = window.open(url, "_blank", "width=960,height=780,left=60,top=40");
 
-    const startPrint = (win: Window) => {
-      const run = () => {
-        try {
-          win.focus();
-          win.print();
-        } catch {
-          /* ignore */
-        }
-      };
-      if (win.document.readyState === "complete") {
-        window.setTimeout(run, 120);
-      } else {
-        win.onload = () => window.setTimeout(run, 120);
-      }
-      window.setTimeout(() => URL.revokeObjectURL(url), 15000);
-    };
-
     if (popup) {
-      startPrint(popup);
+      try {
+        popup.focus();
+      } catch {
+        /* ignore */
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 120000);
       return;
     }
 
-    // Popup blocked — print via hidden iframe
-    const iframe = document.createElement("iframe");
-    iframe.setAttribute("aria-hidden", "true");
-    iframe.style.cssText =
-      "position:fixed;left:-10000px;top:0;width:900px;height:1200px;border:0;opacity:0;pointer-events:none;z-index:-1;";
-    document.body.appendChild(iframe);
-    const win = iframe.contentWindow;
-    const doc = iframe.contentDocument || win?.document;
-    if (!win || !doc) {
-      iframe.remove();
-      URL.revokeObjectURL(url);
-      window.alert("تعذر فتح تقرير الطباعة — اسمح بالنوافذ المنبثقة ثم أعد المحاولة");
-      return;
-    }
-    doc.open();
-    doc.write(fullHtml);
-    doc.close();
     URL.revokeObjectURL(url);
-    window.setTimeout(() => {
-      try {
-        win.focus();
-        win.print();
-      } finally {
-        window.setTimeout(() => iframe.remove(), 1500);
-      }
-    }, 200);
+    window.alert("تعذر فتح معاينة التقرير — اسمح بالنوافذ المنبثقة ثم أعد المحاولة");
   };
 
   const printDebtsReport = () => {
