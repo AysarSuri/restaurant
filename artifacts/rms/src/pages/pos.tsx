@@ -46,6 +46,7 @@ import { getOrCreateDeviceKey } from "@/lib/device-id";
 import {
   DEVICE_PRINTERS_QUERY_KEY,
   DEVICE_PRINTERS_REQUEST,
+  resolveDevicePrinter,
 } from "@/lib/device-printer-query";
 import { useDeviceVirtualKeyboard } from "@/hooks/use-device-virtual-keyboard";
 import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
@@ -241,14 +242,15 @@ export default function POS() {
     return (branches ?? []).find((b) => b.id === selectedBranchId) ?? null;
   }, [branches, selectedBranchId]);
 
-  const devicePrinter = useMemo(() => {
-    const list = devicePrinters ?? [];
-    return (
-      list.find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
-      list.find((p) => p.deviceKey === deviceKey) ??
-      null
-    );
-  }, [devicePrinters, deviceKey]);
+  const devicePrinter = useMemo(
+    () =>
+      resolveDevicePrinter(
+        devicePrinters,
+        deviceKey,
+        selectedBranchId === "all" ? null : selectedBranchId
+      ),
+    [devicePrinters, deviceKey, selectedBranchId]
+  );
 
   /** Settings → Numbers: amount/phone numeric pads (local prefs win for this device) */
   const amountPadEnabled = useDeviceVirtualNumericKeypad(true);
@@ -1742,14 +1744,24 @@ export default function POS() {
 
         <footer
           className={`relative z-20 flex-shrink-0 border-t border-border/60 bg-card/85 backdrop-blur-xl safe-pb ${
-            isPortraitPos ? "px-4 py-3 xl:px-5" : "px-3 py-2.5 sm:px-5 xl:px-6"
+            isPortraitPos ? "px-4 py-3.5 xl:px-5 xl:py-4" : "px-3 py-2.5 sm:px-5 xl:px-6"
           }`}
         >
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div
+            className={
+              isPortraitPos
+                ? "flex flex-col gap-2.5 xl:gap-3"
+                : "flex items-center gap-2 sm:gap-3"
+            }
+          >
             <button
               type="button"
               onClick={() => setIsReturnMode((v) => !v)}
-              className={`group relative inline-flex h-12 sm:h-14 min-w-[7.5rem] flex-1 items-center justify-center gap-2.5 overflow-hidden rounded-2xl border-2 px-3.5 sm:px-4 text-sm sm:text-base font-extrabold transition-all active:scale-[0.98] ${
+              className={`group relative inline-flex items-center justify-center overflow-hidden rounded-2xl border-2 font-extrabold transition-all active:scale-[0.98] ${
+                isPortraitPos
+                  ? "h-16 xl:h-[4.25rem] w-full gap-3 px-5 text-lg xl:text-xl leading-snug"
+                  : "h-12 sm:h-14 min-w-[7.5rem] flex-1 gap-2.5 px-3.5 sm:px-4 text-sm sm:text-base"
+              } ${
                 isReturnMode
                   ? "border-rose-400/80 bg-gradient-to-l from-rose-600 via-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/35 hover:brightness-110"
                   : "border-rose-500/40 bg-gradient-to-l from-rose-500/12 via-card to-card text-rose-700 dark:text-rose-300 hover:border-rose-500/70 hover:from-rose-500/18"
@@ -1765,22 +1777,34 @@ export default function POS() {
                 }`}
               />
               <span
-                className={`relative inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border transition-colors ${
+                className={`relative inline-flex items-center justify-center rounded-xl border transition-colors ${
+                  isPortraitPos ? "h-11 w-11 xl:h-12 xl:w-12" : "h-8 w-8 sm:h-9 sm:w-9"
+                } ${
                   isReturnMode
                     ? "border-white/35 bg-white/20 text-white shadow-inner"
                     : "border-rose-500/35 bg-rose-500/15 text-rose-600 dark:text-rose-300 group-hover:bg-rose-500/25"
                 }`}
               >
                 <RotateCcw
-                  className={`w-[1.15rem] h-[1.15rem] sm:w-5 sm:h-5 ${
-                    isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""
-                  }`}
+                  className={`${
+                    isPortraitPos ? "w-6 h-6" : "w-[1.15rem] h-[1.15rem] sm:w-5 sm:h-5"
+                  } ${isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""}`}
                   strokeWidth={2.35}
                 />
               </span>
-              <span className="relative truncate tracking-tight">{t("pos.return")}</span>
+              <span
+                className={`relative tracking-tight ${
+                  isPortraitPos ? "whitespace-normal text-center" : "truncate"
+                }`}
+              >
+                {t("pos.return")}
+              </span>
               {isReturnMode ? (
-                <span className="relative hidden sm:inline-flex h-2 w-2 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.25)]" />
+                <span
+                  className={`relative rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.25)] ${
+                    isPortraitPos ? "inline-flex h-2.5 w-2.5" : "hidden sm:inline-flex h-2 w-2"
+                  }`}
+                />
               ) : null}
             </button>
 
@@ -1790,7 +1814,11 @@ export default function POS() {
                 setTableOrderPulse(false);
                 openSeatPicker("tableOrders");
               }}
-              className={`group relative inline-flex h-12 sm:h-14 min-w-0 flex-[1.25] items-center justify-center gap-2 overflow-hidden rounded-2xl border-2 bg-gradient-to-l from-sky-500/15 via-card to-card px-3 sm:px-4 text-sm sm:text-base font-extrabold text-sky-800 dark:text-sky-200 shadow-md shadow-sky-500/10 transition-all hover:border-sky-500/70 hover:from-sky-500/25 active:scale-[0.98] ${
+              className={`group relative inline-flex items-center justify-center overflow-hidden rounded-2xl border-2 bg-gradient-to-l from-sky-500/15 via-card to-card font-extrabold text-sky-800 dark:text-sky-200 shadow-md shadow-sky-500/10 transition-all hover:border-sky-500/70 hover:from-sky-500/25 active:scale-[0.98] ${
+                isPortraitPos
+                  ? "h-16 xl:h-[4.25rem] w-full gap-3 px-5 text-lg xl:text-xl leading-snug"
+                  : "h-12 sm:h-14 min-w-0 flex-[1.25] gap-2 px-3 sm:px-4 text-sm sm:text-base"
+              } ${
                 tableOrderPulse
                   ? "border-sky-500/80 ring-2 ring-sky-400/50 animate-pulse"
                   : unpaidTableOrderCount > 0
@@ -1799,13 +1827,30 @@ export default function POS() {
               }`}
             >
               <span className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsla(199,89%,48%,0.18),transparent_55%)] pointer-events-none opacity-80" />
-              <span className="relative inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-500/15 text-sky-700 dark:text-sky-300">
-                <Table2 className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.25} />
+              <span
+                className={`relative inline-flex items-center justify-center rounded-xl border border-sky-500/35 bg-sky-500/15 text-sky-700 dark:text-sky-300 ${
+                  isPortraitPos ? "h-11 w-11 xl:h-12 xl:w-12" : "h-8 w-8 sm:h-9 sm:w-9"
+                }`}
+              >
+                <Table2
+                  className={isPortraitPos ? "w-6 h-6" : "w-4 h-4 sm:w-5 sm:h-5"}
+                  strokeWidth={2.25}
+                />
               </span>
-              <span className="relative truncate">{t("pos.tableOrderLists")}</span>
+              <span
+                className={`relative ${
+                  isPortraitPos ? "whitespace-normal text-center" : "truncate"
+                }`}
+              >
+                {t("pos.tableOrderLists")}
+              </span>
               {todayTableOrders.length > 0 ? (
                 <span
-                  className={`relative ms-0.5 inline-flex min-w-6 h-6 items-center justify-center rounded-full border px-1.5 text-[11px] font-display font-bold tabular-nums ${
+                  className={`relative ms-0.5 inline-flex items-center justify-center rounded-full border font-display font-bold tabular-nums ${
+                    isPortraitPos
+                      ? "min-w-8 h-8 px-2 text-sm"
+                      : "min-w-6 h-6 px-1.5 text-[11px]"
+                  } ${
                     unpaidTableOrderCount > 0 || tableOrderPulse
                       ? "bg-sky-500 text-white border-sky-400 shadow-md shadow-sky-500/40"
                       : "bg-sky-500/20 border-sky-500/30 text-sky-800 dark:text-sky-100"
@@ -1819,22 +1864,48 @@ export default function POS() {
             <button
               type="button"
               onClick={() => openSeatPicker("openOrders")}
-              className="group relative inline-flex h-12 sm:h-14 min-w-0 flex-[1.45] items-center justify-center gap-2 overflow-hidden rounded-2xl border border-primary/35 bg-gradient-to-l from-primary via-primary to-amber-500 px-4 text-sm sm:text-base font-extrabold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:brightness-110 active:scale-[0.98]"
+              className={`group relative inline-flex items-center justify-center overflow-hidden rounded-2xl border border-primary/35 bg-gradient-to-l from-primary via-primary to-amber-500 font-extrabold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:brightness-110 active:scale-[0.98] ${
+                isPortraitPos
+                  ? "h-16 xl:h-[4.25rem] w-full gap-3 px-5 text-lg xl:text-xl leading-snug"
+                  : "h-12 sm:h-14 min-w-0 flex-[1.45] gap-2 px-4 text-sm sm:text-base"
+              }`}
             >
               <span className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.22),transparent_55%)] pointer-events-none" />
-              <PencilLine className="relative w-5 h-5" />
-              <span className="relative truncate">{t("pos.editLists")}</span>
+              <PencilLine className={`relative ${isPortraitPos ? "w-6 h-6" : "w-5 h-5"}`} />
+              <span
+                className={`relative ${
+                  isPortraitPos ? "whitespace-normal text-center" : "truncate"
+                }`}
+              >
+                {t("pos.editLists")}
+              </span>
               {todayBranchOrders.length > 0 && (
-                <span className="relative ms-0.5 inline-flex min-w-6 h-6 items-center justify-center rounded-full bg-white/25 px-1.5 text-[11px] font-display font-bold tabular-nums">
+                <span
+                  className={`relative ms-0.5 inline-flex items-center justify-center rounded-full bg-white/25 font-display font-bold tabular-nums ${
+                    isPortraitPos
+                      ? "min-w-8 h-8 px-2 text-sm"
+                      : "min-w-6 h-6 px-1.5 text-[11px]"
+                  }`}
+                >
                   {todayBranchOrders.length}
                 </span>
               )}
             </button>
 
             {selectedTable && (
-              <div className="hidden md:flex max-w-[11rem] flex-col items-end leading-tight rounded-xl border border-primary/25 bg-primary/10 px-3 py-2">
+              <div
+                className={`flex-col items-end leading-tight rounded-xl border border-primary/25 bg-primary/10 ${
+                  isPortraitPos
+                    ? "flex w-full px-4 py-2.5"
+                    : "hidden md:flex max-w-[11rem] px-3 py-2"
+                }`}
+              >
                 <span className="text-[10px] font-bold text-primary/80">{t("pos.selectedMark")}</span>
-                <span className="truncate text-xs font-extrabold text-foreground">
+                <span
+                  className={`font-extrabold text-foreground ${
+                    isPortraitPos ? "text-sm truncate w-full text-end" : "truncate text-xs"
+                  }`}
+                >
                   {seatLabel(selectedTable, t)}
                 </span>
               </div>

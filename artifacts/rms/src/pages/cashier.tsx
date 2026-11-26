@@ -43,6 +43,7 @@ import { getOrCreateDeviceKey } from "@/lib/device-id";
 import {
   DEVICE_PRINTERS_QUERY_KEY,
   DEVICE_PRINTERS_REQUEST,
+  resolveDevicePrinter,
 } from "@/lib/device-printer-query";
 import { useDeviceVirtualNumericKeypad } from "@/hooks/use-device-virtual-numeric-keypad";
 import { printKitchenTicketThermal } from "@/lib/print-receipt";
@@ -631,14 +632,15 @@ export default function Cashier() {
     query: { queryKey: DEVICE_PRINTERS_QUERY_KEY },
     request: DEVICE_PRINTERS_REQUEST,
   });
-  const devicePrinter = useMemo(() => {
-    const list = devicePrinters ?? [];
-    return (
-      list.find((p) => p.deviceKey === deviceKey && p.isActive !== false) ??
-      list.find((p) => p.deviceKey === deviceKey) ??
-      null
-    );
-  }, [devicePrinters, deviceKey]);
+  const devicePrinter = useMemo(
+    () =>
+      resolveDevicePrinter(
+        devicePrinters,
+        deviceKey,
+        selectedBranchId === "all" ? null : selectedBranchId
+      ),
+    [devicePrinters, deviceKey, selectedBranchId]
+  );
 
   /** Settings → Numbers: on-screen amount pad (local prefs win for this device) */
   const amountPadEnabled = useDeviceVirtualNumericKeypad(true);
