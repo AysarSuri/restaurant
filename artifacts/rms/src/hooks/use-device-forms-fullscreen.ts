@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGetDevicePrinters } from "@workspace/api-client-react";
 import { getOrCreateDeviceKey } from "@/lib/device-id";
 import {
@@ -6,11 +6,11 @@ import {
   DEVICE_PRINTERS_REQUEST,
 } from "@/lib/device-printer-query";
 
-function isFullscreenActive() {
+export function isFullscreenActive() {
   return Boolean(document.fullscreenElement);
 }
 
-async function enterFullscreen() {
+export async function enterFullscreen() {
   const el = document.documentElement;
   if (!el.requestFullscreen || isFullscreenActive()) return;
   try {
@@ -20,13 +20,32 @@ async function enterFullscreen() {
   }
 }
 
-async function exitFullscreen() {
+export async function exitFullscreen() {
   if (!document.exitFullscreen || !isFullscreenActive()) return;
   try {
     await document.exitFullscreen();
   } catch {
     /* ignore */
   }
+}
+
+/** Manual fullscreen toggle (login toolbar, etc.). */
+export function useBrowserFullscreen() {
+  const [isFullscreen, setIsFullscreen] = useState(isFullscreenActive);
+
+  useEffect(() => {
+    const sync = () => setIsFullscreen(isFullscreenActive());
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (isFullscreenActive()) await exitFullscreen();
+    else await enterFullscreen();
+    setIsFullscreen(isFullscreenActive());
+  }, []);
+
+  return { isFullscreen, toggleFullscreen, enterFullscreen, exitFullscreen };
 }
 
 /**
