@@ -65,35 +65,78 @@ function thermalBaseStyles() {
       font-weight: 700;
       line-height: 1.4;
     }
+    .identity {
+      text-align: center;
+      margin: 0 0 3mm;
+      padding-bottom: 2.5mm;
+      border-bottom: 1.6px solid #111;
+    }
+    .logo-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 0 0 2.2mm;
+    }
     .logo {
       display: block;
-      width: 22mm;
-      height: 22mm;
+      width: 30mm;
+      height: 30mm;
       object-fit: contain;
-      margin: 0 auto 2.5mm;
-      border-radius: 3mm;
-      filter: grayscale(1) contrast(1.2);
+      border-radius: 4mm;
+      filter: grayscale(1) contrast(1.22);
     }
     .brand {
       text-align: center;
-      font-size: 15px;
+      font-size: 17px;
       font-weight: 800;
-      margin: 0 0 2px;
-      line-height: 1.25;
+      margin: 0 0 1.5mm;
+      line-height: 1.2;
+      letter-spacing: 0.04em;
       word-break: break-word;
+      text-transform: uppercase;
+    }
+    .brand-rule {
+      display: block;
+      width: 28mm;
+      height: 0;
+      margin: 0 auto 2.2mm;
+      border: 0;
+      border-top: 1.5px solid #111;
     }
     .kicker {
       text-align: center;
-      margin: 4px 0 2px;
+      margin: 0 0 2mm;
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
     }
     .sub {
       text-align: center;
       font-size: 11px;
       margin: 1px 0;
       font-weight: 700;
+      word-break: break-word;
+    }
+    .phone-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      margin: 1.8mm auto 0;
+      max-width: 100%;
+      font-size: 12px;
+      font-weight: 800;
+      direction: ltr;
+      unicode-bidi: plaintext;
+      font-variant-numeric: tabular-nums;
+    }
+    .phone-ico {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      display: inline-block;
+    }
+    .phone-num {
+      min-width: 0;
       word-break: break-word;
     }
     .meta {
@@ -277,13 +320,52 @@ function thermalBaseStyles() {
   `;
 }
 
+function thermalPhoneIconSvg() {
+  return `<svg class="phone-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path fill="#000" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1L6.6 10.8z"/>
+  </svg>`;
+}
+
 function thermalLogoHtml(logoUrl?: string | null) {
   const src = logoUrl?.trim();
-  return src ? `<img class="logo" src="${esc(src)}" alt="" />` : "";
+  return src
+    ? `<div class="logo-wrap"><img class="logo" src="${esc(src)}" alt="" /></div>`
+    : "";
+}
+
+/** Shared POS/cashier header: large logo + elegant title + phone icon rows. */
+function thermalIdentityHtml(opts: {
+  restaurantName: string;
+  branchName?: string | null;
+  address?: string | null;
+  mobile1?: string | null;
+  mobile2?: string | null;
+  logoUrl?: string | null;
+  kicker?: string | null;
+}) {
+  const phones = [opts.mobile1, opts.mobile2]
+    .map((p) => (p ? String(p).trim() : ""))
+    .filter(Boolean);
+  const phoneRows = phones
+    .map(
+      (p) =>
+        `<div class="phone-row">${thermalPhoneIconSvg()}<span class="phone-num">${esc(p)}</span></div>`
+    )
+    .join("");
+
+  return `
+    <div class="identity">
+      ${thermalLogoHtml(opts.logoUrl)}
+      <p class="brand">${esc(opts.restaurantName || "المطعم")}</p>
+      <hr class="brand-rule" />
+      ${opts.kicker?.trim() ? `<div class="kicker">${esc(opts.kicker.trim())}</div>` : ""}
+      ${opts.branchName?.trim() ? `<div class="sub">${esc(opts.branchName.trim())}</div>` : ""}
+      ${phoneRows}
+      ${opts.address?.trim() ? `<div class="sub" style="margin-top:1.5mm;">${esc(opts.address.trim())}</div>` : ""}
+    </div>`;
 }
 
 function buildReceiptHtml(data: ThermalReceiptData) {
-  const phones = [data.mobile1, data.mobile2].filter((v) => Boolean(v && String(v).trim()));
   const itemsHtml = data.items
     .map((item) => {
       const qty = Number(item.quantity) || 0;
@@ -311,12 +393,15 @@ function buildReceiptHtml(data: ThermalReceiptData) {
 </head>
 <body>
   <div class="ticket">
-    ${thermalLogoHtml(data.logoUrl)}
-    <p class="brand">${esc(data.restaurantName || "المطعم")}</p>
-    <div class="kicker">فاتورة مبيعات</div>
-    ${data.branchName?.trim() ? `<div class="sub">${esc(data.branchName.trim())}</div>` : ""}
-    ${phones.length ? `<div class="sub" dir="ltr">${phones.map((p) => esc(String(p))).join(" · ")}</div>` : ""}
-    ${data.address?.trim() ? `<div class="sub">${esc(data.address.trim())}</div>` : ""}
+    ${thermalIdentityHtml({
+      restaurantName: data.restaurantName,
+      branchName: data.branchName,
+      address: data.address,
+      mobile1: data.mobile1,
+      mobile2: data.mobile2,
+      logoUrl: data.logoUrl,
+      kicker: "فاتورة مبيعات",
+    })}
 
     <div class="meta">
       <div class="line"><span>رقم الفاتورة</span><b>${esc(data.invoiceNumber)}</b></div>
@@ -491,6 +576,9 @@ export type KitchenTicketThermalData = {
   restaurantName: string;
   branchName: string;
   logoUrl?: string | null;
+  mobile1?: string | null;
+  mobile2?: string | null;
+  address?: string | null;
   invoiceNumber: string;
   dateLabel: string;
   timeLabel: string;
@@ -538,10 +626,15 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
 </head>
 <body>
   <div class="ticket">
-    ${thermalLogoHtml(data.logoUrl)}
-    <p class="brand">${esc(data.restaurantName || "المطعم")}</p>
-    <div class="kicker">تذكرة مطبخ</div>
-    ${data.branchName?.trim() ? `<div class="sub">${esc(data.branchName.trim())}</div>` : ""}
+    ${thermalIdentityHtml({
+      restaurantName: data.restaurantName,
+      branchName: data.branchName,
+      address: data.address,
+      mobile1: data.mobile1,
+      mobile2: data.mobile2,
+      logoUrl: data.logoUrl,
+      kicker: "تذكرة مطبخ",
+    })}
     <div class="order-no">#${esc(String(orderTail))}</div>
     <div class="chips">
       ${typeChip ? `<span class="chip">${esc(typeChip)}</span>` : ""}

@@ -957,10 +957,10 @@ export default function POS() {
     return {
       restaurantName: appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
       branchName: currentBranch?.name?.trim() || branchLabel,
-      mobile1: currentBranch?.mobile1,
-      mobile2: currentBranch?.mobile2,
+      mobile1: currentBranch?.mobile1 || appSettings?.mobile || null,
+      mobile2: currentBranch?.mobile2 || null,
       address: currentBranch?.address,
-      logoUrl: currentBranch?.logoUrl,
+      logoUrl: currentBranch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
       invoiceNumber,
       dateLabel: formatDate(nowStamp),
       timeLabel: formatClock(nowStamp),

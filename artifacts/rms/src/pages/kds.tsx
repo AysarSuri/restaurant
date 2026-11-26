@@ -419,6 +419,9 @@ export default function KDS() {
           appSettings?.restaurantName?.trim() || t("pos.fallbackRestaurant"),
         branchName: branch?.name?.trim() || branchLabel,
         logoUrl: branch?.logoUrl?.trim() || appSettings?.logoUrl?.trim() || null,
+        mobile1: branch?.mobile1 || appSettings?.mobile || null,
+        mobile2: branch?.mobile2 || null,
+        address: branch?.address || null,
         invoiceNumber: order.orderNumber,
         dateLabel: created.toLocaleDateString("en-GB", {
           year: "numeric",
