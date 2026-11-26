@@ -39,7 +39,11 @@ function esc(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-/** Shared 80mm thermal chrome: 12px bold, safe printable width (avoids left cut). */
+/**
+ * Shared 80mm thermal chrome.
+ * POS80 printable width is often ~58–68mm (driver margins clip the physical left),
+ * so content is kept narrow with extra physical-left padding — never a 4-column table.
+ */
 function thermalBaseStyles() {
   return `
     @page { size: 80mm auto; margin: 0; }
@@ -54,80 +58,78 @@ function thermalBaseStyles() {
       font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Arial", sans-serif;
       font-size: 12px;
       font-weight: 700;
-      line-height: 1.45;
+      line-height: 1.4;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
-      overflow-x: hidden;
     }
-    /* Printable area ~72mm — keeps left/right from clipping on 80mm rolls */
+    /* Narrow ticket + extra padding-left (physical left = amounts side in RTL) */
     .ticket {
-      width: 72mm;
-      max-width: 72mm;
-      margin: 0 auto;
-      padding: 3mm 2.5mm 5mm;
+      width: 58mm;
+      max-width: 58mm;
+      margin: 0 0 0 8mm;
+      padding: 2.5mm 1.5mm 4mm 2mm;
       overflow: visible;
     }
     .logo {
       display: block;
-      width: 18mm;
-      height: 18mm;
+      width: 16mm;
+      height: 16mm;
       object-fit: contain;
-      margin: 0 auto 2mm;
+      margin: 0 auto 1.5mm;
       border-radius: 2mm;
       filter: grayscale(1) contrast(1.18);
     }
     .brand {
       text-align: center;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 800;
-      letter-spacing: 0.01em;
-      line-height: 1.3;
-      margin: 0 0 1mm;
+      line-height: 1.25;
+      margin: 0 0 0.8mm;
       word-break: break-word;
     }
     .branch {
       text-align: center;
       font-size: 12px;
       font-weight: 700;
-      margin: 0 0 1.5mm;
+      margin: 0 0 1.2mm;
       word-break: break-word;
     }
     .kicker {
       text-align: center;
       font-size: 12px;
       font-weight: 800;
-      margin: 0 0 2mm;
-      padding: 1.6mm 0;
-      border-top: 1.5px solid #000;
-      border-bottom: 1.5px solid #000;
-      letter-spacing: 0.04em;
+      margin: 0 0 1.8mm;
+      padding: 1.4mm 0;
+      border-top: 1.4px solid #000;
+      border-bottom: 1.4px solid #000;
+      letter-spacing: 0.03em;
     }
     .meta-center {
       text-align: center;
       font-size: 12px;
       font-weight: 700;
-      line-height: 1.45;
-      margin: 0 0 2mm;
+      line-height: 1.4;
+      margin: 0 0 1.8mm;
       word-break: break-word;
     }
     .rule {
       border: 0;
-      border-top: 1.5px solid #000;
-      margin: 2.2mm 0;
+      border-top: 1.4px solid #000;
+      margin: 2mm 0;
     }
     .rule-dashed {
       border: 0;
-      border-top: 1.2px dashed #222;
-      margin: 2mm 0;
+      border-top: 1.1px dashed #222;
+      margin: 1.8mm 0;
     }
     .row {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      gap: 3mm;
+      align-items: flex-start;
+      gap: 2mm;
       font-size: 12px;
       font-weight: 700;
-      line-height: 1.4;
+      line-height: 1.35;
       margin: 1mm 0;
       width: 100%;
     }
@@ -136,112 +138,121 @@ function thermalBaseStyles() {
       min-width: 0;
       word-break: break-word;
     }
-    .row > span:last-child,
+    .row > .val,
     .ltr {
-      flex: 0 1 auto;
-      max-width: 55%;
+      flex: 0 0 auto;
+      max-width: 62%;
       font-variant-numeric: tabular-nums;
       direction: ltr;
       unicode-bidi: plaintext;
       text-align: left;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .panel {
-      border: 1.4px solid #000;
-      border-radius: 2.5mm;
-      padding: 2mm 2.2mm;
-      margin: 0 0 2mm;
+      border: 1.3px solid #000;
+      border-radius: 2mm;
+      padding: 1.6mm 1.8mm;
+      margin: 0 0 1.8mm;
     }
     .section-title {
       text-align: center;
       font-size: 12px;
       font-weight: 800;
-      margin: 0 0 1.5mm;
-      letter-spacing: 0.05em;
+      margin: 0 0 1.2mm;
+      letter-spacing: 0.04em;
     }
-    table.items {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
+    .line-item {
+      padding: 1.6mm 0;
+      border-bottom: 0.7px dotted #444;
     }
-    table.items thead th {
-      font-size: 11px;
-      font-weight: 800;
-      border-bottom: 1.3px solid #000;
-      padding: 0 0 1.2mm;
-      text-align: right;
-    }
-    table.items thead th.num,
-    table.items tbody td.num {
-      text-align: left;
-      direction: ltr;
-      unicode-bidi: plaintext;
-    }
-    table.items tbody td {
+    .line-item:last-child { border-bottom: 0; }
+    .line-name {
       font-size: 12px;
-      font-weight: 700;
-      padding: 1.4mm 0.5mm 1.4mm 0;
-      vertical-align: top;
-      border-bottom: 0.7px dotted #333;
+      font-weight: 800;
+      line-height: 1.3;
       word-break: break-word;
+      margin: 0 0 0.6mm;
     }
-    table.items .item-name { width: 40%; }
-    table.items .num { width: 18%; }
-    table.items .num.total { width: 24%; font-weight: 800; }
-    .grand {
+    .line-calc {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      gap: 3mm;
-      margin-top: 1.8mm;
-      padding: 2mm 2.2mm;
-      border: 1.8px solid #000;
-      border-radius: 2mm;
-      font-size: 13px;
-      font-weight: 800;
-    }
-    .grand strong {
+      align-items: baseline;
+      gap: 2mm;
+      font-size: 12px;
+      font-weight: 700;
       font-variant-numeric: tabular-nums;
       direction: ltr;
       unicode-bidi: plaintext;
-      white-space: nowrap;
+    }
+    .line-calc .qty-price { flex: 1 1 auto; text-align: right; }
+    .line-calc .line-total { flex: 0 0 auto; font-weight: 800; text-align: left; }
+    .grand {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 1mm;
+      margin-top: 1.6mm;
+      padding: 2mm 1.8mm;
+      border: 1.6px solid #000;
+      border-radius: 2mm;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .grand .grand-label { font-size: 12px; }
+    .grand .grand-amount {
+      font-size: 14px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      direction: ltr;
+      unicode-bidi: plaintext;
+      word-break: break-word;
     }
     .footer {
       text-align: center;
-      margin-top: 3mm;
+      margin-top: 2.5mm;
       font-size: 12px;
       font-weight: 700;
-      line-height: 1.4;
+      line-height: 1.35;
     }
     .printer-hint {
       text-align: center;
-      margin-top: 2mm;
+      margin-top: 1.8mm;
       font-size: 11px;
       font-weight: 700;
-      opacity: 0.8;
+      opacity: 0.85;
       word-break: break-word;
     }
     @media print {
-      html, body { width: 80mm !important; max-width: 80mm !important; }
-      .ticket { width: 72mm !important; max-width: 72mm !important; }
+      html, body { width: 80mm !important; max-width: 80mm !important; margin: 0 !important; }
+      .ticket {
+        width: 58mm !important;
+        max-width: 58mm !important;
+        margin: 0 0 0 8mm !important;
+      }
     }
   `;
 }
 
 function buildReceiptHtml(data: ThermalReceiptData) {
   const phones = [data.mobile1, data.mobile2].filter((v) => Boolean(v && String(v).trim()));
+  // Stacked lines (not 4 columns) — prevents left-edge cut on POS80 rolls
   const itemsHtml = data.items
-    .map(
-      (item) => `
-      <tr>
-        <td class="item-name">${esc(item.name)}</td>
-        <td class="num">${item.quantity}</td>
-        <td class="num">${esc(data.formatMoney(item.unitPrice))}</td>
-        <td class="num total">${esc(data.formatMoney(item.lineTotal))}</td>
-      </tr>`
-    )
+    .map((item) => {
+      const qty = Number(item.quantity) || 0;
+      const unit = data.formatMoney(item.unitPrice);
+      const total = data.formatMoney(item.lineTotal);
+      return `
+      <div class="line-item">
+        <div class="line-name">${esc(item.name)}</div>
+        <div class="line-calc">
+          <span class="qty-price">${esc(String(qty))} × ${esc(unit)}</span>
+          <span class="line-total">${esc(total)}</span>
+        </div>
+      </div>`;
+    })
     .join("");
 
   const logo = data.logoUrl?.trim()
@@ -271,55 +282,52 @@ function buildReceiptHtml(data: ThermalReceiptData) {
         : ""
     }
     <div class="panel">
-      <div class="row"><span>رقم الفاتورة</span><span class="ltr">${esc(data.invoiceNumber)}</span></div>
-      <div class="row"><span>التاريخ</span><span class="ltr">${esc(data.dateLabel)}</span></div>
-      <div class="row"><span>الوقت</span><span class="ltr">${esc(data.timeLabel)}</span></div>
-      <div class="row"><span>نوع الطلب</span><span>${esc(data.orderTypeLabel)}</span></div>
-      ${data.seatLabel ? `<div class="row"><span>المكان</span><span>${esc(data.seatLabel)}</span></div>` : ""}
-      <div class="row"><span>الدفع</span><span>${esc(data.paymentLabel)}</span></div>
+      <div class="row"><span>رقم الفاتورة</span><span class="val ltr">${esc(data.invoiceNumber)}</span></div>
+      <div class="row"><span>التاريخ</span><span class="val ltr">${esc(data.dateLabel)}</span></div>
+      <div class="row"><span>الوقت</span><span class="val ltr">${esc(data.timeLabel)}</span></div>
+      <div class="row"><span>نوع الطلب</span><span class="val">${esc(data.orderTypeLabel)}</span></div>
+      ${
+        data.seatLabel
+          ? `<div class="row"><span>المكان</span><span class="val">${esc(data.seatLabel)}</span></div>`
+          : ""
+      }
+      <div class="row"><span>الدفع</span><span class="val">${esc(data.paymentLabel)}</span></div>
     </div>
     <p class="section-title">تفاصيل الفاتورة</p>
-    <table class="items">
-      <thead>
-        <tr>
-          <th>الصنف</th>
-          <th class="num">الكمية</th>
-          <th class="num">السعر</th>
-          <th class="num">المجموع</th>
-        </tr>
-      </thead>
-      <tbody>${itemsHtml}</tbody>
-    </table>
+    ${itemsHtml || `<p class="meta-center">لا توجد أصناف</p>`}
     <hr class="rule-dashed" />
     <div class="totals">
-      <div class="row"><span>المجموع الفرعي</span><span class="ltr">${esc(data.formatMoney(data.subtotal))}</span></div>
+      <div class="row"><span>المجموع الفرعي</span><span class="val ltr">${esc(data.formatMoney(data.subtotal))}</span></div>
       ${
         data.discount > 0
-          ? `<div class="row"><span>الخصم</span><span class="ltr">- ${esc(data.formatMoney(data.discount))}</span></div>`
+          ? `<div class="row"><span>الخصم</span><span class="val ltr">- ${esc(data.formatMoney(data.discount))}</span></div>`
           : ""
       }
       ${
         (data.deliveryFee ?? 0) > 0
-          ? `<div class="row"><span>التوصيل</span><span class="ltr">${esc(data.formatMoney(data.deliveryFee ?? 0))}</span></div>`
+          ? `<div class="row"><span>التوصيل</span><span class="val ltr">${esc(data.formatMoney(data.deliveryFee ?? 0))}</span></div>`
           : ""
       }
-      <div class="grand"><span>الإجمالي</span><strong>${esc(data.formatMoney(data.total))}</strong></div>
+      <div class="grand">
+        <span class="grand-label">الإجمالي</span>
+        <strong class="grand-amount">${esc(data.formatMoney(data.total))}</strong>
+      </div>
       ${
         data.received != null
-          ? `<div class="row"><span>الواصل</span><span class="ltr">${esc(data.formatMoney(data.received))}</span></div>`
+          ? `<div class="row"><span>الواصل</span><span class="val ltr">${esc(data.formatMoney(data.received))}</span></div>`
           : ""
       }
       ${
         data.change != null && data.change > 0
-          ? `<div class="row"><span>الباقي</span><span class="ltr">${esc(data.formatMoney(data.change))}</span></div>`
+          ? `<div class="row"><span>الباقي</span><span class="val ltr">${esc(data.formatMoney(data.change))}</span></div>`
           : ""
       }
     </div>
     <p class="footer">شكراً لزيارتكم<br/>نتمنى لكم وجبة شهية</p>
     ${
       data.printerName?.trim()
-        ? `<p class="printer-hint">طابعة: ${esc(data.printerName.trim())} · 80mm</p>`
-        : `<p class="printer-hint">فاتورة حرارية · 80mm</p>`
+        ? `<p class="printer-hint">طابعة: ${esc(data.printerName.trim())}</p>`
+        : `<p class="printer-hint">فاتورة حرارية 80mm</p>`
     }
   </div>
 </body>
