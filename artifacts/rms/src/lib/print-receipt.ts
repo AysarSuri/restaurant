@@ -96,6 +96,63 @@ function thermalBaseStyles() {
       filter: grayscale(1) contrast(1.22);
       background: #fff;
     }
+    .sales-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2.2mm;
+      flex-wrap: wrap;
+      margin: 0 0 2.2mm;
+      padding: 2mm 2.4mm;
+      border: 1.4px solid #111;
+      border-radius: 7px;
+      background: #fff;
+    }
+    .sales-title-row .seat-chip {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 1.6mm;
+      max-width: 100%;
+    }
+    .sales-title-row .seat-chip-ico {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      display: block;
+    }
+    .sales-title-row .seat-chip-value {
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.1;
+      max-width: 28mm;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: rtl;
+      unicode-bidi: plaintext;
+    }
+    .sales-title-row .sales-title-copy {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: center;
+    }
+    .sales-title-row .kicker {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.15;
+    }
+    .sales-title-row .brand {
+      margin: 0.6mm 0 0;
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: 0.04em;
+      word-break: break-word;
+      text-transform: uppercase;
+    }
     .brand {
       text-align: center;
       font-size: 19px;
@@ -136,6 +193,7 @@ function thermalBaseStyles() {
       font-weight: 700;
       word-break: break-word;
     }
+    .address-row,
     .phone-row {
       display: inline-flex;
       align-items: center;
@@ -148,11 +206,22 @@ function thermalBaseStyles() {
       border-radius: 999px;
       font-size: 12px;
       font-weight: 800;
+      background: #fff;
+    }
+    .address-row {
+      direction: rtl;
+      unicode-bidi: plaintext;
+      text-align: right;
+      font-size: 11px;
+      gap: 5px;
+      padding: 1.5mm 2.8mm;
+    }
+    .phone-row {
       direction: ltr;
       unicode-bidi: plaintext;
       font-variant-numeric: tabular-nums;
-      background: #fff;
     }
+    .address-ico-wrap,
     .phone-ico-wrap {
       flex: 0 0 auto;
       width: 16px;
@@ -164,12 +233,14 @@ function thermalBaseStyles() {
       justify-content: center;
       background: #111;
     }
+    .address-ico,
     .phone-ico {
       flex: 0 0 auto;
       width: 9px;
       height: 9px;
       display: block;
     }
+    .address-text,
     .phone-num {
       min-width: 0;
       word-break: break-word;
@@ -346,37 +417,6 @@ function thermalBaseStyles() {
       border-radius: 5px;
       word-break: break-word;
     }
-    .seat-visual {
-      text-align: center;
-      margin: 2.5mm 0 3.5mm;
-      padding: 3mm 2mm 2.5mm;
-      border: 1.5px solid #111;
-      border-radius: 6px;
-      background: #fafafa;
-    }
-    .seat-visual-art {
-      display: block;
-      width: 52mm;
-      max-width: 100%;
-      height: auto;
-      margin: 0 auto;
-    }
-    .seat-visual-kind {
-      margin: 2mm 0 0;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      opacity: 0.85;
-    }
-    .seat-visual-value {
-      margin: 0.8mm 0 0;
-      font-size: 14px;
-      font-weight: 800;
-      line-height: 1.25;
-      word-break: break-word;
-      direction: rtl;
-      unicode-bidi: plaintext;
-    }
     @media print {
       body, .ticket {
         width: 72mm !important;
@@ -396,133 +436,59 @@ function thermalPhoneIconSvg() {
   </span>`;
 }
 
-/** Side-view dining table (matches POS/cashier DiningTableIcon) with number on cloth */
-function thermalTableSvg(number: string) {
-  const n = esc(number);
-  const fontSize = number.length > 2 ? "22" : "28";
-  return `<svg class="seat-visual-art" viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="طاولة ${n}">
-    <path d="M8 38c0-3.2 2.4-5.8 5.5-5.8h14c3.1 0 5.5 2.6 5.5 5.8v20.5H8V38Z" fill="url(#th-tbl-chair)"/>
-    <ellipse cx="20.5" cy="58.5" rx="12" ry="3.2" fill="url(#th-tbl-woodDark)"/>
-    <path d="M12 58.5 L7 86 h3.4 L15.2 58.5Z" fill="url(#th-tbl-woodDark)"/>
-    <path d="M16.5 58.5 L14.8 86 h3.2 L19.5 58.5Z" fill="url(#th-tbl-woodMid)"/>
-    <path d="M24.5 58.5 L26.2 86 h3.2 L27.5 58.5Z" fill="url(#th-tbl-woodMid)"/>
-    <path d="M29 58.5 L34 86 h3.4 L32.2 58.5Z" fill="url(#th-tbl-woodDark)"/>
-    <path d="M127 38c0-3.2 2.4-5.8 5.5-5.8h14c3.1 0 5.5 2.6 5.5 5.8v20.5H127V38Z" fill="url(#th-tbl-chair)"/>
-    <ellipse cx="139.5" cy="58.5" rx="12" ry="3.2" fill="url(#th-tbl-woodDark)"/>
-    <path d="M131 58.5 L126 86 h3.4 L134.2 58.5Z" fill="url(#th-tbl-woodDark)"/>
-    <path d="M135.5 58.5 L133.8 86 h3.2 L138.5 58.5Z" fill="url(#th-tbl-woodMid)"/>
-    <path d="M143.5 58.5 L145.2 86 h3.2 L146.5 58.5Z" fill="url(#th-tbl-woodMid)"/>
-    <path d="M148 58.5 L153 86 h3.4 L151.2 58.5Z" fill="url(#th-tbl-woodDark)"/>
-    <rect x="36" y="42" width="88" height="10" rx="1.8" fill="url(#th-tbl-woodTop)"/>
-    <rect x="37.5" y="43.8" width="85" height="2" rx="1" fill="#D4A574" opacity="0.5"/>
-    <path d="M42 52 L39.5 88 h4.2 L48 52Z" fill="url(#th-tbl-woodDark)"/>
-    <path d="M52 52 L53.5 88 h4 L54.5 52Z" fill="url(#th-tbl-woodMid)"/>
-    <path d="M106 52 L104.5 88 h4 L108.5 52Z" fill="url(#th-tbl-woodDark)"/>
-    <path d="M112 52 L114.5 88 h4.2 L116 52Z" fill="url(#th-tbl-woodMid)"/>
-    <path d="M62 40h36c1.6 0 2.8 1.1 2.8 2.5v28.5c0 2.2-1.2 3.4-3.4 4.2l-2 .7c-1.1.3-1.8-.3-1.8-1.4V62H66.4v12.5c0 1.1-.7 1.7-1.8 1.4l-2-.7c-2.2-.8-3.4-2-3.4-4.2V42.5c0-1.4 1.2-2.5 2.8-2.5Z" fill="url(#th-tbl-cloth)"/>
-    <path d="M65 41.5h30c.6 0 1 .4 1 1v4.5H64v-4.5c0-.6.4-1 1-1Z" fill="#FFE98A" opacity="0.45"/>
-    <path d="M68 68.5h24" stroke="#FFF8E0" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>
-    <path d="M66 72.5c2.5.9 5.5 1.4 8 1.4s5.5-.5 8-1.4 5.5-1.4 8-1.4" stroke="#C98900" stroke-width="1.3" stroke-linecap="round" opacity="0.7"/>
-    <text x="80" y="57" text-anchor="middle" dominant-baseline="middle" fill="#5C3A10" font-size="${fontSize}" font-weight="900" font-family="Segoe UI, Tahoma, Noto Sans Arabic, Arial, sans-serif">${n}</text>
-    <defs>
-      <linearGradient id="th-tbl-cloth" x1="62" y1="40" x2="98" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#F7D65C"/><stop offset="0.4" stop-color="#E8B008"/><stop offset="1" stop-color="#C98900"/></linearGradient>
-      <linearGradient id="th-tbl-chair" x1="8" y1="32" x2="33" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#F3CF4A"/><stop offset="1" stop-color="#D4A017"/></linearGradient>
-      <linearGradient id="th-tbl-woodTop" x1="36" y1="42" x2="124" y2="52" gradientUnits="userSpaceOnUse"><stop stop-color="#C48A4A"/><stop offset="0.5" stop-color="#A86B32"/><stop offset="1" stop-color="#8B5424"/></linearGradient>
-      <linearGradient id="th-tbl-woodDark" x1="0" y1="52" x2="0" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#6B3E1F"/><stop offset="1" stop-color="#3F2412"/></linearGradient>
-      <linearGradient id="th-tbl-woodMid" x1="0" y1="52" x2="0" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#8A5530"/><stop offset="1" stop-color="#5A3518"/></linearGradient>
-    </defs>
+/** GPS / map-pin mark for restaurant address */
+function thermalGpsIconSvg() {
+  return `<span class="address-ico-wrap" aria-hidden="true">
+    <svg class="address-ico" viewBox="0 0 24 24" focusable="false">
+      <path fill="#fff" d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5c-1.4 0-2.5-1.1-2.5-2.5S10.6 6.5 12 6.5s2.5 1.1 2.5 2.5S13.4 11.5 12 11.5z"/>
+    </svg>
+  </span>`;
+}
+
+/** Compact monochrome vector: round dining table + chairs (thermal-safe) */
+function thermalTableVectorSvg() {
+  return `<svg class="seat-chip-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <circle cx="12" cy="12" r="4.2" stroke="#111" stroke-width="1.7"/>
+    <circle cx="12" cy="12" r="1.35" fill="#111"/>
+    <path d="M12 3.2v2.2M12 18.6v2.2M3.2 12h2.2M18.6 12h2.2" stroke="#111" stroke-width="1.55" stroke-linecap="round"/>
+    <path d="M5.6 5.6l1.55 1.55M16.85 16.85l1.55 1.55M16.85 7.15l1.55-1.55M5.6 18.4l1.55-1.55" stroke="#111" stroke-width="1.45" stroke-linecap="round"/>
+    <circle cx="12" cy="3.2" r="1.35" fill="#111"/>
+    <circle cx="12" cy="20.8" r="1.35" fill="#111"/>
+    <circle cx="3.2" cy="12" r="1.35" fill="#111"/>
+    <circle cx="20.8" cy="12" r="1.35" fill="#111"/>
   </svg>`;
 }
 
-/** Private room illustration (matches RoomIcon) with number badge */
-function thermalRoomSvg(number: string) {
-  const n = esc(number);
-  const fontSize = number.length > 2 ? "22" : "28";
-  return `<svg class="seat-visual-art" viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="غرفة ${n}">
-    <rect x="6" y="8" width="148" height="72" rx="8" fill="url(#th-rm-wall)"/>
-    <path d="M6 8h148c4.4 0 8 3.6 8 8v6H-2v-6c0-4.4 3.6-8 8-8Z" fill="#FFF8EC" opacity="0.28"/>
-    <path d="M6 70h148v18c0 3.3-2.7 6-6 6H12c-3.3 0-6-2.7-6-6V70Z" fill="#C9A878"/>
-    <path d="M6 70h148" stroke="#A88860" stroke-width="1.2" opacity="0.5"/>
-    <rect x="36" y="14" width="48" height="30" rx="2.8" fill="#4A3828"/>
-    <rect x="38.5" y="16.5" width="43" height="25" rx="1.5" fill="url(#th-rm-sky)"/>
-    <circle cx="66" cy="23" r="3.8" fill="#FFE2A8" opacity="0.9"/>
-    <path d="M38.5 32c6-4 12-5 18-2.5 5 2 10 1 15-1.5v13.5h-33V32Z" fill="#5A6F88" opacity="0.5"/>
-    <path d="M60 16.5v25M38.5 29h43" stroke="#6B5340" stroke-width="1.2" opacity="0.7"/>
-    <rect x="36" y="14" width="48" height="30" rx="2.8" stroke="#7A5E45" stroke-width="1.8"/>
-    <rect x="12" y="16" width="18" height="22" rx="1.5" fill="url(#th-rm-woodDark)"/>
-    <rect x="13.5" y="17.5" width="15" height="19" rx="0.8" fill="#6FA3C9"/>
-    <ellipse cx="128" cy="32" rx="26" ry="20" fill="url(#th-rm-tvGlow)"/>
-    <rect x="104" y="20" width="48" height="30" rx="2.8" fill="#0E1014"/>
-    <rect x="107" y="22.5" width="42" height="23" rx="1.4" fill="url(#th-rm-screen)"/>
-    <ellipse cx="128" cy="34" rx="12" ry="7" stroke="#E8F8EA" stroke-width="0.9" opacity="0.8"/>
-    <path d="M128 27v14M116 34h24" stroke="#E8F8EA" stroke-width="0.75" opacity="0.6"/>
-    <circle cx="128" cy="34" r="1.5" fill="#E8F8EA" opacity="0.85"/>
-    <rect x="108" y="51" width="40" height="8" rx="1.8" fill="url(#th-rm-wood)"/>
-    <rect x="104" y="59" width="48" height="24" rx="5" fill="#F7D65C"/>
-    <rect x="105.5" y="60.5" width="45" height="4" rx="1.6" fill="#FFE98A" opacity="0.55"/>
-    <text x="128" y="74" text-anchor="middle" dominant-baseline="middle" fill="#5C3A10" font-size="${fontSize}" font-weight="900" font-family="Segoe UI, Tahoma, Noto Sans Arabic, Arial, sans-serif">${n}</text>
-    <ellipse cx="58" cy="88" rx="40" ry="7.5" fill="url(#th-rm-rug)"/>
-    <path d="M14 50c0-5.5 4-9 9.5-9h70c5.5 0 9.5 3.5 9.5 9v12H14V50Z" fill="url(#th-rm-sofaBack)"/>
-    <path d="M16 60c0-2.8 2-4.5 5-4.5h72c3 0 5 1.7 5 4.5v13c0 2-1.5 3.5-3.5 3.5H19.5c-2 0-3.5-1.5-3.5-3.5V60Z" fill="url(#th-rm-sofaSeat)"/>
-    <path d="M10 52c0-3.5 2.4-6 5.5-6h7v28h-8c-2.5 0-4.5-2-4.5-4.5V52Z" fill="#3D6B7A"/>
-    <path d="M93 46h7c3.1 0 5.5 2.5 5.5 5.5v18c0 2.5-2 4.5-4.5 4.5h-8V46Z" fill="#3D6B7A"/>
-    <rect x="26" y="48" width="14" height="16" rx="3" fill="url(#th-rm-cushionA)" transform="rotate(-7 33 56)"/>
-    <rect x="42" y="46" width="15" height="17" rx="3" fill="url(#th-rm-cushionB)" transform="rotate(4 49 54)"/>
-    <defs>
-      <linearGradient id="th-rm-wall" x1="6" y1="8" x2="154" y2="80" gradientUnits="userSpaceOnUse"><stop stop-color="#F3E4C8"/><stop offset="0.55" stop-color="#E6D0A8"/><stop offset="1" stop-color="#D4B48A"/></linearGradient>
-      <linearGradient id="th-rm-sky" x1="38" y1="16" x2="82" y2="42" gradientUnits="userSpaceOnUse"><stop stop-color="#FFB07A"/><stop offset="0.4" stop-color="#F0A070"/><stop offset="0.7" stop-color="#7FA8C9"/><stop offset="1" stop-color="#3F5F8A"/></linearGradient>
-      <linearGradient id="th-rm-wood" x1="108" y1="51" x2="148" y2="61" gradientUnits="userSpaceOnUse"><stop stop-color="#D4A574"/><stop offset="1" stop-color="#8B5424"/></linearGradient>
-      <linearGradient id="th-rm-woodDark" x1="12" y1="16" x2="30" y2="38" gradientUnits="userSpaceOnUse"><stop stop-color="#6B3E1F"/><stop offset="1" stop-color="#3F2412"/></linearGradient>
-      <linearGradient id="th-rm-sofaBack" x1="14" y1="41" x2="103" y2="62" gradientUnits="userSpaceOnUse"><stop stop-color="#6FA8B8"/><stop offset="0.5" stop-color="#4A8496"/><stop offset="1" stop-color="#356A7A"/></linearGradient>
-      <linearGradient id="th-rm-sofaSeat" x1="16" y1="55" x2="98" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#5B92A4"/><stop offset="0.45" stop-color="#3F7386"/><stop offset="1" stop-color="#2E5C6C"/></linearGradient>
-      <linearGradient id="th-rm-rug" x1="18" y1="82" x2="98" y2="96" gradientUnits="userSpaceOnUse"><stop stop-color="#C44536"/><stop offset="0.5" stop-color="#A12E2E"/><stop offset="1" stop-color="#6E1C1C"/></linearGradient>
-      <linearGradient id="th-rm-cushionA" x1="26" y1="48" x2="40" y2="64" gradientUnits="userSpaceOnUse"><stop stop-color="#E07A6A"/><stop offset="1" stop-color="#B84A3A"/></linearGradient>
-      <linearGradient id="th-rm-cushionB" x1="42" y1="46" x2="57" y2="63" gradientUnits="userSpaceOnUse"><stop stop-color="#3A6AB0"/><stop offset="1" stop-color="#1E3F78"/></linearGradient>
-      <radialGradient id="th-rm-tvGlow" cx="128" cy="32" r="26" gradientUnits="userSpaceOnUse"><stop stop-color="#4ADE80" stop-opacity="0.45"/><stop offset="1" stop-color="#4ADE80" stop-opacity="0"/></radialGradient>
-      <linearGradient id="th-rm-screen" x1="107" y1="22" x2="149" y2="46" gradientUnits="userSpaceOnUse"><stop stop-color="#166534"/><stop offset="0.5" stop-color="#15803D"/><stop offset="1" stop-color="#14532D"/></linearGradient>
-    </defs>
+/** Compact monochrome vector: room / door */
+function thermalRoomVectorSvg() {
+  return `<svg class="seat-chip-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="2.2" stroke="#111" stroke-width="1.7"/>
+    <path d="M10.2 20.5V9.2c0-.9.7-1.6 1.6-1.6h5.7c.9 0 1.6.7 1.6 1.6v11.3" stroke="#111" stroke-width="1.55" stroke-linejoin="round"/>
+    <circle cx="15.6" cy="14.2" r="0.95" fill="#111"/>
+    <path d="M3.5 20.5h17" stroke="#111" stroke-width="1.55" stroke-linecap="round"/>
   </svg>`;
 }
 
-/** Person card: soft avatar + silhouette + name plaque */
-function thermalPersonSvg(name: string) {
-  const n = esc(name);
-  const fontSize = name.length > 14 ? "14" : name.length > 8 ? "17" : "20";
-  return `<svg class="seat-visual-art" viewBox="0 0 160 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="شخص ${n}">
-    <rect x="8" y="6" width="144" height="88" rx="12" fill="url(#th-ps-card)"/>
-    <rect x="10" y="8" width="140" height="18" rx="8" fill="#FFE98A" opacity="0.35"/>
-    <circle cx="80" cy="40" r="26" fill="url(#th-ps-halo)"/>
-    <circle cx="80" cy="40" r="22" fill="url(#th-ps-disk)"/>
-    <circle cx="80" cy="32" r="9.5" fill="#1A1A1A"/>
-    <path d="M58 58c2.5-10 10-15 22-15s19.5 5 22 15c.6 2.4-.8 4.5-3.2 4.5H61.2c-2.4 0-3.8-2.1-3.2-4.5Z" fill="#1A1A1A"/>
-    <rect x="22" y="68" width="116" height="22" rx="7" fill="#F7D65C"/>
-    <rect x="24" y="69.5" width="112" height="4" rx="2" fill="#FFE98A" opacity="0.55"/>
-    <text x="80" y="81" text-anchor="middle" dominant-baseline="middle" fill="#5C3A10" font-size="${fontSize}" font-weight="900" font-family="Segoe UI, Tahoma, Noto Sans Arabic, Arial, sans-serif">${n}</text>
-    <defs>
-      <linearGradient id="th-ps-card" x1="8" y1="6" x2="152" y2="94" gradientUnits="userSpaceOnUse"><stop stop-color="#EAF6FB"/><stop offset="0.55" stop-color="#D6EAF4"/><stop offset="1" stop-color="#B8D4E4"/></linearGradient>
-      <radialGradient id="th-ps-halo" cx="80" cy="40" r="26" gradientUnits="userSpaceOnUse"><stop stop-color="#7DD3FC" stop-opacity="0.55"/><stop offset="1" stop-color="#7DD3FC" stop-opacity="0"/></radialGradient>
-      <linearGradient id="th-ps-disk" x1="58" y1="18" x2="102" y2="62" gradientUnits="userSpaceOnUse"><stop stop-color="#F8FAFC"/><stop offset="1" stop-color="#CBD5E1"/></linearGradient>
-    </defs>
+/** Compact monochrome vector: person */
+function thermalPersonVectorSvg() {
+  return `<svg class="seat-chip-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <circle cx="12" cy="8" r="3.4" stroke="#111" stroke-width="1.7"/>
+    <path d="M5.2 19.4c1.1-3.4 3.5-5.1 6.8-5.1s5.7 1.7 6.8 5.1" stroke="#111" stroke-width="1.7" stroke-linecap="round"/>
   </svg>`;
 }
 
-function thermalSeatVisualHtml(visual?: ThermalSeatVisual | null) {
+function thermalSeatChipHtml(visual?: ThermalSeatVisual | null) {
   if (!visual?.value?.trim()) return "";
   const value = visual.value.trim();
   const kind = visual.kind;
   const art =
     kind === "room"
-      ? thermalRoomSvg(value)
+      ? thermalRoomVectorSvg()
       : kind === "person"
-        ? thermalPersonSvg(value)
-        : thermalTableSvg(value);
+        ? thermalPersonVectorSvg()
+        : thermalTableVectorSvg();
   const kindLabel = kind === "room" ? "غرفة" : kind === "person" ? "شخص" : "طاولة";
-  return `
-    <div class="seat-visual">
-      ${art}
-      <div class="seat-visual-kind">${kindLabel}</div>
-      <div class="seat-visual-value">${esc(value)}</div>
-    </div>`;
+  return `<span class="seat-chip" title="${esc(kindLabel)} ${esc(value)}">${art}<span class="seat-chip-value">${esc(value)}</span></span>`;
 }
 
 function thermalLogoHtml(logoUrl?: string | null) {
@@ -541,6 +507,7 @@ function thermalIdentityHtml(opts: {
   mobile2?: string | null;
   logoUrl?: string | null;
   kicker?: string | null;
+  seatVisual?: ThermalSeatVisual | null;
 }) {
   const phones = [opts.mobile1, opts.mobile2]
     .map((p) => (p ? String(p).trim() : ""))
@@ -551,17 +518,33 @@ function thermalIdentityHtml(opts: {
         `<div class="phone-row">${thermalPhoneIconSvg()}<span class="phone-num">${esc(p)}</span></div>`
     )
     .join("");
+  const address = opts.address?.trim() || "";
+  const addressRow = address
+    ? `<div class="address-row">${thermalGpsIconSvg()}<span class="address-text">${esc(address)}</span></div>`
+    : "";
+  const seatChip = thermalSeatChipHtml(opts.seatVisual);
+  const brandName = esc(opts.restaurantName || "المطعم");
+  const kicker = opts.kicker?.trim() || "";
+  const titleRow =
+    seatChip || kicker
+      ? `<div class="sales-title-row">
+          ${seatChip}
+          <div class="sales-title-copy">
+            ${kicker ? `<div class="kicker">${esc(kicker)}</div>` : ""}
+            <p class="brand">${brandName}</p>
+          </div>
+        </div>`
+      : `<p class="brand">${brandName}</p>
+         <hr class="brand-rule" />
+         <hr class="brand-rule-soft" />`;
 
   return `
     <div class="identity">
       ${thermalLogoHtml(opts.logoUrl)}
-      <p class="brand">${esc(opts.restaurantName || "المطعم")}</p>
-      <hr class="brand-rule" />
-      <hr class="brand-rule-soft" />
-      ${opts.kicker?.trim() ? `<div class="kicker">${esc(opts.kicker.trim())}</div>` : ""}
+      ${titleRow}
       ${opts.branchName?.trim() ? `<div class="sub">${esc(opts.branchName.trim())}</div>` : ""}
+      ${addressRow}
       ${phoneRows}
-      ${opts.address?.trim() ? `<div class="sub" style="margin-top:1.8mm;">${esc(opts.address.trim())}</div>` : ""}
     </div>`;
 }
 
@@ -601,9 +584,8 @@ function buildReceiptHtml(data: ThermalReceiptData) {
       mobile2: data.mobile2,
       logoUrl: data.logoUrl,
       kicker: "فاتورة مبيعات",
+      seatVisual: data.seatVisual,
     })}
-
-    ${thermalSeatVisualHtml(data.seatVisual)}
 
     <div class="meta">
       <div class="line"><span>رقم الفاتورة</span><b>${esc(data.invoiceNumber)}</b></div>

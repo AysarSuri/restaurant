@@ -35,7 +35,7 @@ import {
   PencilLine,
   Clock,
   Save,
-  RotateCcw,
+  ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/App";
 import { useLocation } from "wouter";
@@ -120,7 +120,6 @@ export default function TableOrder() {
   const [editPickerOpen, setEditPickerOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingOrderNumber, setEditingOrderNumber] = useState<string | null>(null);
-  const [isReturnMode, setIsReturnMode] = useState(false);
 
   const tableId = user?.tableId;
   const tableNumber = user?.tableNumber;
@@ -209,15 +208,30 @@ export default function TableOrder() {
       .sort((a, b) => Number(b.isFavorite === true) - Number(a.isFavorite === true));
   }, [items, search, activeCategory]);
 
+  const goBack = () => {
+    if (step === "success") {
+      setStep("menu");
+      setCart([]);
+      clearEditing();
+      setOrderNum("");
+      return;
+    }
+    if (editingOrderId != null || cart.length > 0) {
+      setCart([]);
+      clearEditing();
+      setCartOpen(false);
+      return;
+    }
+    logout();
+    navigate("/login");
+  };
+
   const addToCart = (item: MenuItem) => {
-    const asReturn = isReturnMode;
     setCart((prev) => {
-      const ex = prev.find(
-        (i) => i.id === item.id && Boolean(i.isReturn) === asReturn
-      );
+      const ex = prev.find((i) => i.id === item.id && !i.isReturn);
       if (ex) {
         return prev.map((i) =>
-          i.id === item.id && Boolean(i.isReturn) === asReturn
+          i.id === item.id && !i.isReturn
             ? { ...i, cartQuantity: i.cartQuantity + 1 }
             : i
         );
@@ -228,7 +242,6 @@ export default function TableOrder() {
           ...item,
           price: Number(item.price),
           cartQuantity: 1,
-          isReturn: asReturn || undefined,
         },
       ];
     });
@@ -289,7 +302,6 @@ export default function TableOrder() {
       });
     }
     setCart(nextCart);
-    setIsReturnMode(false);
     setEditingOrderId(order.id);
     setEditingOrderNumber(order.orderNumber || null);
     setOrderNum(order.orderNumber || "");
@@ -535,31 +547,14 @@ export default function TableOrder() {
         ) : null}
         <button
           type="button"
-          onClick={() => setIsReturnMode((v) => !v)}
-          className={`group relative w-full h-12 inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl border-2 font-extrabold text-sm transition-all active:scale-[0.98] ${
-            isReturnMode
-              ? "border-rose-400/80 bg-gradient-to-l from-rose-600 via-rose-500 to-orange-500 text-white shadow-lg shadow-rose-500/35"
-              : "border-rose-500/40 bg-gradient-to-l from-rose-500/12 via-card to-card text-rose-700 dark:text-rose-300 hover:border-rose-500/70"
-          }`}
-          title={t("pos.returnModeOn")}
-          aria-pressed={isReturnMode}
+          onClick={goBack}
+          className="group relative w-full h-12 inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl border-2 border-border/70 bg-secondary/40 font-extrabold text-sm text-foreground transition-all active:scale-[0.98] hover:border-primary/40 hover:bg-secondary/70"
+          title={t("common.back")}
         >
-          <span
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl border ${
-              isReturnMode
-                ? "border-white/35 bg-white/20 text-white"
-                : "border-rose-500/35 bg-rose-500/15 text-rose-600 dark:text-rose-300"
-            }`}
-          >
-            <RotateCcw
-              className={`w-4 h-4 ${isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""}`}
-              strokeWidth={2.35}
-            />
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border/60 bg-background/80 text-muted-foreground">
+            <ArrowRight className="w-4 h-4" strokeWidth={2.35} />
           </span>
-          <span>{t("pos.return")}</span>
-          {isReturnMode ? (
-            <span className="h-2 w-2 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.25)]" />
-          ) : null}
+          <span>{t("common.back")}</span>
         </button>
         <div className="flex justify-between items-end font-bold">
           <span
@@ -652,19 +647,12 @@ export default function TableOrder() {
 
           <button
             type="button"
-            onClick={() => setIsReturnMode((v) => !v)}
-            className={`relative inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border text-sm font-extrabold transition-colors ${
-              isReturnMode
-                ? "border-rose-400/80 bg-rose-500 text-white shadow-md shadow-rose-500/30"
-                : "border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-200 hover:bg-rose-500/20"
-            }`}
-            title={t("pos.returnModeOn")}
-            aria-pressed={isReturnMode}
+            onClick={goBack}
+            className="relative inline-flex items-center gap-1.5 h-10 px-3 rounded-xl border border-border/70 bg-secondary/50 text-foreground text-sm font-extrabold hover:bg-secondary transition-colors"
+            title={t("common.back")}
           >
-            <RotateCcw
-              className={`w-4 h-4 ${isReturnMode ? "animate-[spin_0.7s_ease-out]" : ""}`}
-            />
-            <span className="hidden sm:inline">{t("pos.return")}</span>
+            <ArrowRight className="w-4 h-4" />
+            <span className="hidden sm:inline">{t("common.back")}</span>
           </button>
 
           <button
@@ -758,9 +746,7 @@ export default function TableOrder() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-2.5 md:gap-3">
                 <AnimatePresence mode="popLayout">
                   {filteredItems.map((item) => {
-                    const inCart = cart.find(
-                      (c) => c.id === item.id && Boolean(c.isReturn) === isReturnMode
-                    );
+                    const inCart = cart.find((c) => c.id === item.id && !c.isReturn);
                     return (
                       <motion.button
                         key={item.id}
@@ -772,26 +758,18 @@ export default function TableOrder() {
                         whileTap={{ scale: 0.96 }}
                         onClick={() => addToCart(item)}
                         className={`text-start bg-card/85 border rounded-2xl p-3 md:p-3.5 cursor-pointer hover:shadow-lg transition-all relative overflow-hidden ${
-                          isReturnMode
-                            ? inCart
-                              ? "border-rose-500/60 bg-rose-500/10 shadow-md shadow-rose-500/15"
-                              : "border-rose-500/35 hover:border-rose-500/55"
-                            : inCart
-                              ? "border-primary/55 bg-primary/5 shadow-md shadow-primary/10"
-                              : "border-border/45 hover:border-primary/35"
+                          inCart
+                            ? "border-primary/55 bg-primary/5 shadow-md shadow-primary/10"
+                            : "border-border/45 hover:border-primary/35"
                         }`}
                       >
                         {inCart && (
                           <motion.div
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className={`absolute top-2 left-2 min-w-6 h-6 md:min-w-7 md:h-7 px-1 rounded-full flex items-center justify-center text-xs md:text-sm font-bold z-10 shadow-md tabular-nums ${
-                              isReturnMode
-                                ? "bg-rose-500 text-white"
-                                : "bg-primary text-primary-foreground"
-                            }`}
+                            className="absolute top-2 left-2 min-w-6 h-6 md:min-w-7 md:h-7 px-1 rounded-full flex items-center justify-center text-xs md:text-sm font-bold z-10 shadow-md tabular-nums bg-primary text-primary-foreground"
                           >
-                            {isReturnMode ? `-${inCart.cartQuantity}` : inCart.cartQuantity}
+                            {inCart.cartQuantity}
                           </motion.div>
                         )}
                         <div className="aspect-[4/3] rounded-xl bg-gradient-to-br from-secondary/80 to-secondary/40 border border-border/30 flex items-center justify-center mb-2.5 overflow-hidden">
