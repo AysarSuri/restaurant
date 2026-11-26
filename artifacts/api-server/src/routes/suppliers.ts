@@ -24,6 +24,7 @@ import {
   branchEq,
   resolveWriteBranchId,
 } from "../lib/branch-scope";
+import { requireOpenShiftForBranch } from "../lib/require-open-shift";
 
 const router: IRouter = Router();
 
@@ -732,6 +733,10 @@ async function parsePurchaseBody(body: any): Promise<
 router.post("/purchases", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
+  const shiftErrPurchase = await requireOpenShiftForBranch(parsed.branchId);
+  if (shiftErrPurchase) {
+    return res.status(400).json({ message: shiftErrPurchase, error: shiftErrPurchase });
+  }
 
   /** 1) Weighted avg cost BEFORE insert (Q = remaining without this purchase) */
   await applyWeightedCostAdd(
@@ -963,6 +968,10 @@ router.get("/returns", async (_req, res) => {
 router.post("/returns", async (req, res) => {
   const parsed = await parsePurchaseBody(req.body);
   if (!parsed.ok) return res.status(parsed.status).json({ message: parsed.message });
+  const shiftErrReturn = await requireOpenShiftForBranch(parsed.branchId);
+  if (shiftErrReturn) {
+    return res.status(400).json({ message: shiftErrReturn, error: shiftErrReturn });
+  }
 
   /** 3) Return qty: (Q*C - q*p) / (Q - q) before stock decreases */
   await applyWeightedCostRemove(
@@ -1207,6 +1216,13 @@ router.post("/movements", async (req, res) => {
     .where(eq(suppliersTable.id, supplierId))
     .limit(1);
   if (!supplier) return res.status(400).json({ message: "المورد غير موجود" });
+
+  const shiftErrMov = await requireOpenShiftForBranch(
+    payment.branchId ?? supplier.branchId
+  );
+  if (shiftErrMov) {
+    return res.status(400).json({ message: shiftErrMov, error: shiftErrMov });
+  }
 
   const [row] = await db
     .insert(supplierMovementsTable)

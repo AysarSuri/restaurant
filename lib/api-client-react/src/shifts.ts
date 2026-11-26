@@ -228,3 +228,106 @@ export const useDeleteShift = <TError = ErrorType<unknown>, TContext = unknown>(
     mutationFn: ({ id }) => deleteShift(id, requestOptions),
   });
 };
+
+export interface ShiftReportCategory {
+  categoryId: number;
+  name: string;
+  amount: number;
+  qty: number;
+}
+
+export interface ShiftReportLine {
+  id: number;
+  invoiceNo?: string | null;
+  label?: string;
+  amount?: number;
+  notes?: string | null;
+  date?: string | null;
+  time?: string | null;
+  totalAmount?: number;
+  paidAmount?: number;
+  receivedAmount?: number;
+  discountAmount?: number;
+}
+
+export interface ShiftReport {
+  shift: Shift;
+  restaurantName: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
+  branchName: string;
+  branchAddress?: string | null;
+  openedAt: string;
+  closedAt?: string | null;
+  sales: {
+    byCategory: ShiftReportCategory[];
+    total: number;
+    discountTotal: number;
+    receivedTotal: number;
+    invoiceCount: number;
+  };
+  expenses: {
+    total: number;
+    items: ShiftReportLine[];
+  };
+  cashMovements: {
+    show: boolean;
+    withdrawalsTotal: number;
+    returnsTotal: number;
+    withdrawals: ShiftReportLine[];
+    returns: ShiftReportLine[];
+  };
+  suppliers: {
+    show: boolean;
+    purchasesTotal: number;
+    returnsTotal: number;
+    paidTotal: number;
+    receivedTotal: number;
+    discountTotal: number;
+    purchases: ShiftReportLine[];
+    returns: ShiftReportLine[];
+  };
+}
+
+export const getShiftReport = async (
+  id: number,
+  options?: RequestOpts
+): Promise<ShiftReport> => {
+  return customFetch<ShiftReport>(`/api/shifts/${id}/report`, {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetShiftReportQueryKey = (id: number) =>
+  [`/api/shifts/${id}/report`] as const;
+
+export function useGetShiftReport<
+  TData = Awaited<ReturnType<typeof getShiftReport>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number | null | undefined,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof getShiftReport>>, TError, TData>
+    >;
+    request?: RequestOpts;
+  }
+) {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const enabled =
+    id != null &&
+    Number.isFinite(id) &&
+    (queryOptions?.enabled === undefined ? true : Boolean(queryOptions.enabled));
+  const queryKey = queryOptions?.queryKey ?? getGetShiftReportQueryKey(Number(id || 0));
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getShiftReport>>> = ({
+    signal,
+  }) => getShiftReport(Number(id), { signal, ...requestOptions });
+  const query = useQuery({
+    ...queryOptions,
+    queryKey,
+    queryFn,
+    enabled,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}

@@ -9,12 +9,12 @@ import {
   employeesTable,
   appSettingsTable,
   devicePrintersTable,
-  shiftsTable,
 } from "@workspace/db/schema";
-import { eq, desc, and, gte, lte, sql, inArray, isNull } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 import { ensureVaultColumns } from "../lib/ensure-vault-columns";
+import { requireOpenShiftForBranch } from "../lib/require-open-shift";
 import {
   isOrderPaymentReceived,
   syncRestaurantSeatFromOrders,
@@ -345,23 +345,10 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  /** POS / sales: cannot create a new list when the branch shift is closed */
-  const [openShift] = await db
-    .select({ id: shiftsTable.id })
-    .from(shiftsTable)
-    .where(
-      and(
-        eq(shiftsTable.branchId, resolvedBranchId),
-        eq(shiftsTable.isActive, true),
-        isNull(shiftsTable.closedAt)
-      )
-    )
-    .limit(1);
-  if (!openShift) {
-    res.status(400).json({
-      error: "لا يمكن إضافة قائمة — الوردية مقفلة. افتح وردية أولاً.",
-      message: "لا يمكن إضافة قائمة — الوردية مقفلة. افتح وردية أولاً.",
-    });
+  /** Cannot create any sales list without an open shift for this branch */
+  const shiftErr = await requireOpenShiftForBranch(resolvedBranchId);
+  if (shiftErr) {
+    res.status(400).json({ error: shiftErr, message: shiftErr });
     return;
   }
 

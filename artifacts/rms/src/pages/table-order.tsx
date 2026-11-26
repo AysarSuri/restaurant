@@ -5,14 +5,17 @@ import {
   useGetMenuItems,
   useGetMenuCategories,
   useGetTables,
+  useGetShifts,
   useCreateOrder,
   useUpdateOrder,
   useGetOrders,
   getGetOrdersQueryKey,
   getGetTablesQueryKey,
+  getGetShiftsQueryKey,
   type Order,
   type MenuItem,
 } from "@workspace/api-client-react";
+import { toast } from "@/hooks/use-toast";
 import {
   ShoppingCart,
   Search,
@@ -87,6 +90,12 @@ export default function TableOrder() {
   });
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder();
+  const { data: shiftsData, isLoading: shiftsLoading } = useGetShifts({
+    query: {
+      queryKey: [...getGetShiftsQueryKey(), loginBranchId ?? "table-order"],
+      staleTime: 5_000,
+    },
+  });
 
   const [step, setStep] = useState<"menu" | "success">("menu");
   const [activeCategory, setActiveCategory] = useState<number | "favorites" | null>("favorites");
@@ -108,6 +117,24 @@ export default function TableOrder() {
   const seatKind: SeatKind = ((tableInfo?.type as SeatKind) || "table") as SeatKind;
   /** Prefer seat branch; fall back to login branch so table orders stay branch-scoped */
   const branchId = tableInfo?.branchId ?? loginBranchId;
+
+  const openShiftForBranch = useMemo(() => {
+    if (branchId == null) return null;
+    const list = shiftsData ?? [];
+    return (
+      list.find(
+        (s) =>
+          s.branchId === branchId &&
+          (s.isOpen === true || (s.isActive === true && !s.closedAt)) &&
+          !s.closedAt
+      ) ?? null
+    );
+  }, [shiftsData, branchId]);
+
+  const shiftClosed =
+    branchId != null &&
+    !(shiftsLoading && shiftsData == null) &&
+    openShiftForBranch == null;
   const isSaving = isCreating || isUpdating;
 
   const todayOrdersParams = useMemo(
@@ -258,6 +285,13 @@ export default function TableOrder() {
   const handleSubmitOrder = () => {
     if (!tableId || cart.length === 0) return;
     if (branchId == null) return;
+    if (editingOrderId == null && shiftClosed) {
+      toast({
+        title: t("pos.shiftClosedBlock"),
+        variant: "destructive",
+      });
+      return;
+    }
     const lineItems = cart.map((i) => ({
       menuItemId: i.id,
       quantity: i.cartQuantity,
@@ -288,6 +322,15 @@ export default function TableOrder() {
       },
       {
         onSuccess: (order: any) => afterSaveSuccess(order),
+        onError: (err: any) => {
+          toast({
+            title:
+              err?.message ||
+              err?.data?.message ||
+              t("pos.shiftClosedBlock"),
+            variant: "destructive",
+          });
+        },
       }
     );
   };
@@ -407,6 +450,11 @@ export default function TableOrder() {
       </div>
 
       <div className="p-4 border-t border-border/40 space-y-3 bg-card/80 backdrop-blur-sm flex-shrink-0">
+        {shiftClosed && editingOrderId == null ? (
+          <div className="rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-[12px] font-extrabold text-rose-800 dark:text-rose-200 leading-snug">
+            {t("pos.shiftClosedBlock")}
+          </div>
+        ) : null}
         <div className="flex justify-between items-end font-bold">
           <span className="text-primary font-display text-xl tabular-nums">
             {formatIQD(subtotal)} {t("common.iqd")}
@@ -417,7 +465,12 @@ export default function TableOrder() {
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={handleSubmitOrder}
-          disabled={cart.length === 0 || isSaving || !tableId}
+          disabled={
+            cart.length === 0 ||
+            isSaving ||
+            !tableId ||
+            (shiftClosed && editingOrderId == null)
+          }
           className="w-full h-14 rounded-2xl bg-gradient-to-l from-primary via-primary to-amber-500 hover:brightness-105 text-primary-foreground font-extrabold text-base transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-primary/25"
         >
           {isSaving ? (

@@ -1,7 +1,20 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { shiftsTable, branchesTable } from "@workspace/db/schema";
-import { and, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import {
+  shiftsTable,
+  branchesTable,
+  ordersTable,
+  orderItemsTable,
+  menuItemsTable,
+  menuCategoriesTable,
+  expensesTable,
+  cashMovementsTable,
+  supplierPurchasesTable,
+  supplierReturnsTable,
+  supplierMovementsTable,
+  appSettingsTable,
+} from "@workspace/db/schema";
+import { and, desc, eq, gte, isNull, lt, lte, ne, or, isNotNull, sql } from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
@@ -109,6 +122,303 @@ router.get("/", async (req, res) => {
     .orderBy(desc(shiftsTable.openedAt), desc(shiftsTable.createdAt));
 
   res.json(shifts.map((r) => serializeShift(r.shift, r.branchName)));
+});
+
+function money(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+}
+
+/** Closed-shift financial report for thermal / detail view */
+router.get("/:id/report", async (req, res) => {
+  await ensureSalesDeviceColumns();
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ success: false, message: "معرف غير صالح" });
+    return;
+  }
+
+  const [row] = await db
+    .select({
+      shift: shiftsTable,
+      branchName: branchesTable.name,
+      branchLogoUrl: branchesTable.logoUrl,
+      branchAddress: branchesTable.address,
+    })
+    .from(shiftsTable)
+    .leftJoin(branchesTable, eq(shiftsTable.branchId, branchesTable.id))
+    .where(eq(shiftsTable.id, id))
+    .limit(1);
+
+  if (!row) {
+    res.status(404).json({ success: false, message: "الوردية غير موجودة" });
+    return;
+  }
+
+  const shift = serializeShift(row.shift, row.branchName);
+  const openedAt = new Date(shift.openedAt);
+  const closedAt = shift.closedAt ? new Date(shift.closedAt) : new Date();
+  const branchId = shift.branchId;
+
+  const [settings] = await db.select().from(appSettingsTable).limit(1);
+  const restaurantName = settings?.restaurantName?.trim() || "المطعم";
+  const logoUrl = (row.branchLogoUrl || settings?.logoUrl || "").trim() || null;
+  const mobile = settings?.mobile?.trim() || null;
+
+  const orderReceived = and(
+    ne(ordersTable.status, "cancelled"),
+    or(isNotNull(ordersTable.paymentMethod), eq(ordersTable.status, "paid"))
+  );
+  const orderWindow = and(
+    eq(ordersTable.branchId, branchId),
+    gte(ordersTable.createdAt, openedAt),
+    lt(ordersTable.createdAt, closedAt),
+    orderReceived
+  );
+
+  // Sales by category
+  const categoryRows = await db
+    .select({
+      categoryId: menuCategoriesTable.id,
+      categoryName: menuCategoriesTable.nameAr,
+      amount: sql<number>`coalesce(sum(${orderItemsTable.totalPrice}::numeric), 0)`,
+      qty: sql<number>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
+    })
+    .from(orderItemsTable)
+    .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+    .innerJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
+    .innerJoin(
+      menuCategoriesTable,
+      eq(menuItemsTable.categoryId, menuCategoriesTable.id)
+    )
+    .where(orderWindow)
+    .groupBy(menuCategoriesTable.id, menuCategoriesTable.nameAr)
+    .orderBy(sql`sum(${orderItemsTable.totalPrice}::numeric) desc`);
+
+  const salesByCategory = categoryRows.map((r) => ({
+    categoryId: r.categoryId,
+    name: r.categoryName || "—",
+    amount: money(r.amount),
+    qty: Number(r.qty) || 0,
+  }));
+  const salesTotal = money(salesByCategory.reduce((s, r) => s + r.amount, 0));
+
+  const [discountAgg] = await db
+    .select({
+      total: sql<number>`coalesce(sum(${ordersTable.discount}::numeric), 0)`,
+      count: sql<number>`count(*)`,
+    })
+    .from(ordersTable)
+    .where(
+      and(orderWindow, sql`coalesce(${ordersTable.discount}::numeric, 0) > 0`)
+    );
+
+  const [receivedAgg] = await db
+    .select({
+      total: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
+      count: sql<number>`count(*)`,
+    })
+    .from(ordersTable)
+    .where(orderWindow);
+
+  const salesDiscountTotal = money(discountAgg?.total);
+  const salesReceivedTotal = money(receivedAgg?.total);
+  const salesInvoiceCount = Number(receivedAgg?.count) || 0;
+
+  // Expenses
+  const expenseRows = await db
+    .select()
+    .from(expensesTable)
+    .where(
+      and(
+        eq(expensesTable.branchId, branchId),
+        gte(expensesTable.createdAt, openedAt),
+        lt(expensesTable.createdAt, closedAt)
+      )
+    )
+    .orderBy(desc(expensesTable.createdAt));
+
+  const expenses = expenseRows.map((e) => ({
+    id: e.id,
+    invoiceNo: e.invoiceNo,
+    label: e.category || e.descriptionAr || e.description || "مصروف",
+    amount: money(e.amount),
+    date: e.expenseDate || null,
+  }));
+  const expensesTotal = money(expenses.reduce((s, e) => s + e.amount, 0));
+
+  // Cash movements
+  const cashRows = await db
+    .select()
+    .from(cashMovementsTable)
+    .where(
+      and(
+        eq(cashMovementsTable.branchId, branchId),
+        gte(cashMovementsTable.createdAt, openedAt),
+        lt(cashMovementsTable.createdAt, closedAt)
+      )
+    )
+    .orderBy(desc(cashMovementsTable.createdAt));
+
+  const withdrawals = cashRows
+    .filter((m) => m.kind === "withdrawal")
+    .map((m) => ({
+      id: m.id,
+      invoiceNo: m.invoiceNo,
+      amount: money(m.amount),
+      notes: m.notes,
+      date: m.movementDate,
+      time: m.movementTime,
+    }));
+  const cashReturns = cashRows
+    .filter((m) => m.kind === "return")
+    .map((m) => ({
+      id: m.id,
+      invoiceNo: m.invoiceNo,
+      amount: money(m.amount),
+      notes: m.notes,
+      date: m.movementDate,
+      time: m.movementTime,
+    }));
+  const withdrawalsTotal = money(withdrawals.reduce((s, m) => s + m.amount, 0));
+  const cashReturnsTotal = money(cashReturns.reduce((s, m) => s + m.amount, 0));
+  const showCashMovements =
+    Math.abs(withdrawalsTotal) > 0.009 || Math.abs(cashReturnsTotal) > 0.009;
+
+  // Supplier purchases / returns
+  const purchaseRows = await db
+    .select()
+    .from(supplierPurchasesTable)
+    .where(
+      and(
+        eq(supplierPurchasesTable.branchId, branchId),
+        gte(supplierPurchasesTable.createdAt, openedAt),
+        lt(supplierPurchasesTable.createdAt, closedAt)
+      )
+    )
+    .orderBy(desc(supplierPurchasesTable.createdAt));
+
+  const returnRows = await db
+    .select()
+    .from(supplierReturnsTable)
+    .where(
+      and(
+        eq(supplierReturnsTable.branchId, branchId),
+        gte(supplierReturnsTable.createdAt, openedAt),
+        lt(supplierReturnsTable.createdAt, closedAt)
+      )
+    )
+    .orderBy(desc(supplierReturnsTable.createdAt));
+
+  const purchases = purchaseRows.map((p) => ({
+    id: p.id,
+    invoiceNo: p.invoiceNo,
+    totalAmount: money(p.totalAmount),
+    paidAmount: money(p.paidAmount),
+    discountAmount: money(p.discountAmount),
+    date: p.invoiceDate,
+  }));
+  const supplierReturns = returnRows.map((r) => ({
+    id: r.id,
+    invoiceNo: r.invoiceNo,
+    totalAmount: money(r.totalAmount),
+    receivedAmount: money(r.paidAmount),
+    discountAmount: money(r.discountAmount),
+    date: r.invoiceDate,
+  }));
+
+  const purchasesTotal = money(purchases.reduce((s, p) => s + p.totalAmount, 0));
+  const purchasesPaidTotal = money(purchases.reduce((s, p) => s + p.paidAmount, 0));
+  const purchasesDiscountTotal = money(
+    purchases.reduce((s, p) => s + p.discountAmount, 0)
+  );
+  const returnsTotal = money(
+    supplierReturns.reduce((s, r) => s + r.totalAmount, 0)
+  );
+  const returnsReceivedTotal = money(
+    supplierReturns.reduce((s, r) => s + r.receivedAmount, 0)
+  );
+  const returnsDiscountTotal = money(
+    supplierReturns.reduce((s, r) => s + r.discountAmount, 0)
+  );
+
+  // Supplier movements paid / received
+  const movRows = await db
+    .select()
+    .from(supplierMovementsTable)
+    .where(
+      and(
+        eq(supplierMovementsTable.branchId, branchId),
+        gte(supplierMovementsTable.createdAt, openedAt),
+        lt(supplierMovementsTable.createdAt, closedAt)
+      )
+    );
+
+  const supplierPaidExtra = money(
+    movRows
+      .filter((m) => m.amountType === "paid")
+      .reduce((s, m) => s + Number(m.amount || 0), 0)
+  );
+  const supplierReceivedExtra = money(
+    movRows
+      .filter((m) => m.amountType === "received")
+      .reduce((s, m) => s + Number(m.amount || 0), 0)
+  );
+  const supplierDiscountExtra = money(
+    movRows
+      .filter((m) => m.amountType === "discount")
+      .reduce((s, m) => s + Number(m.amount || 0), 0)
+  );
+
+  const supplierPaidTotal = money(purchasesPaidTotal + supplierPaidExtra);
+  const supplierReceivedTotal = money(
+    returnsReceivedTotal + supplierReceivedExtra
+  );
+  const supplierDiscountTotal = money(
+    purchasesDiscountTotal + returnsDiscountTotal + supplierDiscountExtra
+  );
+
+  const showSuppliers =
+    Math.abs(purchasesTotal) > 0.009 || Math.abs(returnsTotal) > 0.009;
+
+  res.json({
+    shift,
+    restaurantName,
+    logoUrl,
+    mobile,
+    branchName: row.branchName || shift.branchName || "—",
+    branchAddress: row.branchAddress || null,
+    openedAt: shift.openedAt,
+    closedAt: shift.closedAt,
+    sales: {
+      byCategory: salesByCategory,
+      total: salesTotal,
+      discountTotal: salesDiscountTotal,
+      receivedTotal: salesReceivedTotal,
+      invoiceCount: salesInvoiceCount,
+    },
+    expenses: {
+      total: expensesTotal,
+      items: expenses,
+    },
+    cashMovements: {
+      show: showCashMovements,
+      withdrawalsTotal,
+      returnsTotal: cashReturnsTotal,
+      withdrawals,
+      returns: cashReturns,
+    },
+    suppliers: {
+      show: showSuppliers,
+      purchasesTotal,
+      returnsTotal,
+      paidTotal: supplierPaidTotal,
+      receivedTotal: supplierReceivedTotal,
+      discountTotal: supplierDiscountTotal,
+      purchases,
+      returns: supplierReturns,
+    },
+  });
 });
 
 router.get("/:id", async (req, res) => {

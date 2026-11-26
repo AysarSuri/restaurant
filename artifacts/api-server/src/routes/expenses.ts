@@ -8,6 +8,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
+import { requireOpenShiftForBranch } from "../lib/require-open-shift";
 
 const router: IRouter = Router();
 
@@ -324,6 +325,8 @@ router.post("/", async (req, res) => {
   if (!resolvedBranchId) {
     return res.status(400).json({ message: "اختر فرعاً قبل إضافة مصروف" });
   }
+  const shiftErr = await requireOpenShiftForBranch(resolvedBranchId);
+  if (shiftErr) return res.status(400).json({ message: shiftErr, error: shiftErr });
 
   if (!invoiceNo) invoiceNo = await nextExpenseInvoiceNo();
 

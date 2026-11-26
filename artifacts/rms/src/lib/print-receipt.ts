@@ -2853,3 +2853,263 @@ export function printVaultReportThermal(data: VaultReportData) {
   URL.revokeObjectURL(url);
   openPrintHtmlDocument(html, "rms-vault-thermal-iframe");
 }
+
+export type ShiftThermalReportData = {
+  restaurantName: string;
+  logoUrl?: string | null;
+  mobile?: string | null;
+  branchName: string;
+  branchAddress?: string | null;
+  shiftKindLabel: string;
+  openedAtLabel: string;
+  closedAtLabel: string;
+  sales: {
+    byCategory: { name: string; amount: number }[];
+    total: number;
+    discountTotal: number;
+    receivedTotal: number;
+  };
+  expenses: {
+    total: number;
+    items: { label: string; amount: number; invoiceNo?: string | null }[];
+  };
+  cashMovements: {
+    show: boolean;
+    withdrawalsTotal: number;
+    returnsTotal: number;
+    withdrawals: { invoiceNo?: string | null; amount: number; notes?: string | null }[];
+    returns: { invoiceNo?: string | null; amount: number; notes?: string | null }[];
+  };
+  suppliers: {
+    show: boolean;
+    purchasesTotal: number;
+    returnsTotal: number;
+    paidTotal: number;
+    receivedTotal: number;
+    discountTotal: number;
+    purchases: { invoiceNo?: string | null; totalAmount: number }[];
+    returns: { invoiceNo?: string | null; totalAmount: number }[];
+  };
+  formatMoney: (n: number) => string;
+};
+
+function buildShiftThermalHtml(data: ShiftThermalReportData) {
+  const money = (n: number) => esc(data.formatMoney(n));
+  const logoSrc = (data.logoUrl?.trim() || "").replace(/"/g, "");
+  const logo = logoSrc
+    ? `<img class="logo" src="${logoSrc}" alt="" />`
+    : "";
+  const phone = data.mobile?.trim() || "";
+
+  const catRows = data.sales.byCategory
+    .map(
+      (c) => `<div class="line">
+        <span>${esc(c.name)}</span>
+        <b dir="ltr">${money(c.amount)}</b>
+      </div>`
+    )
+    .join("");
+
+  const expenseRows = data.expenses.items
+    .map(
+      (e) => `<div class="detail">
+        <div class="detail-top">
+          <span>${esc(e.label || "مصروف")}</span>
+          <b dir="ltr">${money(e.amount)}</b>
+        </div>
+        ${e.invoiceNo ? `<div class="muted">#${esc(e.invoiceNo)}</div>` : ""}
+      </div>`
+    )
+    .join("");
+
+  const cashBlock = data.cashMovements.show
+    ? `<div class="sec">سحوبات ومرجوعات</div>
+      <div class="sum-box">
+        <div class="line"><span>مجموع السحوبات</span><b dir="ltr">${money(data.cashMovements.withdrawalsTotal)}</b></div>
+        <div class="line"><span>مجموع المرجوعات</span><b dir="ltr">${money(data.cashMovements.returnsTotal)}</b></div>
+      </div>
+      ${
+        data.cashMovements.withdrawals.length
+          ? `<div class="subhead">تفاصيل السحوبات</div>${data.cashMovements.withdrawals
+              .map(
+                (w) => `<div class="detail">
+            <div class="detail-top">
+              <span>${esc(w.invoiceNo ? `#${w.invoiceNo}` : "سحب")}</span>
+              <b dir="ltr">${money(w.amount)}</b>
+            </div>
+            ${w.notes ? `<div class="muted">${esc(w.notes)}</div>` : ""}
+          </div>`
+              )
+              .join("")}`
+          : ""
+      }
+      ${
+        data.cashMovements.returns.length
+          ? `<div class="subhead">تفاصيل المرجوعات</div>${data.cashMovements.returns
+              .map(
+                (w) => `<div class="detail">
+            <div class="detail-top">
+              <span>${esc(w.invoiceNo ? `#${w.invoiceNo}` : "مرجوع")}</span>
+              <b dir="ltr">${money(w.amount)}</b>
+            </div>
+            ${w.notes ? `<div class="muted">${esc(w.notes)}</div>` : ""}
+          </div>`
+              )
+              .join("")}`
+          : ""
+      }`
+    : "";
+
+  const supplierBlock = data.suppliers.show
+    ? `<div class="sec">الموردون</div>
+      <div class="sum-box">
+        <div class="line"><span>مجموع الشراء</span><b dir="ltr">${money(data.suppliers.purchasesTotal)}</b></div>
+        <div class="line"><span>مجموع مرجوعات الشراء</span><b dir="ltr">${money(data.suppliers.returnsTotal)}</b></div>
+        <div class="line"><span>مبلغ الدفع</span><b dir="ltr">${money(data.suppliers.paidTotal)}</b></div>
+        <div class="line"><span>مبلغ الواصل</span><b dir="ltr">${money(data.suppliers.receivedTotal)}</b></div>
+        <div class="line"><span>خصومات الموردين</span><b dir="ltr">${money(data.suppliers.discountTotal)}</b></div>
+      </div>
+      ${
+        data.suppliers.purchases.length
+          ? `<div class="subhead">تفاصيل الشراء</div>${data.suppliers.purchases
+              .map(
+                (p) => `<div class="detail">
+            <div class="detail-top">
+              <span>${esc(p.invoiceNo ? `#${p.invoiceNo}` : "شراء")}</span>
+              <b dir="ltr">${money(p.totalAmount)}</b>
+            </div>
+          </div>`
+              )
+              .join("")}`
+          : ""
+      }
+      ${
+        data.suppliers.returns.length
+          ? `<div class="subhead">تفاصيل مرجوعات الموردين</div>${data.suppliers.returns
+              .map(
+                (p) => `<div class="detail">
+            <div class="detail-top">
+              <span>${esc(p.invoiceNo ? `#${p.invoiceNo}` : "مرجوع")}</span>
+              <b dir="ltr">${money(p.totalAmount)}</b>
+            </div>
+          </div>`
+              )
+              .join("")}`
+          : ""
+      }`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>تقرير وردية</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: #fff; color: #000;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  body {
+    width: 72mm; margin: 0 auto; padding: 2.5mm 2mm 4mm;
+    font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
+    font-size: 12px; font-weight: 700; line-height: 1.4;
+  }
+  .logo {
+    display: block; width: 38px; height: 38px; object-fit: contain;
+    margin: 0 auto 5px; filter: grayscale(1) contrast(1.12);
+  }
+  .brand {
+    text-align: center; font-size: 15px; font-weight: 800; margin: 0 0 2px; line-height: 1.25;
+  }
+  .kicker {
+    text-align: center; margin: 4px 0 2px; font-size: 12px; font-weight: 800;
+    letter-spacing: 0.03em;
+  }
+  .sub { text-align: center; font-size: 11px; margin: 1px 0; font-weight: 700; }
+  .meta {
+    margin: 7px 0 8px; border: 1.5px solid #111; border-radius: 6px; padding: 6px 7px;
+  }
+  .meta div {
+    display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; font-size: 12px; font-weight: 700;
+  }
+  .meta b { font-weight: 800; }
+  .sec {
+    text-align: center; font-size: 12px; font-weight: 800; margin: 9px 0 5px;
+    border-top: 1.5px dashed #000; border-bottom: 1.5px dashed #000; padding: 4px 0;
+  }
+  .subhead {
+    font-size: 11px; font-weight: 800; margin: 6px 0 3px; opacity: 0.92;
+  }
+  .line {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    margin: 2px 0; font-size: 12px; font-weight: 700;
+  }
+  .line b { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sum-box {
+    border: 1px solid #111; border-radius: 5px; padding: 5px 6px; margin: 4px 0 6px;
+  }
+  .grand {
+    display: flex; justify-content: space-between; gap: 8px;
+    margin-top: 4px; padding-top: 4px; border-top: 1px solid #111;
+    font-size: 12px; font-weight: 800;
+  }
+  .detail {
+    margin: 4px 0; padding-bottom: 3px; border-bottom: 1px dotted #999;
+  }
+  .detail-top {
+    display: flex; justify-content: space-between; gap: 6px; font-weight: 700;
+  }
+  .detail-top b { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .muted { font-size: 11px; opacity: 0.8; margin-top: 1px; font-weight: 700; }
+  .footer {
+    text-align: center; margin-top: 9px; padding-top: 5px;
+    border-top: 1.5px dashed #000; font-size: 11px; font-weight: 700;
+  }
+</style>
+</head>
+<body>
+  ${logo}
+  <p class="brand">${esc(data.restaurantName)}</p>
+  <div class="kicker">تقرير الوردية</div>
+  ${phone ? `<div class="sub" dir="ltr">${esc(phone)}</div>` : ""}
+  ${data.branchAddress?.trim() ? `<div class="sub">${esc(data.branchAddress.trim())}</div>` : ""}
+
+  <div class="meta">
+    <div><span>الفرع</span><b>${esc(data.branchName)}</b></div>
+    <div><span>الوردية</span><b>${esc(data.shiftKindLabel)}</b></div>
+    <div><span>الافتتاح</span><b dir="ltr">${esc(data.openedAtLabel)}</b></div>
+    <div><span>الإغلاق</span><b dir="ltr">${esc(data.closedAtLabel)}</b></div>
+  </div>
+
+  <div class="sec">المبيعات حسب الفئة</div>
+  ${catRows || `<div class="sub">لا مبيعات</div>`}
+  <div class="sum-box">
+    <div class="line"><span>مجموع المبيعات</span><b dir="ltr">${money(data.sales.total)}</b></div>
+    <div class="line"><span>خصومات المبيعات</span><b dir="ltr">${money(data.sales.discountTotal)}</b></div>
+    <div class="grand"><span>الواصل من المبيعات</span><span dir="ltr">${money(data.sales.receivedTotal)}</span></div>
+  </div>
+
+  <div class="sec">المصاريف</div>
+  <div class="sum-box">
+    <div class="line"><span>مجموع المصاريف</span><b dir="ltr">${money(data.expenses.total)}</b></div>
+  </div>
+  ${expenseRows ? `<div class="subhead">تفاصيل المصاريف</div>${expenseRows}` : ""}
+
+  ${cashBlock}
+  ${supplierBlock}
+
+  <div class="footer">تقرير وردية · حراري</div>
+</body>
+</html>`;
+}
+
+/** Professional closed-shift financial report for 80mm thermal paper (12px bold). */
+export function printShiftReportThermal(data: ShiftThermalReportData) {
+  openThermalHtmlDocument(
+    buildShiftThermalHtml(data),
+    "rms-shift-thermal",
+    "تقرير وردية 80×80"
+  );
+}

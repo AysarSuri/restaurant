@@ -7,8 +7,10 @@ import {
   useDeleteShift,
   useGetBranches,
   getGetShiftsQueryKey,
+  getShiftReport,
   type Shift,
   type ShiftKind,
+  type ShiftReport,
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog, Card } from "@/components/ui-elements";
 import { ModernCombobox, type ComboboxOption } from "@/components/modern-combobox";
@@ -16,11 +18,12 @@ import { LockedBranchField } from "@/components/locked-branch-field";
 import { YmdDateInput } from "@/components/ymd-date-input";
 import { useScopedBranch } from "@/hooks/use-scoped-branch";
 import { useBranch } from "@/lib/branch-context";
+import { useCurrency } from "@/hooks/use-currency";
 import { useI18n } from "@/i18n";
+import { printShiftReportThermal } from "@/lib/print-receipt";
 import {
   Plus,
   Trash2,
-  Search,
   Clock3,
   Building2,
   SunMedium,
@@ -28,6 +31,9 @@ import {
   Lock,
   Unlock,
   AlertTriangle,
+  FileText,
+  Printer,
+  Eye,
 } from "lucide-react";
 
 const KIND_META: Record<
@@ -67,7 +73,6 @@ function formatDateTime(iso: string | null | undefined) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  // Always Latin (English) digits for shift open/close timestamps
   return new Intl.DateTimeFormat("en-GB", {
     numberingSystem: "latn",
     year: "numeric",
@@ -79,8 +84,29 @@ function formatDateTime(iso: string | null | undefined) {
   }).format(d);
 }
 
+function moneyRow(label: string, value: string, emphasize = false) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 py-1.5 ${
+        emphasize ? "border-t border-border/60 pt-2 mt-1" : ""
+      }`}
+    >
+      <span className={`text-sm ${emphasize ? "font-extrabold" : "font-bold text-muted-foreground"}`}>
+        {label}
+      </span>
+      <span
+        className={`tabular-nums text-sm font-extrabold ${emphasize ? "text-base" : ""}`}
+        dir="ltr"
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function ShiftsPage() {
   const { t } = useI18n();
+  const { format: fmtMoney } = useCurrency();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
   const { locked, forcedBranchId, filterOptions } = useScopedBranch();
@@ -90,10 +116,17 @@ export default function ShiftsPage() {
   const { mutate: closeShift, isPending: isClosing } = useCloseShift();
   const { mutate: deleteShift, isPending: isDeleting } = useDeleteShift();
 
-  const [search, setSearch] = useState("");
+  const [filterFrom, setFilterFrom] = useState(todayYmd);
+  const [filterTo, setFilterTo] = useState(todayYmd);
+  const [filterKind, setFilterKind] = useState<ShiftKind | "all">("all");
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
   const [closeTarget, setCloseTarget] = useState<Shift | null>(null);
+  const [detailShift, setDetailShift] = useState<Shift | null>(null);
+  const [report, setReport] = useState<ShiftReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [printingId, setPrintingId] = useState<number | null>(null);
   const [kind, setKind] = useState<ShiftKind | "">("morning");
   const [branchId, setBranchId] = useState<number | "">("");
   const [openDate, setOpenDate] = useState(todayYmd);
@@ -130,29 +163,28 @@ export default function ShiftsPage() {
       selectedBranchId === "all"
         ? list
         : list.filter((s) => s.branchId === selectedBranchId);
-    const q = search.trim().toLowerCase();
-    if (!q) return scoped;
-    return scoped.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.branchName ?? "").toLowerCase().includes(q) ||
-        s.openDate.includes(q) ||
-        s.kind.includes(q)
-    );
-  }, [shifts, selectedBranchId, search]);
+
+    const from = filterFrom || todayYmd();
+    const to = filterTo || todayYmd();
+    const byDate = scoped.filter((s) => {
+      const od = s.openDate || "";
+      return od >= from && od <= to;
+    });
+
+    return filterKind === "all"
+      ? byDate
+      : byDate.filter((s) => s.kind === filterKind);
+  }, [shifts, selectedBranchId, filterFrom, filterTo, filterKind]);
 
   const stats = useMemo(() => {
-    const list =
-      selectedBranchId === "all"
-        ? shifts ?? []
-        : (shifts ?? []).filter((s) => s.branchId === selectedBranchId);
+    const list = filtered;
     return {
       total: list.length,
       open: list.filter((s) => s.isOpen).length,
       morning: list.filter((s) => s.kind === "morning").length,
       evening: list.filter((s) => s.kind === "evening").length,
     };
-  }, [shifts, selectedBranchId]);
+  }, [filtered]);
 
   const openAdd = () => {
     const defaultBranch =
@@ -172,9 +204,9 @@ export default function ShiftsPage() {
 
   const openShiftForBranch = useMemo(() => {
     if (branchId === "" || !Number(branchId)) return null;
-    return (shifts ?? []).find(
-      (s) => s.branchId === Number(branchId) && s.isOpen
-    ) ?? null;
+    return (
+      (shifts ?? []).find((s) => s.branchId === Number(branchId) && s.isOpen) ?? null
+    );
   }, [shifts, branchId]);
 
   const handleOpenShift = () => {
@@ -248,6 +280,102 @@ export default function ShiftsPage() {
     );
   };
 
+  const toPrintPayload = (data: ShiftReport) => ({
+    restaurantName: data.restaurantName,
+    logoUrl: data.logoUrl,
+    mobile: data.mobile,
+    branchName: data.branchName,
+    branchAddress: data.branchAddress,
+    shiftKindLabel: t(KIND_META[data.shift.kind].labelKey),
+    openedAtLabel: formatDateTime(data.openedAt),
+    closedAtLabel: data.closedAt ? formatDateTime(data.closedAt) : "—",
+    sales: {
+      byCategory: data.sales.byCategory.map((c) => ({
+        name: c.name,
+        amount: c.amount,
+      })),
+      total: data.sales.total,
+      discountTotal: data.sales.discountTotal,
+      receivedTotal: data.sales.receivedTotal,
+    },
+    expenses: {
+      total: data.expenses.total,
+      items: data.expenses.items.map((e) => ({
+        label: e.label || "مصروف",
+        amount: e.amount ?? 0,
+        invoiceNo: e.invoiceNo,
+      })),
+    },
+    cashMovements: {
+      show: data.cashMovements.show,
+      withdrawalsTotal: data.cashMovements.withdrawalsTotal,
+      returnsTotal: data.cashMovements.returnsTotal,
+      withdrawals: data.cashMovements.withdrawals.map((w) => ({
+        invoiceNo: w.invoiceNo,
+        amount: w.amount ?? 0,
+        notes: w.notes,
+      })),
+      returns: data.cashMovements.returns.map((w) => ({
+        invoiceNo: w.invoiceNo,
+        amount: w.amount ?? 0,
+        notes: w.notes,
+      })),
+    },
+    suppliers: {
+      show: data.suppliers.show,
+      purchasesTotal: data.suppliers.purchasesTotal,
+      returnsTotal: data.suppliers.returnsTotal,
+      paidTotal: data.suppliers.paidTotal,
+      receivedTotal: data.suppliers.receivedTotal,
+      discountTotal: data.suppliers.discountTotal,
+      purchases: data.suppliers.purchases.map((p) => ({
+        invoiceNo: p.invoiceNo,
+        totalAmount: p.totalAmount ?? 0,
+      })),
+      returns: data.suppliers.returns.map((p) => ({
+        invoiceNo: p.invoiceNo,
+        totalAmount: p.totalAmount ?? 0,
+      })),
+    },
+    formatMoney: fmtMoney,
+  });
+
+  const loadReport = async (shift: Shift) => {
+    setReportLoading(true);
+    setReportError("");
+    try {
+      const data = await getShiftReport(shift.id);
+      setReport(data);
+      return data;
+    } catch (err: any) {
+      setReportError(err?.data?.message || err?.message || t("shifts.reportFailed"));
+      setReport(null);
+      return null;
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const openDetails = async (shift: Shift) => {
+    setDetailShift(shift);
+    setReport(null);
+    await loadReport(shift);
+  };
+
+  const printReport = async (shift: Shift) => {
+    setPrintingId(shift.id);
+    try {
+      const data =
+        detailShift?.id === shift.id && report ? report : await getShiftReport(shift.id);
+      if (!data) return;
+      printShiftReportThermal(toPrintPayload(data));
+    } catch (err: any) {
+      setReportError(err?.data?.message || err?.message || t("shifts.reportFailed"));
+    } finally {
+      setPrintingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-8">
       <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-l from-sky-500/15 via-card to-card p-5 sm:p-7">
@@ -299,14 +427,62 @@ export default function ShiftsPage() {
         ))}
       </div>
 
-      <div className="relative">
-        <Search className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("shifts.searchSimple")}
-          className="ps-10 h-12 rounded-2xl"
-        />
+      <div className="rounded-3xl border border-border/60 bg-card/80 p-4 sm:p-5 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground mb-1.5">
+              {t("expenses.fromDate")}
+            </p>
+            <YmdDateInput
+              value={filterFrom}
+              onChange={setFilterFrom}
+              className="h-11 rounded-xl"
+            />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-muted-foreground mb-1.5">
+              {t("expenses.toDate")}
+            </p>
+            <YmdDateInput
+              value={filterTo}
+              onChange={setFilterTo}
+              className="h-11 rounded-xl"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <p className="text-[11px] font-bold text-muted-foreground mb-1.5">
+              {t("shifts.filterKind")}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { id: "all" as const, label: t("common.all") },
+                  { id: "morning" as const, label: t("shifts.kindMorning") },
+                  { id: "evening" as const, label: t("shifts.kindEvening") },
+                ] as const
+              ).map((opt) => {
+                const selected = filterKind === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setFilterKind(opt.id)}
+                    className={`h-11 rounded-xl border-2 text-sm font-extrabold touch-manipulation transition-all ${
+                      selected
+                        ? "border-sky-500 bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                        : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-border"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <p className="text-[11px] font-semibold text-muted-foreground">
+          {t("shifts.filterByOpenDateHint")}
+        </p>
       </div>
 
       {isLoading ? (
@@ -324,37 +500,67 @@ export default function ShiftsPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map((shift) => {
-            const meta = KIND_META[shift.kind] ?? KIND_META.morning;
-            const Icon = meta.icon;
-            const color = shift.color || meta.color;
-            return (
-              <article
-                key={shift.id}
-                className="group relative overflow-hidden rounded-3xl border border-border/60 bg-card/90 p-5 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.45)]"
-              >
-                <div
-                  className="absolute inset-y-0 start-0 w-1.5"
-                  style={{ backgroundColor: color }}
-                />
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex items-start gap-3">
-                    <span
-                      className="h-11 w-11 rounded-2xl flex items-center justify-center flex-shrink-0 border"
-                      style={{
-                        backgroundColor: `${color}22`,
-                        color,
-                        borderColor: `${color}55`,
-                      }}
+        <div className="rounded-2xl border border-border/60 bg-card/90 overflow-hidden shadow-[0_18px_40px_-28px_rgba(0,0,0,0.35)]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-[13px] border-collapse">
+              <thead>
+                <tr className="bg-secondary/55 border-b border-border/60">
+                  <th className="px-3 py-3.5 text-start font-extrabold whitespace-nowrap">
+                    {t("shifts.kind")}
+                  </th>
+                  <th className="px-3 py-3.5 text-start font-extrabold whitespace-nowrap">
+                    {t("common.branch")}
+                  </th>
+                  <th className="px-3 py-3.5 text-start font-extrabold whitespace-nowrap">
+                    {t("shifts.status")}
+                  </th>
+                  <th className="px-3 py-3.5 text-start font-extrabold whitespace-nowrap">
+                    {t("shifts.openedAt")}
+                  </th>
+                  <th className="px-3 py-3.5 text-start font-extrabold whitespace-nowrap">
+                    {t("shifts.closedAt")}
+                  </th>
+                  <th className="px-3 py-3.5 text-start font-extrabold whitespace-nowrap min-w-[22rem]">
+                    {t("common.actions")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((shift, idx) => {
+                  const meta = KIND_META[shift.kind] ?? KIND_META.morning;
+                  const Icon = meta.icon;
+                  const color = shift.color || meta.color;
+                  return (
+                    <tr
+                      key={shift.id}
+                      className={`border-b border-border/40 last:border-b-0 hover:bg-sky-500/[0.06] transition-colors ${
+                        idx % 2 === 1 ? "bg-secondary/20" : "bg-transparent"
+                      }`}
                     >
-                      <Icon className="w-5 h-5" />
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-extrabold truncate">
-                          {t(meta.labelKey)}
-                        </h2>
+                      <td className="px-3 py-2.5 align-middle">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 border"
+                            style={{
+                              backgroundColor: `${color}22`,
+                              color,
+                              borderColor: `${color}55`,
+                            }}
+                          >
+                            <Icon className="w-5 h-5" />
+                          </span>
+                          <span className="font-extrabold text-[15px] whitespace-nowrap">
+                            {t(meta.labelKey)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
+                        <span className="inline-flex items-center gap-1.5 font-bold text-sm whitespace-nowrap">
+                          <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                          {shift.branchName || t("branch.noneSpecified")}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
                         <Badge
                           className={
                             shift.isOpen
@@ -364,59 +570,74 @@ export default function ShiftsPage() {
                         >
                           {shift.isOpen ? t("shifts.statusOpen") : t("shifts.statusClosed")}
                         </Badge>
-                      </div>
-                      <p className="mt-1.5 text-sm text-muted-foreground flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5" />
-                        {shift.branchName || t("branch.noneSpecified")}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-3.5 flex-shrink-0">
-                    {shift.isOpen ? (
-                      <button
-                        type="button"
-                        onClick={() => setCloseTarget(shift)}
-                        className="h-11 min-w-[5.75rem] sm:min-w-[6.5rem] px-4 rounded-xl border border-amber-500/35 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 flex items-center justify-center gap-2 text-sm font-extrabold touch-manipulation"
-                      >
-                        <Lock className="w-4 h-4" />
-                        {t("shifts.close")}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(shift)}
-                      className="h-11 min-w-[5.75rem] sm:min-w-[6.5rem] px-4 rounded-xl border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 flex items-center justify-center gap-2 text-sm font-extrabold touch-manipulation"
-                      aria-label={t("common.delete")}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {t("common.delete")}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="rounded-2xl bg-secondary/45 px-3 py-2.5">
-                    <p className="text-[10px] font-bold text-muted-foreground">
-                      {t("shifts.openedAt")}
-                    </p>
-                    <p className="font-display font-extrabold tabular-nums text-sm mt-0.5" dir="ltr">
-                      {formatDateTime(shift.openedAt)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-secondary/45 px-3 py-2.5">
-                    <p className="text-[10px] font-bold text-muted-foreground">
-                      {t("shifts.closedAt")}
-                    </p>
-                    <p className="font-display font-extrabold tabular-nums text-sm mt-0.5" dir="ltr">
-                      {shift.closedAt
-                        ? formatDateTime(shift.closedAt)
-                        : t("shifts.stillOpen")}
-                    </p>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
+                        <span
+                          className="font-display font-extrabold tabular-nums text-sm whitespace-nowrap"
+                          dir="ltr"
+                        >
+                          {formatDateTime(shift.openedAt)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
+                        <span
+                          className="font-display font-extrabold tabular-nums text-sm whitespace-nowrap"
+                          dir="ltr"
+                        >
+                          {shift.closedAt
+                            ? formatDateTime(shift.closedAt)
+                            : t("shifts.stillOpen")}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
+                        <div className="flex items-center gap-2 flex-nowrap">
+                          {!shift.isOpen ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void openDetails(shift)}
+                                className="h-12 min-w-[6.75rem] px-3 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20 flex items-center justify-center gap-1.5 text-sm font-extrabold touch-manipulation active:scale-[0.98]"
+                              >
+                                <Eye className="w-4 h-4" />
+                                {t("shifts.showDetails")}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={printingId === shift.id}
+                                onClick={() => void printReport(shift)}
+                                className="h-12 min-w-[6.75rem] px-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 flex items-center justify-center gap-1.5 text-sm font-extrabold touch-manipulation active:scale-[0.98] disabled:opacity-60"
+                              >
+                                <Printer className="w-4 h-4" />
+                                {t("shifts.printReport")}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setCloseTarget(shift)}
+                              className="h-12 min-w-[6.75rem] px-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 flex items-center justify-center gap-1.5 text-sm font-extrabold touch-manipulation active:scale-[0.98]"
+                            >
+                              <Lock className="w-4 h-4" />
+                              {t("shifts.close")}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(shift)}
+                            className="h-12 min-w-[5.5rem] px-3 rounded-xl border border-rose-500/35 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 flex items-center justify-center gap-1.5 text-sm font-extrabold touch-manipulation active:scale-[0.98]"
+                            aria-label={t("common.delete")}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            {t("common.delete")}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -656,6 +877,235 @@ export default function ShiftsPage() {
               {t("common.delete")}
             </Button>
           </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={Boolean(detailShift)}
+        onClose={() => {
+          setDetailShift(null);
+          setReport(null);
+          setReportError("");
+        }}
+        title={t("shifts.reportTitle")}
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4 max-h-[75vh] overflow-y-auto pe-1">
+          {reportLoading ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              {t("common.loading")}
+            </p>
+          ) : reportError ? (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-bold">
+              {reportError}
+            </div>
+          ) : report ? (
+            <>
+              <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-secondary/50 to-card p-4">
+                <div className="flex items-start gap-3">
+                  {report.logoUrl ? (
+                    <img
+                      src={report.logoUrl}
+                      alt=""
+                      className="h-14 w-14 rounded-xl object-contain border border-border/50 bg-white"
+                    />
+                  ) : (
+                    <span className="h-14 w-14 rounded-xl bg-sky-500/15 text-sky-600 flex items-center justify-center border border-sky-500/25">
+                      <FileText className="w-6 h-6" />
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-lg font-extrabold leading-tight">
+                      {report.restaurantName}
+                    </p>
+                    <p className="text-sm font-bold text-muted-foreground mt-0.5">
+                      {report.branchName}
+                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground mt-1">
+                      {t(KIND_META[report.shift.kind].labelKey)} ·{" "}
+                      <span dir="ltr">{formatDateTime(report.openedAt)}</span>
+                      {" → "}
+                      <span dir="ltr">
+                        {report.closedAt ? formatDateTime(report.closedAt) : "—"}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <section className="rounded-2xl border border-border/60 p-4">
+                <h3 className="text-sm font-extrabold mb-2 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                  {t("shifts.salesByCategory")}
+                </h3>
+                {report.sales.byCategory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("shifts.noSales")}</p>
+                ) : (
+                  <div className="space-y-1">
+                    {report.sales.byCategory.map((c) => (
+                      <div key={c.categoryId} className="flex justify-between gap-3 text-sm">
+                        <span className="font-bold">{c.name}</span>
+                        <span className="font-extrabold tabular-nums" dir="ltr">
+                          {fmtMoney(c.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3 rounded-xl bg-secondary/50 px-3 py-2">
+                  {moneyRow(t("shifts.salesTotal"), fmtMoney(report.sales.total))}
+                  {moneyRow(
+                    t("shifts.salesDiscounts"),
+                    fmtMoney(report.sales.discountTotal)
+                  )}
+                  {moneyRow(
+                    t("shifts.salesReceived"),
+                    fmtMoney(report.sales.receivedTotal),
+                    true
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-border/60 p-4">
+                <h3 className="text-sm font-extrabold mb-2">{t("shifts.expensesSection")}</h3>
+                {moneyRow(t("shifts.expensesTotal"), fmtMoney(report.expenses.total), true)}
+                {report.expenses.items.length > 0 ? (
+                  <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
+                    {report.expenses.items.map((e) => (
+                      <div key={e.id} className="flex justify-between gap-3 text-sm">
+                        <span className="font-bold text-muted-foreground">
+                          {e.label}
+                          {e.invoiceNo ? ` · #${e.invoiceNo}` : ""}
+                        </span>
+                        <span className="font-extrabold tabular-nums" dir="ltr">
+                          {fmtMoney(e.amount ?? 0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+
+              {report.cashMovements.show ? (
+                <section className="rounded-2xl border border-border/60 p-4">
+                  <h3 className="text-sm font-extrabold mb-2">
+                    {t("shifts.cashMovementsSection")}
+                  </h3>
+                  {moneyRow(
+                    t("shifts.withdrawalsTotal"),
+                    fmtMoney(report.cashMovements.withdrawalsTotal)
+                  )}
+                  {moneyRow(
+                    t("shifts.cashReturnsTotal"),
+                    fmtMoney(report.cashMovements.returnsTotal)
+                  )}
+                  {report.cashMovements.withdrawals.length > 0 ? (
+                    <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+                      <p className="text-xs font-extrabold text-muted-foreground mb-1">
+                        {t("shifts.withdrawalsDetails")}
+                      </p>
+                      {report.cashMovements.withdrawals.map((w) => (
+                        <div key={w.id} className="flex justify-between gap-3 text-sm">
+                          <span className="font-bold">
+                            {w.invoiceNo ? `#${w.invoiceNo}` : t("shifts.withdrawal")}
+                          </span>
+                          <span className="font-extrabold tabular-nums" dir="ltr">
+                            {fmtMoney(w.amount ?? 0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {report.cashMovements.returns.length > 0 ? (
+                    <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+                      <p className="text-xs font-extrabold text-muted-foreground mb-1">
+                        {t("shifts.cashReturnsDetails")}
+                      </p>
+                      {report.cashMovements.returns.map((w) => (
+                        <div key={w.id} className="flex justify-between gap-3 text-sm">
+                          <span className="font-bold">
+                            {w.invoiceNo ? `#${w.invoiceNo}` : t("shifts.cashReturn")}
+                          </span>
+                          <span className="font-extrabold tabular-nums" dir="ltr">
+                            {fmtMoney(w.amount ?? 0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {report.suppliers.show ? (
+                <section className="rounded-2xl border border-border/60 p-4">
+                  <h3 className="text-sm font-extrabold mb-2">
+                    {t("shifts.suppliersSection")}
+                  </h3>
+                  {moneyRow(
+                    t("shifts.purchasesTotal"),
+                    fmtMoney(report.suppliers.purchasesTotal)
+                  )}
+                  {moneyRow(
+                    t("shifts.supplierReturnsTotal"),
+                    fmtMoney(report.suppliers.returnsTotal)
+                  )}
+                  {moneyRow(t("shifts.supplierPaid"), fmtMoney(report.suppliers.paidTotal))}
+                  {moneyRow(
+                    t("shifts.supplierReceived"),
+                    fmtMoney(report.suppliers.receivedTotal)
+                  )}
+                  {moneyRow(
+                    t("shifts.supplierDiscounts"),
+                    fmtMoney(report.suppliers.discountTotal),
+                    true
+                  )}
+                  {report.suppliers.purchases.length > 0 ? (
+                    <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+                      <p className="text-xs font-extrabold text-muted-foreground mb-1">
+                        {t("shifts.purchasesDetails")}
+                      </p>
+                      {report.suppliers.purchases.map((p) => (
+                        <div key={p.id} className="flex justify-between gap-3 text-sm">
+                          <span className="font-bold">
+                            {p.invoiceNo ? `#${p.invoiceNo}` : t("shifts.purchase")}
+                          </span>
+                          <span className="font-extrabold tabular-nums" dir="ltr">
+                            {fmtMoney(p.totalAmount ?? 0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {report.suppliers.returns.length > 0 ? (
+                    <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+                      <p className="text-xs font-extrabold text-muted-foreground mb-1">
+                        {t("shifts.supplierReturnsDetails")}
+                      </p>
+                      {report.suppliers.returns.map((p) => (
+                        <div key={p.id} className="flex justify-between gap-3 text-sm">
+                          <span className="font-bold">
+                            {p.invoiceNo ? `#${p.invoiceNo}` : t("shifts.supplierReturn")}
+                          </span>
+                          <span className="font-extrabold tabular-nums" dir="ltr">
+                            {fmtMoney(p.totalAmount ?? 0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
+              <Button
+                className="w-full h-12 rounded-2xl gap-2 font-extrabold"
+                isLoading={printingId === detailShift?.id}
+                onClick={() => detailShift && void printReport(detailShift)}
+              >
+                <Printer className="w-4 h-4" />
+                {t("shifts.printReport")}
+              </Button>
+            </>
+          ) : null}
         </div>
       </Dialog>
     </div>

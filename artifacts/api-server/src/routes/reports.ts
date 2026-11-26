@@ -4,20 +4,56 @@ import {
   ordersTable,
   orderItemsTable,
   menuItemsTable,
+  menuCategoriesTable,
   restaurantTablesTable,
   customersTable,
   inventoryTable,
 } from "@workspace/db/schema";
-import { eq, sql, and, gte, lte, type SQL } from "drizzle-orm";
+import { eq, sql, and, gte, lte, lt, ne, isNotNull, or, type SQL } from "drizzle-orm";
 import { parseBranchScope, branchEq } from "../lib/branch-scope";
 
 const router: IRouter = Router();
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function combine(...conds: (SQL | undefined)[]) {
   const list = conds.filter((c): c is SQL => Boolean(c));
   if (list.length === 0) return undefined;
   if (list.length === 1) return list[0];
   return and(...list);
+}
+
+function money(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Number(n.toFixed(2)) : 0;
+}
+
+function todayYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function normalizeYmd(v: unknown): string | null {
+  const raw = String(v ?? "").trim();
+  return DATE_RE.test(raw) ? raw : null;
+}
+
+function dayStart(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function dayEndExclusive(ymd: string) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+}
+
+/** Paid / واصل invoices only (exclude cancelled). */
+function orderReceivedCond() {
+  return and(
+    ne(ordersTable.status, "cancelled"),
+    or(isNotNull(ordersTable.paymentMethod), eq(ordersTable.status, "paid"))
+  );
 }
 
 router.get("/dashboard", async (req, res) => {
@@ -246,6 +282,379 @@ router.get("/sales", async (req, res) => {
   for (const r of typeRows) byOrderType[r.type] = Number(r.count);
 
   res.json({ period, totalRevenue, totalOrders, averageOrderValue, data, byPaymentMethod, byOrderType });
+});
+
+/**
+ * Detailed sales breakdown for reports UI.
+ * groupBy: date | item | category
+ * Optional filters: from, to, filterBranchId, categoryId, menuItemId
+ */
+router.get("/sales-breakdown", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const from = normalizeYmd(req.query.from) ?? todayYmd();
+  const to = normalizeYmd(req.query.to) ?? from;
+  const rangeStart = from <= to ? from : to;
+  const rangeEnd = from <= to ? to : from;
+  const groupByRaw = String(req.query.groupBy ?? "date").toLowerCase();
+  const groupBy =
+    groupByRaw === "item" || groupByRaw === "category" ? groupByRaw : "date";
+
+  const filterBranchId = Number(req.query.filterBranchId ?? req.query.branchId);
+  const branchFilter =
+    Number.isFinite(filterBranchId) && filterBranchId > 0
+      ? filterBranchId
+      : scope.mode === "one"
+        ? scope.branchId
+        : null;
+
+  const categoryId = Number(req.query.categoryId);
+  const menuItemId = Number(req.query.menuItemId);
+  const hasCategory =
+    Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null;
+  const hasItem =
+    Number.isFinite(menuItemId) && menuItemId > 0 ? menuItemId : null;
+
+  const scopeBranch = branchEq(ordersTable.branchId, scope);
+  const where = combine(
+    gte(ordersTable.createdAt, dayStart(rangeStart)),
+    lt(ordersTable.createdAt, dayEndExclusive(rangeEnd)),
+    orderReceivedCond(),
+    scopeBranch,
+    branchFilter != null ? eq(ordersTable.branchId, branchFilter) : undefined,
+    hasCategory != null ? eq(menuItemsTable.categoryId, hasCategory) : undefined,
+    hasItem != null ? eq(orderItemsTable.menuItemId, hasItem) : undefined
+  );
+
+  type RowOut = {
+    key: string;
+    label: string;
+    labelAr: string;
+    qty: number;
+    amount: number;
+    orderCount: number;
+    lineCount: number;
+  };
+
+  let rows: RowOut[] = [];
+
+  if (groupBy === "date") {
+    const agg = await db
+      .select({
+        key: sql<string>`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`,
+        qty: sql<number>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
+        amount: sql<number>`coalesce(sum(${orderItemsTable.totalPrice}::numeric), 0)`,
+        orderCount: sql<number>`count(distinct ${ordersTable.id})`,
+        lineCount: sql<number>`count(${orderItemsTable.id})`,
+      })
+      .from(orderItemsTable)
+      .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+      .innerJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
+      .where(where)
+      .groupBy(sql`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`);
+    rows = agg.map((r) => ({
+      key: r.key,
+      label: r.key,
+      labelAr: r.key,
+      qty: Number(r.qty) || 0,
+      amount: money(r.amount),
+      orderCount: Number(r.orderCount) || 0,
+      lineCount: Number(r.lineCount) || 0,
+    }));
+  } else if (groupBy === "item") {
+    const agg = await db
+      .select({
+        key: sql<string>`${orderItemsTable.menuItemId}::text`,
+        label: menuItemsTable.name,
+        labelAr: menuItemsTable.nameAr,
+        categoryNameAr: menuCategoriesTable.nameAr,
+        qty: sql<number>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
+        amount: sql<number>`coalesce(sum(${orderItemsTable.totalPrice}::numeric), 0)`,
+        orderCount: sql<number>`count(distinct ${ordersTable.id})`,
+        lineCount: sql<number>`count(${orderItemsTable.id})`,
+      })
+      .from(orderItemsTable)
+      .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+      .innerJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
+      .innerJoin(
+        menuCategoriesTable,
+        eq(menuItemsTable.categoryId, menuCategoriesTable.id)
+      )
+      .where(where)
+      .groupBy(
+        orderItemsTable.menuItemId,
+        menuItemsTable.name,
+        menuItemsTable.nameAr,
+        menuCategoriesTable.nameAr
+      )
+      .orderBy(sql`sum(${orderItemsTable.totalPrice}::numeric) desc`);
+    rows = agg.map((r) => ({
+      key: String(r.key),
+      label: r.label || r.labelAr || `#${r.key}`,
+      labelAr: `${r.labelAr || r.label || `#${r.key}`}${
+        r.categoryNameAr ? ` · ${r.categoryNameAr}` : ""
+      }`,
+      qty: Number(r.qty) || 0,
+      amount: money(r.amount),
+      orderCount: Number(r.orderCount) || 0,
+      lineCount: Number(r.lineCount) || 0,
+    }));
+  } else {
+    const agg = await db
+      .select({
+        key: sql<string>`${menuCategoriesTable.id}::text`,
+        label: menuCategoriesTable.name,
+        labelAr: menuCategoriesTable.nameAr,
+        qty: sql<number>`coalesce(sum(${orderItemsTable.quantity}), 0)`,
+        amount: sql<number>`coalesce(sum(${orderItemsTable.totalPrice}::numeric), 0)`,
+        orderCount: sql<number>`count(distinct ${ordersTable.id})`,
+        lineCount: sql<number>`count(${orderItemsTable.id})`,
+      })
+      .from(orderItemsTable)
+      .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+      .innerJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
+      .innerJoin(
+        menuCategoriesTable,
+        eq(menuItemsTable.categoryId, menuCategoriesTable.id)
+      )
+      .where(where)
+      .groupBy(
+        menuCategoriesTable.id,
+        menuCategoriesTable.name,
+        menuCategoriesTable.nameAr
+      )
+      .orderBy(sql`sum(${orderItemsTable.totalPrice}::numeric) desc`);
+    rows = agg.map((r) => ({
+      key: String(r.key),
+      label: r.label || r.labelAr || `#${r.key}`,
+      labelAr: r.labelAr || r.label || `#${r.key}`,
+      qty: Number(r.qty) || 0,
+      amount: money(r.amount),
+      orderCount: Number(r.orderCount) || 0,
+      lineCount: Number(r.lineCount) || 0,
+    }));
+  }
+
+  const summary = {
+    totalQty: rows.reduce((s, r) => s + r.qty, 0),
+    totalAmount: money(rows.reduce((s, r) => s + r.amount, 0)),
+    orderCount: rows.reduce((s, r) => s + r.orderCount, 0),
+    lineCount: rows.reduce((s, r) => s + r.lineCount, 0),
+    rowCount: rows.length,
+  };
+
+  // Distinct order count across whole period (not sum of groups for date/item overlap)
+  const [ordersAgg] = await db
+    .select({
+      orderCount: sql<number>`count(distinct ${ordersTable.id})`,
+    })
+    .from(orderItemsTable)
+    .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+    .innerJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
+    .where(where);
+
+  summary.orderCount = Number(ordersAgg?.orderCount) || 0;
+
+  res.json({
+    from: rangeStart,
+    to: rangeEnd,
+    groupBy,
+    branchId: branchFilter,
+    categoryId: hasCategory,
+    menuItemId: hasItem,
+    summary,
+    rows,
+  });
+});
+
+/**
+ * Profit from sales — line details for items with cost mode only (cost > 0).
+ * Filters: from, to, filterBranchId, categoryId, menuItemId
+ */
+router.get("/sales-profit", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const from = normalizeYmd(req.query.from) ?? todayYmd();
+  const to = normalizeYmd(req.query.to) ?? from;
+  const rangeStart = from <= to ? from : to;
+  const rangeEnd = from <= to ? to : from;
+
+  const filterBranchId = Number(req.query.filterBranchId ?? req.query.branchId);
+  const branchFilter =
+    Number.isFinite(filterBranchId) && filterBranchId > 0
+      ? filterBranchId
+      : scope.mode === "one"
+        ? scope.branchId
+        : null;
+
+  const categoryId = Number(req.query.categoryId);
+  const menuItemId = Number(req.query.menuItemId);
+  const hasCategory =
+    Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null;
+  const hasItem =
+    Number.isFinite(menuItemId) && menuItemId > 0 ? menuItemId : null;
+
+  const scopeBranch = branchEq(ordersTable.branchId, scope);
+  const where = combine(
+    gte(ordersTable.createdAt, dayStart(rangeStart)),
+    lt(ordersTable.createdAt, dayEndExclusive(rangeEnd)),
+    orderReceivedCond(),
+    scopeBranch,
+    branchFilter != null ? eq(ordersTable.branchId, branchFilter) : undefined,
+    isNotNull(menuItemsTable.cost),
+    sql`${menuItemsTable.cost}::numeric > 0`,
+    hasCategory != null ? eq(menuItemsTable.categoryId, hasCategory) : undefined,
+    hasItem != null ? eq(orderItemsTable.menuItemId, hasItem) : undefined
+  );
+
+  const lines = await db
+    .select({
+      id: orderItemsTable.id,
+      orderId: ordersTable.id,
+      invoiceNo: ordersTable.orderNumber,
+      date: sql<string>`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`,
+      time: sql<string>`to_char(${ordersTable.createdAt}, 'HH24:MI')`,
+      menuItemId: orderItemsTable.menuItemId,
+      itemName: menuItemsTable.name,
+      itemNameAr: menuItemsTable.nameAr,
+      categoryId: menuCategoriesTable.id,
+      categoryName: menuCategoriesTable.name,
+      categoryNameAr: menuCategoriesTable.nameAr,
+      qty: orderItemsTable.quantity,
+      unitPrice: orderItemsTable.unitPrice,
+      lineSale: orderItemsTable.totalPrice,
+      costPrice: menuItemsTable.cost,
+    })
+    .from(orderItemsTable)
+    .innerJoin(ordersTable, eq(orderItemsTable.orderId, ordersTable.id))
+    .innerJoin(menuItemsTable, eq(orderItemsTable.menuItemId, menuItemsTable.id))
+    .innerJoin(
+      menuCategoriesTable,
+      eq(menuItemsTable.categoryId, menuCategoriesTable.id)
+    )
+    .where(where)
+    .orderBy(
+      sql`${ordersTable.createdAt} desc`,
+      sql`${orderItemsTable.id} asc`
+    );
+
+  const rows = lines.map((r) => {
+    const qty = Number(r.qty) || 0;
+    const unitPrice = money(r.unitPrice);
+    const lineSale = money(r.lineSale);
+    const costPrice = money(r.costPrice);
+    const lineCost = money(qty * costPrice);
+    const profit = money(lineSale - lineCost);
+    return {
+      id: r.id,
+      orderId: r.orderId,
+      invoiceNo: r.invoiceNo,
+      date: r.date,
+      time: r.time,
+      menuItemId: r.menuItemId,
+      itemName: r.itemName,
+      itemNameAr: r.itemNameAr || r.itemName,
+      categoryId: r.categoryId,
+      categoryName: r.categoryName,
+      categoryNameAr: r.categoryNameAr || r.categoryName,
+      qty,
+      unitPrice,
+      costPrice,
+      lineSale,
+      lineCost,
+      profit,
+    };
+  });
+
+  const summary = {
+    lineCount: rows.length,
+    totalQty: rows.reduce((s, r) => s + r.qty, 0),
+    totalSale: money(rows.reduce((s, r) => s + r.lineSale, 0)),
+    totalCost: money(rows.reduce((s, r) => s + r.lineCost, 0)),
+    totalProfit: money(rows.reduce((s, r) => s + r.profit, 0)),
+    orderCount: new Set(rows.map((r) => r.orderId)).size,
+  };
+
+  res.json({
+    from: rangeStart,
+    to: rangeEnd,
+    branchId: branchFilter,
+    categoryId: hasCategory,
+    menuItemId: hasItem,
+    summary,
+    rows,
+  });
+});
+
+/**
+ * Discounts from sales — invoices with discount > 0 in date range.
+ * Filters: from, to, filterBranchId
+ */
+router.get("/sales-discounts", async (req, res) => {
+  const scope = parseBranchScope(req);
+  const from = normalizeYmd(req.query.from) ?? todayYmd();
+  const to = normalizeYmd(req.query.to) ?? from;
+  const rangeStart = from <= to ? from : to;
+  const rangeEnd = from <= to ? to : from;
+
+  const filterBranchId = Number(req.query.filterBranchId ?? req.query.branchId);
+  const branchFilter =
+    Number.isFinite(filterBranchId) && filterBranchId > 0
+      ? filterBranchId
+      : scope.mode === "one"
+        ? scope.branchId
+        : null;
+
+  const scopeBranch = branchEq(ordersTable.branchId, scope);
+  const where = combine(
+    gte(ordersTable.createdAt, dayStart(rangeStart)),
+    lt(ordersTable.createdAt, dayEndExclusive(rangeEnd)),
+    orderReceivedCond(),
+    scopeBranch,
+    branchFilter != null ? eq(ordersTable.branchId, branchFilter) : undefined,
+    sql`coalesce(${ordersTable.discount}::numeric, 0) > 0`
+  );
+
+  const list = await db
+    .select({
+      id: ordersTable.id,
+      invoiceNo: ordersTable.orderNumber,
+      date: sql<string>`to_char(${ordersTable.createdAt}, 'YYYY-MM-DD')`,
+      time: sql<string>`to_char(${ordersTable.createdAt}, 'HH24:MI')`,
+      discount: ordersTable.discount,
+      subtotal: ordersTable.subtotal,
+      total: ordersTable.total,
+      paymentMethod: ordersTable.paymentMethod,
+      type: ordersTable.type,
+    })
+    .from(ordersTable)
+    .where(where)
+    .orderBy(sql`${ordersTable.createdAt} desc`, sql`${ordersTable.id} desc`);
+
+  const rows = list.map((r) => ({
+    id: r.id,
+    invoiceNo: r.invoiceNo,
+    date: r.date,
+    time: r.time,
+    discount: money(r.discount),
+    subtotal: money(r.subtotal),
+    total: money(r.total),
+    paymentMethod: r.paymentMethod,
+    type: r.type,
+  }));
+
+  const summary = {
+    invoiceCount: rows.length,
+    totalDiscount: money(rows.reduce((s, r) => s + r.discount, 0)),
+    totalSales: money(rows.reduce((s, r) => s + r.total, 0)),
+  };
+
+  res.json({
+    from: rangeStart,
+    to: rangeEnd,
+    branchId: branchFilter,
+    summary,
+    rows,
+  });
 });
 
 router.get("/top-items", async (req, res) => {
