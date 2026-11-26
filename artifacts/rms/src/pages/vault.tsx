@@ -180,7 +180,8 @@ export default function VaultPage() {
               </div>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight">القاصة</h1>
               <p className="text-sm font-semibold text-muted-foreground max-w-2xl">
-                كشف سريع حسب التاريخ — بدون بطاقة ولكل بطاقة كشف مستقل، مع رصيد ما قبل تاريخ البداية.
+                تلقائي من المبيعات (±واصل) ومرجوعات الشراء والسحوبات/المرجوعات والمشتريات والمصاريف —
+                حسب الفرع، بدون بطاقة ولكل بطاقة، مع رصيد افتتاحي.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

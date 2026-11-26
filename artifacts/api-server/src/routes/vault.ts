@@ -2,14 +2,16 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   appSettingsTable,
+  cardBranchesTable,
   cardsTable,
   cashMovementsTable,
   expensesTable,
   ordersTable,
   supplierMovementsTable,
   supplierPurchasesTable,
+  supplierReturnsTable,
 } from "@workspace/db/schema";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { parseBranchScope, branchEq } from "../lib/branch-scope";
 import { ensureVaultColumns } from "../lib/ensure-vault-columns";
 import { isOrderPaymentReceived } from "../lib/seat-sync";
@@ -42,6 +44,11 @@ function dayBefore(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
   d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dateFromTimestamp(v: Date | null | undefined): string {
+  if (!v) return todayDate();
+  return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
 }
 
 type LedgerLine = {
@@ -98,6 +105,19 @@ function emptyAccount(
   };
 }
 
+/** Route to cash ledger unless card payment with a real cardId. */
+function resolveLedger(
+  paymentMethod: unknown,
+  cardIdRaw: unknown
+): { paymentMethod: "cash" | "card"; cardId: number | null } {
+  const pm = String(paymentMethod ?? "cash").toLowerCase();
+  const cardId = Number(cardIdRaw);
+  if (pm === "card" && Number.isFinite(cardId) && cardId > 0) {
+    return { paymentMethod: "card", cardId };
+  }
+  return { paymentMethod: "cash", cardId: null };
+}
+
 router.get("/statement", async (req, res) => {
   await ensureVaultColumns();
   const scope = parseBranchScope(req);
@@ -114,11 +134,23 @@ router.get("/statement", async (req, res) => {
   const [settings] = await db.select().from(appSettingsTable).limit(1);
   const cashOpening = money(settings?.cashOpeningBalance ?? 0);
 
-  const cards = await db
+  const allCards = await db
     .select()
     .from(cardsTable)
     .where(eq(cardsTable.isActive, true))
     .orderBy(asc(cardsTable.name));
+
+  let cards = allCards;
+  if (branchFilter != null) {
+    const links = await db
+      .select({ cardId: cardBranchesTable.cardId })
+      .from(cardBranchesTable)
+      .where(eq(cardBranchesTable.branchId, branchFilter));
+    const allowed = new Set(links.map((l) => l.cardId));
+    cards = allCards.filter((c) => allowed.has(c.id));
+  }
+
+  const cardName = new Map(allCards.map((c) => [c.id, c.name]));
 
   const accounts = new Map<string, AccountStatement>();
   accounts.set("cash", emptyAccount("cash", "cash", "بدون بطاقة (نقد)", null, cashOpening));
@@ -140,9 +172,11 @@ router.get("/statement", async (req, res) => {
       acc = emptyAccount(
         key,
         line.paymentMethod === "card" ? "card" : "cash",
-        line.cardName || (line.paymentMethod === "card" ? "بطاقة" : "بدون بطاقة"),
+        line.cardName ||
+          (line.cardId ? cardName.get(line.cardId) : null) ||
+          (line.paymentMethod === "card" ? "بطاقة" : "بدون بطاقة"),
         line.cardId,
-        0
+        line.cardId ? money(allCards.find((c) => c.id === line.cardId)?.openingBalance ?? 0) : 0
       );
       accounts.set(key, acc);
     }
@@ -157,10 +191,44 @@ router.get("/statement", async (req, res) => {
     acc.periodNet = money(acc.periodNet + line.signed);
   };
 
+  const pushSigned = (opts: {
+    id: string;
+    date: string;
+    time?: string | null;
+    source: string;
+    sourceAr: string;
+    label: string;
+    invoiceNo?: string | null;
+    amount: number;
+    paymentMethod: "cash" | "card";
+    cardId: number | null;
+    branchId?: number | null;
+  }) => {
+    const signed = money(opts.amount);
+    if (Math.abs(signed) < 0.005) return;
+    const abs = Math.abs(signed);
+    pushLine({
+      id: opts.id,
+      date: opts.date,
+      time: opts.time ?? null,
+      source: opts.source,
+      sourceAr: opts.sourceAr,
+      label: opts.label,
+      invoiceNo: opts.invoiceNo ?? null,
+      debit: signed < 0 ? abs : 0,
+      credit: signed > 0 ? abs : 0,
+      signed,
+      paymentMethod: opts.paymentMethod,
+      cardId: opts.cardId,
+      cardName: opts.cardId ? cardName.get(opts.cardId) || null : null,
+      branchId: opts.branchId ?? null,
+    });
+  };
+
   const branchOk = (id: number | null | undefined) =>
     branchFilter == null || id == null || id === branchFilter;
 
-  // ── Orders (cash in when paid) ───────────────────────────
+  // ── Orders (POS / cashier) — +واصل / −مرجع ───────────────
   {
     const conds = [];
     const b = branchEq(ordersTable.branchId, scope);
@@ -173,82 +241,64 @@ router.get("/statement", async (req, res) => {
     for (const o of rows) {
       if (!isOrderPaymentReceived(o)) continue;
       if (!branchOk(o.branchId)) continue;
+      if (o.status === "cancelled") continue;
       const pay = String(o.paymentMethod ?? "").toLowerCase();
       if (pay !== "cash" && pay !== "card" && pay !== "transfer") continue;
-      const day = o.createdAt
-        ? `${o.createdAt.getFullYear()}-${String(o.createdAt.getMonth() + 1).padStart(2, "0")}-${String(o.createdAt.getDate()).padStart(2, "0")}`
-        : todayDate();
+      const ledger = resolveLedger(pay, (o as { cardId?: number | null }).cardId);
       const amount = money(o.total);
-      if (!(amount > 0)) continue;
-      /** Card/transfer sales without cardId stay in cash ledger as labeled inflow */
-      const method: "cash" | "card" = pay === "cash" ? "cash" : "cash";
-      pushLine({
+      const isReturn = amount < 0;
+      pushSigned({
         id: `order-${o.id}`,
-        date: day,
-        time: null,
+        date: dateFromTimestamp(o.createdAt),
         source: "order",
-        sourceAr: "مبيعات",
+        sourceAr: isReturn ? "مرجع مبيعات" : "مبيعات",
         label:
           pay === "cash"
             ? `طلب ${o.orderNumber || o.id} (نقد)`
-            : `طلب ${o.orderNumber || o.id} (${pay === "card" ? "بطاقة" : "تحويل"})`,
+            : pay === "card"
+              ? `طلب ${o.orderNumber || o.id} (بطاقة${ledger.cardId && cardName.get(ledger.cardId) ? ` · ${cardName.get(ledger.cardId)}` : ""})`
+              : `طلب ${o.orderNumber || o.id} (تحويل)`,
         invoiceNo: o.orderNumber,
-        debit: 0,
-        credit: amount,
-        signed: amount,
-        paymentMethod: method,
-        cardId: null,
+        amount,
+        paymentMethod: ledger.paymentMethod,
+        cardId: ledger.cardId,
         branchId: o.branchId,
       });
     }
   }
 
-  // ── Expenses ─────────────────────────────────────────────
+  // ── Supplier returns — مبلغ واصل (inflow) ────────────────
   {
     const conds = [];
-    const b = branchEq(expensesTable.branchId, scope);
+    const b = branchEq(supplierReturnsTable.branchId, scope);
     if (b) conds.push(b);
-    if (branchFilter != null) conds.push(eq(expensesTable.branchId, branchFilter));
+    if (branchFilter != null) conds.push(eq(supplierReturnsTable.branchId, branchFilter));
     const rows = await db
       .select()
-      .from(expensesTable)
+      .from(supplierReturnsTable)
       .where(conds.length ? and(...conds) : undefined);
-    const cardName = new Map(cards.map((c) => [c.id, c.name]));
-    for (const e of rows) {
-      if (!branchOk(e.branchId)) continue;
-      const day =
-        e.expenseDate ||
-        (e.date
-          ? `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, "0")}-${String(e.date.getDate()).padStart(2, "0")}`
-          : todayDate());
-      const amount = money(e.amount);
+    for (const r of rows) {
+      if (!branchOk(r.branchId)) continue;
+      const amount = money(r.paidAmount);
       if (!(amount > 0)) continue;
-      const pm = String((e as { paymentMethod?: string }).paymentMethod ?? "cash") === "card"
-        ? "card"
-        : "cash";
-      const cardId =
-        pm === "card" && (e as { cardId?: number | null }).cardId
-          ? Number((e as { cardId?: number | null }).cardId)
-          : null;
-      pushLine({
-        id: `expense-${e.id}`,
-        date: day,
-        source: "expense",
-        sourceAr: "مصروف",
-        label: e.category || e.description || "مصروف",
-        invoiceNo: e.invoiceNo,
-        debit: amount,
-        credit: 0,
-        signed: -amount,
-        paymentMethod: pm === "card" && cardId ? "card" : "cash",
-        cardId: pm === "card" ? cardId : null,
-        cardName: cardId ? cardName.get(cardId) || null : null,
-        branchId: e.branchId,
+      const ledger = resolveLedger(r.paymentMethod, r.cardId);
+      pushSigned({
+        id: `sup-return-${r.id}`,
+        date: r.invoiceDate,
+        time: r.invoiceTime,
+        source: "supplier_return",
+        sourceAr: "مرجع شراء",
+        label: `واصل مرجع ${r.invoiceNo}`,
+        invoiceNo: r.invoiceNo,
+        amount,
+        paymentMethod: ledger.paymentMethod,
+        cardId: ledger.cardId,
+        branchId: r.branchId,
       });
     }
   }
 
-  // ── Cash movements ───────────────────────────────────────
+  // ── Cash movements — مرجوع (+) / سحب (−) ─────────────────
   {
     const conds = [];
     const b = branchEq(cashMovementsTable.branchId, scope);
@@ -258,20 +308,16 @@ router.get("/statement", async (req, res) => {
       .select()
       .from(cashMovementsTable)
       .where(conds.length ? and(...conds) : undefined);
-    const cardName = new Map(cards.map((c) => [c.id, c.name]));
     for (const m of rows) {
       if (!branchOk(m.branchId)) continue;
       const amount = money(m.amount);
       if (!(amount > 0)) continue;
       const isReturn = m.kind === "return";
-      const pm = String((m as { paymentMethod?: string }).paymentMethod ?? "cash") === "card"
-        ? "card"
-        : "cash";
-      const cardId =
-        pm === "card" && (m as { cardId?: number | null }).cardId
-          ? Number((m as { cardId?: number | null }).cardId)
-          : null;
-      pushLine({
+      const ledger = resolveLedger(
+        (m as { paymentMethod?: string }).paymentMethod,
+        (m as { cardId?: number | null }).cardId
+      );
+      pushSigned({
         id: `cashmov-${m.id}`,
         date: m.movementDate,
         time: m.movementTime,
@@ -279,18 +325,15 @@ router.get("/statement", async (req, res) => {
         sourceAr: isReturn ? "مرجوع" : "سحب",
         label: isReturn ? "مرجوع للصندوق" : "سحب من الصندوق",
         invoiceNo: m.invoiceNo,
-        debit: isReturn ? 0 : amount,
-        credit: isReturn ? amount : 0,
-        signed: isReturn ? amount : -amount,
-        paymentMethod: pm === "card" && cardId ? "card" : "cash",
-        cardId: pm === "card" ? cardId : null,
-        cardName: cardId ? cardName.get(cardId) || null : null,
+        amount: isReturn ? amount : -amount,
+        paymentMethod: ledger.paymentMethod,
+        cardId: ledger.cardId,
         branchId: m.branchId,
       });
     }
   }
 
-  // ── Supplier purchases (paid amount) ─────────────────────
+  // ── Supplier purchases — مبلغ الدفع (outflow) ────────────
   {
     const conds = [];
     const b = branchEq(supplierPurchasesTable.branchId, scope);
@@ -300,14 +343,12 @@ router.get("/statement", async (req, res) => {
       .select()
       .from(supplierPurchasesTable)
       .where(conds.length ? and(...conds) : undefined);
-    const cardName = new Map(cards.map((c) => [c.id, c.name]));
     for (const p of rows) {
       if (!branchOk(p.branchId)) continue;
       const amount = money(p.paidAmount);
       if (!(amount > 0)) continue;
-      const pm = p.paymentMethod === "card" ? "card" : "cash";
-      const cardId = pm === "card" && p.cardId ? p.cardId : null;
-      pushLine({
+      const ledger = resolveLedger(p.paymentMethod, p.cardId);
+      pushSigned({
         id: `sup-purchase-${p.id}`,
         date: p.invoiceDate,
         time: p.invoiceTime,
@@ -315,18 +356,53 @@ router.get("/statement", async (req, res) => {
         sourceAr: "شراء مورد",
         label: `دفع فاتورة شراء ${p.invoiceNo}`,
         invoiceNo: p.invoiceNo,
-        debit: amount,
-        credit: 0,
-        signed: -amount,
-        paymentMethod: pm === "card" && cardId ? "card" : "cash",
-        cardId,
-        cardName: cardId ? cardName.get(cardId) || null : null,
+        amount: -amount,
+        paymentMethod: ledger.paymentMethod,
+        cardId: ledger.cardId,
         branchId: p.branchId,
       });
     }
   }
 
-  // ── Supplier movements paid/received ─────────────────────
+  // ── Expenses (outflow) ───────────────────────────────────
+  {
+    const conds = [];
+    const b = branchEq(expensesTable.branchId, scope);
+    if (b) conds.push(b);
+    if (branchFilter != null) conds.push(eq(expensesTable.branchId, branchFilter));
+    const rows = await db
+      .select()
+      .from(expensesTable)
+      .where(conds.length ? and(...conds) : undefined);
+    for (const e of rows) {
+      if (!branchOk(e.branchId)) continue;
+      const day =
+        e.expenseDate ||
+        (e.date
+          ? `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, "0")}-${String(e.date.getDate()).padStart(2, "0")}`
+          : todayDate());
+      const amount = money(e.amount);
+      if (!(amount > 0)) continue;
+      const ledger = resolveLedger(
+        (e as { paymentMethod?: string }).paymentMethod,
+        (e as { cardId?: number | null }).cardId
+      );
+      pushSigned({
+        id: `expense-${e.id}`,
+        date: day,
+        source: "expense",
+        sourceAr: "مصروف",
+        label: e.category || e.description || "مصروف",
+        invoiceNo: e.invoiceNo,
+        amount: -amount,
+        paymentMethod: ledger.paymentMethod,
+        cardId: ledger.cardId,
+        branchId: e.branchId,
+      });
+    }
+  }
+
+  // ── Supplier movements paid (−) / received (+) ───────────
   {
     const conds = [];
     const b = branchEq(supplierMovementsTable.branchId, scope);
@@ -336,16 +412,14 @@ router.get("/statement", async (req, res) => {
       .select()
       .from(supplierMovementsTable)
       .where(conds.length ? and(...conds) : undefined);
-    const cardName = new Map(cards.map((c) => [c.id, c.name]));
     for (const m of rows) {
       if (!branchOk(m.branchId)) continue;
       if (m.amountType !== "paid" && m.amountType !== "received") continue;
       const amount = money(m.amount);
       if (!(amount > 0)) continue;
-      const pm = m.paymentMethod === "card" ? "card" : "cash";
-      const cardId = pm === "card" && m.cardId ? m.cardId : null;
+      const ledger = resolveLedger(m.paymentMethod, m.cardId);
       const isIn = m.amountType === "received";
-      pushLine({
+      pushSigned({
         id: `sup-mov-${m.id}`,
         date: m.movementDate,
         time: m.movementTime,
@@ -353,12 +427,9 @@ router.get("/statement", async (req, res) => {
         sourceAr: isIn ? "واصل مورد" : "مدفوع مورد",
         label: isIn ? `واصل مورد ${m.invoiceNo}` : `مدفوع مورد ${m.invoiceNo}`,
         invoiceNo: m.invoiceNo,
-        debit: isIn ? 0 : amount,
-        credit: isIn ? amount : 0,
-        signed: isIn ? amount : -amount,
-        paymentMethod: pm === "card" && cardId ? "card" : "cash",
-        cardId,
-        cardName: cardId ? cardName.get(cardId) || null : null,
+        amount: isIn ? amount : -amount,
+        paymentMethod: ledger.paymentMethod,
+        cardId: ledger.cardId,
         branchId: m.branchId,
       });
     }

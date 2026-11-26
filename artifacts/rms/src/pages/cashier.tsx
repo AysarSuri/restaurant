@@ -830,6 +830,7 @@ export default function Cashier() {
         data: {
           status: keepKitchen,
           paymentMethod,
+          cardId: paymentMethod === "card" ? checkoutCardId : null,
           discount,
         } as any,
       },

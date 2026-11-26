@@ -14,11 +14,21 @@ import {
 import { eq, desc, and, gte, lte, sql, inArray, isNull } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
+import { ensureVaultColumns } from "../lib/ensure-vault-columns";
 import {
   isOrderPaymentReceived,
   syncRestaurantSeatFromOrders,
 } from "../lib/seat-sync";
 import { upsertDeliveryContactFromOrder } from "../lib/upsert-delivery-contact";
+
+function parseOrderCardId(
+  paymentMethod: unknown,
+  cardIdRaw: unknown
+): number | null {
+  if (paymentMethod !== "card") return null;
+  const id = Number(cardIdRaw);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
 
 type SalesPaymentAt = "pos" | "cashier";
 type OrderTypeKey = "dine_in" | "takeaway" | "delivery";
@@ -113,6 +123,7 @@ async function getOrderWithDetails(orderId: number) {
       deliveryFee: ordersTable.deliveryFee,
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
+      cardId: ordersTable.cardId,
       collectAtCashier: ordersTable.collectAtCashier,
       posEditedAt: ordersTable.posEditedAt,
       source: ordersTable.source,
@@ -205,6 +216,7 @@ router.get("/", async (req, res) => {
       deliveryFee: ordersTable.deliveryFee,
       total: ordersTable.total,
       paymentMethod: ordersTable.paymentMethod,
+      cardId: ordersTable.cardId,
       collectAtCashier: ordersTable.collectAtCashier,
       posEditedAt: ordersTable.posEditedAt,
       source: ordersTable.source,
@@ -270,6 +282,7 @@ router.get("/:id", async (req, res) => {
 // POST /orders
 router.post("/", async (req, res) => {
   await ensureSalesDeviceColumns();
+  await ensureVaultColumns();
   const scope = parseBranchScope(req);
   const {
     type,
@@ -285,6 +298,7 @@ router.post("/", async (req, res) => {
     driverId,
     branchId,
     paymentMethod,
+    cardId,
     deviceKey,
     source,
   } = req.body;
@@ -407,6 +421,9 @@ router.post("/", async (req, res) => {
   /** Tablet table-order always lands unpaid on cashier for review/collect */
   const collectAtCashier =
     orderSource === "table_order" || (routing.paymentAt === "cashier" && !validPay);
+  const resolvedCardId = collectAtCashier
+    ? null
+    : parseOrderCardId(validPay, cardId);
   let initialStatus: "pending" | "preparing" | "paid" = "pending";
   if (orderSource === "table_order") {
     initialStatus = "pending";
@@ -442,6 +459,7 @@ router.post("/", async (req, res) => {
           ? Number(driverId)
           : null,
       paymentMethod: collectAtCashier ? null : validPay,
+      cardId: resolvedCardId,
       collectAtCashier,
     })
     .returning();
@@ -562,8 +580,9 @@ router.put("/:id", async (req, res) => {
 
 // PATCH /orders/:id/status
 router.patch("/:id/status", async (req, res) => {
+  await ensureVaultColumns();
   const id = parseInt(req.params.id);
-  const { status, paymentMethod, clearPayment, discount } = req.body;
+  const { status, paymentMethod, clearPayment, discount, cardId } = req.body;
 
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
   if (!order) {
@@ -576,6 +595,7 @@ router.patch("/:id/status", async (req, res) => {
   if (clearPayment === true) {
     // Move invoice back to غير واصل (cashier unpaid board)
     patch.paymentMethod = null;
+    patch.cardId = null;
     patch.collectAtCashier = true;
     if (typeof status === "string" && status) {
       patch.status = status;
@@ -587,17 +607,19 @@ router.patch("/:id/status", async (req, res) => {
     if (typeof status === "string" && status) patch.status = status;
     if (paymentMethod === "cash" || paymentMethod === "card" || paymentMethod === "transfer") {
       patch.paymentMethod = paymentMethod;
+      patch.cardId = parseOrderCardId(paymentMethod, cardId);
       patch.collectAtCashier = false;
     }
-    // Allow cashier/POS to set invoice discount at collect time
+    // Allow cashier/POS to set invoice discount at collect time (keep signed totals for returns)
     if (discount !== undefined && discount !== null) {
       const subtotal = parseFloat(String(order.subtotal ?? "0")) || 0;
       const deliveryFeeAmt = parseFloat(String(order.deliveryFee ?? "0")) || 0;
       const taxAmt = parseFloat(String(order.tax ?? "0")) || 0;
       const discountAmt = Math.max(0, parseFloat(String(discount)) || 0);
-      const capped = Math.min(discountAmt, subtotal > 0 ? subtotal : discountAmt);
+      const capped =
+        subtotal > 0 ? Math.min(discountAmt, subtotal) : discountAmt;
       patch.discount = capped.toString();
-      patch.total = Math.max(0, subtotal - capped + deliveryFeeAmt + taxAmt).toString();
+      patch.total = (subtotal - capped + deliveryFeeAmt + taxAmt).toString();
     }
   }
 
@@ -635,8 +657,9 @@ router.patch("/:id/status", async (req, res) => {
 
 // POST /orders/:id/pay
 router.post("/:id/pay", async (req, res) => {
+  await ensureVaultColumns();
   const id = parseInt(req.params.id);
-  const { paymentMethod, discount } = req.body;
+  const { paymentMethod, discount, cardId } = req.body;
 
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id));
   if (!order) {
@@ -648,9 +671,17 @@ router.post("/:id/pay", async (req, res) => {
   const subtotal = parseFloat(order.subtotal);
   const deliveryFeeAmt = parseFloat(order.deliveryFee ?? "0") || 0;
   const total = subtotal - discountAmt + deliveryFeeAmt;
+  const resolvedCardId = parseOrderCardId(paymentMethod, cardId);
 
   await db.update(ordersTable)
-    .set({ status: "paid", paymentMethod, discount: discountAmt.toString(), total: total.toString(), updatedAt: new Date() })
+    .set({
+      status: "paid",
+      paymentMethod,
+      cardId: resolvedCardId,
+      discount: discountAmt.toString(),
+      total: total.toString(),
+      updatedAt: new Date(),
+    })
     .where(eq(ordersTable.id, id));
 
   // واصل → sync seat (available if no other unpaid dine-in on this seat)

@@ -28,6 +28,8 @@ export interface Order {
   discount?: number;
   total: number;
   paymentMethod?: OrderPaymentMethod;
+  /** Card used when paymentMethod = card */
+  cardId?: number | null;
   notes?: string;
   deliveryAddress?: string;
   deliveryPhone?: string;

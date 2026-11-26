@@ -1073,6 +1073,10 @@ export default function POS() {
           deliveryFee: orderType === "delivery" ? deliveryFeeAmount : undefined,
           driverId: orderType === "delivery" ? selectedDriverId : undefined,
           paymentMethod,
+          cardId:
+            paymentMethod === "card" && opts?.cardId != null
+              ? opts.cardId
+              : null,
           notes: cardNote,
           deviceKey,
         } as any,

@@ -731,7 +731,7 @@ export function SupplierReturnsPanel({
             <div className="grid grid-cols-2 xl:grid-cols-[minmax(12.5rem,1.1fr)_minmax(11rem,1.15fr)_minmax(0,0.85fr)_minmax(0,0.75fr)_minmax(0,0.85fr)] gap-2 items-end">
               <div className="min-w-0 col-span-2 sm:col-span-1">
                 <label className="text-[15px] font-bold text-foreground mb-1 block">
-                  طريقة الدفع
+                  طريقة واصل
                 </label>
                 <div className="grid grid-cols-2 gap-1 p-1 h-12 rounded-xl border border-border/60 bg-secondary/40">
                   <button

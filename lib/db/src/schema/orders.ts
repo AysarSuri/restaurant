@@ -6,6 +6,7 @@ import { customersTable } from "./customers";
 import { employeesTable } from "./employees";
 import { branchesTable } from "./branches";
 import { driversTable } from "./drivers";
+import { cardsTable } from "./cards";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -27,6 +28,10 @@ export const ordersTable = pgTable("orders", {
   deliveryFee: numeric("delivery_fee", { precision: 12, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 12, scale: 2 }).notNull().default("0"),
   paymentMethod: text("payment_method", { enum: ["cash", "card", "transfer"] }),
+  /** Card used when paymentMethod = card (قاصة per-card) */
+  cardId: integer("card_id").references(() => cardsTable.id, {
+    onDelete: "set null",
+  }),
   /** Saved from POS without payment — awaiting cashier collection */
   collectAtCashier: boolean("collect_at_cashier").default(false).notNull(),
   /** Last time this invoice was edited from the POS form (null = never edited) */

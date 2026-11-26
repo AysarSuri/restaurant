@@ -272,6 +272,8 @@ export interface Order {
   deliveryFee?: number;
   total: number;
   paymentMethod?: OrderPaymentMethod;
+  /** Card used when paymentMethod = card */
+  cardId?: number | null;
   /** Saved from POS without payment — awaiting cashier */
   collectAtCashier?: boolean;
   /** Last POS edit timestamp — cashier shows “edited” badge */
