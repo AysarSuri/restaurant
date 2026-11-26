@@ -2376,9 +2376,11 @@ export type VaultReportLine = {
 
 export type VaultReportAccount = {
   titleAr: string;
+  kind?: "cash" | "card";
   openingBeforeFrom: number;
   periodDebit: number;
   periodCredit: number;
+  periodNet?: number;
   closingBalance: number;
   lines: VaultReportLine[];
 };
@@ -2387,6 +2389,9 @@ export type VaultReportData = {
   restaurantName: string;
   logoUrl?: string | null;
   mobile?: string | null;
+  branchLabel?: string | null;
+  /** بدون بطاقة / اسم البطاقة / كل الحسابات */
+  cardFilterLabel?: string | null;
   fromLabel: string;
   toLabel: string;
   openingAsOfLabel: string;
@@ -2402,42 +2407,87 @@ function escVault(s: string) {
     .replace(/"/g, "&quot;");
 }
 
+function vaultKindBadge(kind?: "cash" | "card") {
+  if (kind === "card") return `<span class="badge badge-card">بطاقة</span>`;
+  return `<span class="badge badge-cash">بدون بطاقة</span>`;
+}
+
 function buildVaultA4Html(data: VaultReportData) {
   const logoSrc = (data.logoUrl?.trim() || "").replace(/"/g, "");
   const logo = logoSrc ? `<img class="logo" src="${logoSrc}" alt="" />` : "";
   const phone = data.mobile?.trim() || "";
-  const blocks = data.accounts
+  const branch = data.branchLabel?.trim() || "كل الفروع";
+  const cardFilter = data.cardFilterLabel?.trim() || "كل الحسابات";
+  const nowLabel = new Date().toLocaleString("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const totalClosing = data.accounts.reduce((s, a) => s + Number(a.closingBalance || 0), 0);
+  const totalDebit = data.accounts.reduce((s, a) => s + Number(a.periodDebit || 0), 0);
+  const totalCredit = data.accounts.reduce((s, a) => s + Number(a.periodCredit || 0), 0);
+
+  const overviewRows = data.accounts
+    .map((acc, i) => {
+      const net = Number(
+        acc.periodNet ?? Number(acc.periodCredit || 0) - Number(acc.periodDebit || 0)
+      );
+      return `<tr>
+        <td>${i + 1}</td>
+        <td class="acc-name">${escVault(acc.titleAr)} ${vaultKindBadge(acc.kind)}</td>
+        <td class="num" dir="ltr">${escVault(data.formatMoney(acc.openingBeforeFrom))}</td>
+        <td class="num debit" dir="ltr">${escVault(data.formatMoney(acc.periodDebit))}</td>
+        <td class="num credit" dir="ltr">${escVault(data.formatMoney(acc.periodCredit))}</td>
+        <td class="num ${net >= 0 ? "credit" : "debit"}" dir="ltr">${escVault(data.formatMoney(net))}</td>
+        <td class="num bal" dir="ltr">${escVault(data.formatMoney(acc.closingBalance))}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const detailBlocks = data.accounts
     .map((acc) => {
       const rows = acc.lines
         .map(
           (l, i) => `<tr>
-          <td class="num">${i + 1}</td>
+          <td>${i + 1}</td>
           <td class="num" dir="ltr">${escVault(l.dateLabel)}</td>
-          <td>${escVault(l.sourceAr)}</td>
-          <td>${escVault(l.label)}</td>
+          <td><span class="chip ${l.debit > 0 ? "chip-out" : "chip-in"}">${escVault(l.sourceAr)}</span></td>
+          <td class="note">${escVault(l.label)}</td>
           <td class="num" dir="ltr">${escVault(l.invoiceNo || "—")}</td>
-          <td class="num" dir="ltr">${escVault(data.formatMoney(l.debit))}</td>
-          <td class="num" dir="ltr">${escVault(data.formatMoney(l.credit))}</td>
-          <td class="num" dir="ltr">${escVault(data.formatMoney(l.balanceAfter))}</td>
+          <td class="num debit" dir="ltr">${l.debit ? escVault(data.formatMoney(l.debit)) : "—"}</td>
+          <td class="num credit" dir="ltr">${l.credit ? escVault(data.formatMoney(l.credit)) : "—"}</td>
+          <td class="num bal" dir="ltr">${escVault(data.formatMoney(l.balanceAfter))}</td>
         </tr>`
         )
         .join("");
+
       return `<section class="acc">
-        <h2>${escVault(acc.titleAr)}</h2>
-        <div class="meta">
-          <span>رصيد قبل الفترة: <b dir="ltr">${escVault(data.formatMoney(acc.openingBeforeFrom))}</b></span>
-          <span>مدين: <b dir="ltr">${escVault(data.formatMoney(acc.periodDebit))}</b></span>
-          <span>دائن: <b dir="ltr">${escVault(data.formatMoney(acc.periodCredit))}</b></span>
-          <span>رصيد ختامي: <b dir="ltr">${escVault(data.formatMoney(acc.closingBalance))}</b></span>
+        <div class="acc-head">
+          <div class="acc-title">
+            <h2>${escVault(acc.titleAr)}</h2>
+            ${vaultKindBadge(acc.kind)}
+          </div>
+          <div class="acc-stats">
+            <div class="pill"><span>قبل الفترة</span><b dir="ltr">${escVault(data.formatMoney(acc.openingBeforeFrom))}</b></div>
+            <div class="pill out"><span>مدين</span><b dir="ltr">${escVault(data.formatMoney(acc.periodDebit))}</b></div>
+            <div class="pill in"><span>دائن</span><b dir="ltr">${escVault(data.formatMoney(acc.periodCredit))}</b></div>
+            <div class="pill accent"><span>ختامي</span><b dir="ltr">${escVault(data.formatMoney(acc.closingBalance))}</b></div>
+          </div>
         </div>
-        <table>
+        <table class="detail">
           <thead>
             <tr>
-              <th>#</th><th>التاريخ</th><th>النوع</th><th>البيان</th><th>رقم</th>
+              <th>#</th><th>التاريخ</th><th>النوع</th><th>البيان</th><th>الرقم</th>
               <th>مدين</th><th>دائن</th><th>الرصيد</th>
             </tr>
           </thead>
-          <tbody>${rows || `<tr><td colspan="8">لا حركات في الفترة</td></tr>`}</tbody>
+          <tbody>${
+            rows ||
+            `<tr><td colspan="8" class="empty">لا حركات في هذه الفترة</td></tr>`
+          }</tbody>
         </table>
       </section>`;
     })
@@ -2449,41 +2499,173 @@ function buildVaultA4Html(data: VaultReportData) {
 <meta charset="utf-8" />
 <title>تقرير القاصة</title>
 <style>
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 portrait; margin: 11mm 12mm 13mm; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-    color: #111; background: #fff; font-size: 13px; font-weight: 700;
+  html, body {
+    margin: 0; padding: 0; background: #fff; color: #0f172a;
+    font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .wrap { padding: 4mm; }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; border-bottom: 2px solid #111; padding-bottom: 8px; }
-  .logo { width: 54px; height: 54px; object-fit: contain; }
-  h1 { margin: 0; font-size: 18px; font-weight: 800; }
-  .sub { margin-top: 4px; font-size: 12px; font-weight: 700; color: #333; }
-  .acc { margin-top: 14px; page-break-inside: avoid; }
-  .acc h2 { margin: 0 0 6px; font-size: 14px; font-weight: 800; background: #111; color: #fff; padding: 6px 10px; }
-  .meta { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 6px; font-size: 12px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #222; padding: 4px 6px; text-align: right; vertical-align: top; }
-  th { background: #f2f2f2; font-size: 12px; }
-  .num { text-align: left; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: plaintext; }
-  .footer { margin-top: 12px; font-size: 11px; display: flex; justify-content: space-between; border-top: 1px solid #999; padding-top: 6px; }
+  body { width: 210mm; margin: 0 auto; font-size: 12.5px; font-weight: 700; }
+  .sheet { padding: 0; }
+  .header {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding-bottom: 12px; border-bottom: 2.5px solid #0f172a; margin-bottom: 14px;
+  }
+  .brand-block { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .logo {
+    width: 56px; height: 56px; object-fit: contain; border-radius: 12px;
+    border: 1px solid #e2e8f0; background: #f8fafc;
+  }
+  .brand-name { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.25; }
+  .brand-phone { margin: 3px 0 0; font-size: 12.5px; font-weight: 700; color: #475569; direction: ltr; unicode-bidi: plaintext; }
+  .doc-side { text-align: left; }
+  .doc-kicker {
+    display: inline-block; margin: 0 0 6px; padding: 3px 10px; border-radius: 999px;
+    background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;
+    font-size: 11px; font-weight: 800;
+  }
+  .doc-title { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: 0.02em; }
+  .doc-sub { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: #64748b; }
+  .info-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;
+  }
+  .info-card {
+    border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px;
+    background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  }
+  .info-card .k { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 4px; }
+  .info-card .v { font-size: 13.5px; font-weight: 800; color: #0f172a; line-height: 1.35; }
+  .section-label {
+    margin: 4px 0 8px; font-size: 13px; font-weight: 800; color: #0f172a;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after {
+    content: ""; flex: 1; height: 1px; background: linear-gradient(to left, transparent, #cbd5e1);
+  }
+  table.overview, table.detail {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin-bottom: 14px;
+  }
+  thead th {
+    background: #0f172a; color: #fff; font-size: 12px; font-weight: 800;
+    padding: 9px 7px; text-align: center; border: 0;
+  }
+  tbody td {
+    padding: 8px 7px; text-align: center; border-bottom: 1px solid #eef2f7;
+    vertical-align: middle; font-size: 12.5px; font-weight: 700;
+  }
+  tbody tr:nth-child(even) td { background: #f8fafc; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+  td.note { font-size: 12px; color: #334155; max-width: 170px; word-break: break-word; }
+  td.acc-name { font-weight: 800; text-align: right; padding-inline: 10px; }
+  td.debit { color: #dc2626 !important; }
+  td.credit { color: #059669 !important; }
+  td.bal { font-weight: 800; color: #0f172a; }
+  td.empty { color: #94a3b8; padding: 18px !important; }
+  .badge {
+    display: inline-block; margin-inline-start: 6px; padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 800; vertical-align: middle;
+  }
+  .badge-cash { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .badge-card { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800;
+  }
+  .chip-in { background: #ecfdf5; color: #047857; }
+  .chip-out { background: #fff1f2; color: #be123c; }
+  .totals {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: -4px 0 16px;
+  }
+  .total-card {
+    border-radius: 12px; border: 1px solid #e2e8f0; padding: 10px 12px; background: #fff;
+  }
+  .total-card.accent { background: #0f172a; color: #fff; border-color: #0f172a; }
+  .total-card .k { font-size: 11px; font-weight: 700; opacity: 0.75; margin-bottom: 4px; }
+  .total-card .v { font-size: 15px; font-weight: 800; direction: ltr; unicode-bidi: plaintext; }
+  .acc { margin-top: 18px; page-break-inside: avoid; }
+  .acc-head { margin-bottom: 8px; }
+  .acc-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .acc-title h2 { margin: 0; font-size: 15px; font-weight: 800; }
+  .acc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .pill {
+    border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; background: #fff;
+  }
+  .pill span { display: block; font-size: 10.5px; font-weight: 700; color: #64748b; margin-bottom: 3px; }
+  .pill b { font-size: 13px; font-weight: 800; }
+  .pill.in { background: #ecfdf5; border-color: #a7f3d0; }
+  .pill.in b { color: #047857; }
+  .pill.out { background: #fff1f2; border-color: #fecdd3; }
+  .pill.out b { color: #be123c; }
+  .pill.accent { background: #eff6ff; border-color: #bfdbfe; }
+  .pill.accent b { color: #1d4ed8; }
+  .footer {
+    margin-top: 16px; padding-top: 10px; border-top: 1px dashed #cbd5e1;
+    display: flex; justify-content: space-between; gap: 12px;
+    font-size: 11.5px; font-weight: 700; color: #64748b;
+  }
+  @media print {
+    html, body { width: auto; }
+    .acc { break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="head">
-      <div>
-        <h1>تقرير القاصة</h1>
-        <div class="sub">${escVault(data.restaurantName)}${phone ? ` · ${escVault(phone)}` : ""}</div>
-        <div class="sub">من ${escVault(data.fromLabel)} إلى ${escVault(data.toLabel)} · رصيد ما قبل ${escVault(data.openingAsOfLabel)}</div>
+  <div class="sheet">
+    <div class="header">
+      <div class="brand-block">
+        ${logo}
+        <div>
+          <p class="brand-name">${escVault(data.restaurantName)}</p>
+          ${phone ? `<p class="brand-phone">${escVault(phone)}</p>` : ""}
+        </div>
       </div>
-      ${logo}
+      <div class="doc-side">
+        <div class="doc-kicker">كشف مالي · Vault</div>
+        <h1 class="doc-title">تقرير القاصة</h1>
+        <p class="doc-sub">حسب الفرع · بدون بطاقة ولكل بطاقة</p>
+      </div>
     </div>
-    ${blocks}
+
+    <div class="info-grid">
+      <div class="info-card"><div class="k">فلتر الفرع</div><div class="v">${escVault(branch)}</div></div>
+      <div class="info-card"><div class="k">فلتر البطاقة</div><div class="v">${escVault(cardFilter)}</div></div>
+      <div class="info-card"><div class="k">من تاريخ</div><div class="v" dir="ltr">${escVault(data.fromLabel)}</div></div>
+      <div class="info-card"><div class="k">إلى تاريخ</div><div class="v" dir="ltr">${escVault(data.toLabel)}</div></div>
+    </div>
+    <div class="info-grid" style="grid-template-columns: 1fr 1fr; margin-top: -4px;">
+      <div class="info-card"><div class="k">رصيد ما قبل</div><div class="v" dir="ltr">${escVault(data.openingAsOfLabel)}</div></div>
+      <div class="info-card"><div class="k">عدد الحسابات في التقرير</div><div class="v">${data.accounts.length}</div></div>
+    </div>
+
+    <div class="section-label">ملخص الحسابات</div>
+    <table class="overview">
+      <thead>
+        <tr>
+          <th>#</th><th>الحساب</th><th>قبل الفترة</th><th>مدين</th><th>دائن</th><th>صافي</th><th>ختامي</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${
+          overviewRows ||
+          `<tr><td colspan="7" class="empty">لا حسابات</td></tr>`
+        }
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div class="total-card"><div class="k">إجمالي المدين</div><div class="v" style="color:#dc2626">${escVault(data.formatMoney(totalDebit))}</div></div>
+      <div class="total-card"><div class="k">إجمالي الدائن</div><div class="v" style="color:#059669">${escVault(data.formatMoney(totalCredit))}</div></div>
+      <div class="total-card accent"><div class="k">مجموع الأرصدة الختامية</div><div class="v">${escVault(data.formatMoney(totalClosing))}</div></div>
+    </div>
+
+    <div class="section-label">تفاصيل الكشوف</div>
+    ${detailBlocks}
+
     <div class="footer">
-      <span>نظام إدارة المطاعم</span>
-      <span>A4 · خط 13 Bold</span>
+      <span>نظام إدارة المطاعم · تقرير القاصة</span>
+      <span dir="ltr">${escVault(nowLabel)}</span>
     </div>
   </div>
 </body>
@@ -2495,29 +2677,59 @@ export function printVaultReportA4(data: VaultReportData) {
 }
 
 function buildVaultThermalHtml(data: VaultReportData) {
-  const blocks = data.accounts
+  const phone = data.mobile?.trim() || "";
+  const branch = data.branchLabel?.trim() || "كل الفروع";
+  const cardFilter = data.cardFilterLabel?.trim() || "كل الحسابات";
+  const logoSrc = (data.logoUrl?.trim() || "").replace(/"/g, "");
+  const logo = logoSrc
+    ? `<img class="logo" src="${logoSrc}" alt="" />`
+    : "";
+
+  const overview = data.accounts
     .map((acc) => {
+      const tag = acc.kind === "card" ? "بطاقة" : "نقد";
+      return `<div class="ov-row">
+        <div class="ov-title"><span>${escVault(acc.titleAr)}</span><span class="tag">${tag}</span></div>
+        <div class="ov-line"><span>قبل</span><b dir="ltr">${escVault(data.formatMoney(acc.openingBeforeFrom))}</b></div>
+        <div class="ov-line"><span>مدين</span><b class="debit" dir="ltr">${escVault(data.formatMoney(acc.periodDebit))}</b></div>
+        <div class="ov-line"><span>دائن</span><b class="credit" dir="ltr">${escVault(data.formatMoney(acc.periodCredit))}</b></div>
+        <div class="ov-line strong"><span>ختامي</span><b dir="ltr">${escVault(data.formatMoney(acc.closingBalance))}</b></div>
+      </div>`;
+    })
+    .join('<div class="dash"></div>');
+
+  const detailBlocks = data.accounts
+    .map((acc) => {
+      const tag = acc.kind === "card" ? "بطاقة" : "بدون بطاقة";
       const lines = acc.lines
         .map(
           (l) => `<div class="row">
-          <div class="t">${escVault(l.dateLabel)} · ${escVault(l.sourceAr)}</div>
-          <div>${escVault(l.label)}</div>
+          <div class="row-top">
+            <span>${escVault(l.dateLabel)}</span>
+            <span class="src">${escVault(l.sourceAr)}</span>
+          </div>
+          <div class="row-mid">${escVault(l.label)}${l.invoiceNo ? ` · ${escVault(l.invoiceNo)}` : ""}</div>
           <div class="nums">
-            <span>م ${escVault(data.formatMoney(l.debit))}</span>
-            <span>د ${escVault(data.formatMoney(l.credit))}</span>
+            <span class="debit">م ${escVault(data.formatMoney(l.debit || 0))}</span>
+            <span class="credit">د ${escVault(data.formatMoney(l.credit || 0))}</span>
             <span>ر ${escVault(data.formatMoney(l.balanceAfter))}</span>
           </div>
         </div>`
         )
         .join("");
       return `<div class="acc">
-        <div class="title">${escVault(acc.titleAr)}</div>
-        <div class="sum">قبل: ${escVault(data.formatMoney(acc.openingBeforeFrom))}</div>
-        <div class="sum">ختامي: ${escVault(data.formatMoney(acc.closingBalance))}</div>
+        <div class="acc-bar">
+          <div class="acc-name">${escVault(acc.titleAr)}</div>
+          <div class="acc-tag">${tag}</div>
+        </div>
+        <div class="acc-sum">
+          <div><span>قبل</span><b dir="ltr">${escVault(data.formatMoney(acc.openingBeforeFrom))}</b></div>
+          <div><span>ختامي</span><b dir="ltr">${escVault(data.formatMoney(acc.closingBalance))}</b></div>
+        </div>
         ${lines || `<div class="empty">لا حركات</div>`}
       </div>`;
     })
-    .join('<hr class="rule" />');
+    .join('<div class="rule"></div>');
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -2525,34 +2737,92 @@ function buildVaultThermalHtml(data: VaultReportData) {
 <meta charset="utf-8" />
 <title>قاصة 80×80</title>
 <style>
-  @page { size: 80mm auto; margin: 2mm; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; width: 76mm; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-    font-size: 12px; font-weight: 700; color: #000; background: #fff;
+  html, body {
+    margin: 0; padding: 0; background: #fff; color: #000;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .wrap { padding: 2mm; }
-  .brand { text-align: center; font-size: 14px; font-weight: 800; margin-bottom: 4px; }
-  .sub { text-align: center; font-size: 11px; margin-bottom: 6px; }
-  .acc { margin: 6px 0; }
-  .title { font-size: 12px; font-weight: 800; border-bottom: 1px dashed #000; padding-bottom: 2px; margin-bottom: 4px; }
-  .sum { font-size: 11px; }
-  .row { margin: 5px 0; border-bottom: 1px dotted #999; padding-bottom: 3px; }
-  .t { font-size: 11px; }
-  .nums { display: flex; justify-content: space-between; gap: 4px; direction: ltr; font-variant-numeric: tabular-nums; font-size: 11px; }
-  .rule { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-  .empty { opacity: 0.7; }
-  .footer { text-align: center; margin-top: 8px; font-size: 10px; }
+  body {
+    width: 72mm; margin: 0 auto; padding: 2.5mm 2mm 4mm;
+    font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
+    font-size: 11.5px; font-weight: 700; line-height: 1.35;
+  }
+  .logo { display: block; width: 34px; height: 34px; object-fit: contain; margin: 0 auto 4px; }
+  .brand { text-align: center; font-size: 14px; font-weight: 800; margin: 0; }
+  .kicker {
+    text-align: center; margin: 4px 0 2px; font-size: 10.5px; font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+  .sub { text-align: center; font-size: 10.5px; margin: 1px 0; }
+  .meta {
+    margin: 6px 0 8px; border: 1px solid #111; border-radius: 6px; padding: 5px 6px;
+  }
+  .meta div { display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; font-size: 10.5px; }
+  .meta b { font-weight: 800; }
+  .head-line {
+    text-align: center; font-size: 11px; font-weight: 800; margin: 8px 0 5px;
+    border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0;
+  }
+  .ov-row { margin: 4px 0; }
+  .ov-title { display: flex; justify-content: space-between; align-items: center; font-weight: 800; margin-bottom: 2px; }
+  .tag { font-size: 9.5px; border: 1px solid #000; border-radius: 999px; padding: 0 5px; }
+  .ov-line { display: flex; justify-content: space-between; font-size: 10.5px; }
+  .ov-line.strong { font-weight: 800; margin-top: 1px; }
+  .dash { border-top: 1px dotted #666; margin: 5px 0; }
+  .rule { border-top: 2px dashed #000; margin: 8px 0; }
+  .acc { margin: 2px 0; }
+  .acc-bar {
+    display: flex; justify-content: space-between; align-items: center; gap: 4px;
+    background: #111; color: #fff; padding: 4px 6px; border-radius: 4px; margin-bottom: 4px;
+  }
+  .acc-name { font-size: 11.5px; font-weight: 800; }
+  .acc-tag { font-size: 9.5px; opacity: 0.9; }
+  .acc-sum {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px;
+  }
+  .acc-sum div {
+    border: 1px solid #111; border-radius: 4px; padding: 3px 5px;
+    display: flex; justify-content: space-between; gap: 4px; font-size: 10.5px;
+  }
+  .row { margin: 5px 0; padding-bottom: 4px; border-bottom: 1px dotted #999; }
+  .row-top { display: flex; justify-content: space-between; gap: 4px; font-size: 10.5px; }
+  .src { font-weight: 800; }
+  .row-mid { font-size: 10.5px; margin: 2px 0; }
+  .nums {
+    display: flex; justify-content: space-between; gap: 3px;
+    direction: ltr; font-variant-numeric: tabular-nums; font-size: 10.5px; font-weight: 800;
+  }
+  .debit { color: #111; }
+  .credit { color: #111; }
+  .empty { text-align: center; opacity: 0.7; padding: 6px 0; }
+  .footer {
+    text-align: center; margin-top: 8px; padding-top: 5px;
+    border-top: 1px dashed #000; font-size: 10px;
+  }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="brand">${escVault(data.restaurantName)}</div>
-    <div class="sub">تقرير القاصة · 80×80</div>
-    <div class="sub">${escVault(data.fromLabel)} → ${escVault(data.toLabel)}</div>
-    ${blocks}
-    <div class="footer">خط 12 Bold</div>
+  ${logo}
+  <p class="brand">${escVault(data.restaurantName)}</p>
+  <div class="kicker">تقرير القاصة · 80×80</div>
+  ${phone ? `<div class="sub" dir="ltr">${escVault(phone)}</div>` : ""}
+
+  <div class="meta">
+    <div><span>الفرع</span><b>${escVault(branch)}</b></div>
+    <div><span>البطاقة</span><b>${escVault(cardFilter)}</b></div>
+    <div><span>من</span><b dir="ltr">${escVault(data.fromLabel)}</b></div>
+    <div><span>إلى</span><b dir="ltr">${escVault(data.toLabel)}</b></div>
+    <div><span>قبل</span><b dir="ltr">${escVault(data.openingAsOfLabel)}</b></div>
   </div>
+
+  <div class="head-line">ملخص · نقد وبطاقات</div>
+  ${overview || `<div class="empty">لا حسابات</div>`}
+
+  <div class="head-line">تفاصيل الحركات</div>
+  ${detailBlocks}
+
+  <div class="footer">حسب الفرع · بدون بطاقة ولكل بطاقة</div>
 </body>
 </html>`;
 }

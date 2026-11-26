@@ -4,11 +4,14 @@ import {
   useGetVaultStatement,
   useSetVaultCashOpening,
   useGetSettings,
+  getVaultStatement,
   getVaultStatementQueryKey,
   getGetSettingsQueryKey,
   type VaultAccountStatement,
   type VaultLedgerLine,
+  type VaultStatementResponse,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/App";
 import { Button, Input } from "@/components/ui-elements";
 import { YmdDateInput } from "@/components/ymd-date-input";
 import { BranchSwitcher } from "@/components/branch-switcher";
@@ -133,9 +136,9 @@ function MetricPill({
           ? "border-sky-500/30 bg-sky-500/10 text-sky-900 dark:text-sky-100"
           : "border-border/60 bg-background/70 text-foreground";
   return (
-    <div className={`rounded-2xl border px-3.5 py-3 min-w-[7.5rem] ${toneCls}`}>
-      <p className="text-[10px] font-extrabold opacity-70 mb-1">{label}</p>
-      <p className="font-display text-[15px] font-black tabular-nums tracking-tight" dir="ltr">
+    <div className={`rounded-2xl border px-3.5 py-3.5 min-w-[8rem] ${toneCls}`}>
+      <p className="text-[13px] font-black opacity-80 mb-1.5">{label}</p>
+      <p className="font-display text-[20px] font-black tabular-nums tracking-tight" dir="ltr">
         {fmtMoney(value)}
       </p>
     </div>
@@ -144,7 +147,9 @@ function MetricPill({
 
 export default function VaultPage() {
   const { formatDate } = useI18n();
-  const { selectedBranchId } = useBranch();
+  const { user } = useAuth();
+  const isSystemAdmin = user?.role === "admin";
+  const { selectedBranchId, branchLabel } = useBranch();
   const queryClient = useQueryClient();
 
   const [from, setFrom] = useState(todayDate);
@@ -155,6 +160,8 @@ export default function VaultPage() {
   }));
   const [openingDraft, setOpeningDraft] = useState<number | "">("");
   const [activeKey, setActiveKey] = useState<string>("cash");
+  /** Report/account filter: all accounts or one ledger key (cash / card:id) */
+  const [cardFilter, setCardFilter] = useState<string>("all");
 
   const params = useMemo(
     () => ({
@@ -184,6 +191,13 @@ export default function VaultPage() {
     accounts[0] ??
     null;
 
+  const cardFilterLabel = useMemo(() => {
+    if (cardFilter === "all") return "كل الحسابات (نقد + بطاقات)";
+    const acc = accounts.find((a) => a.key === cardFilter);
+    if (!acc) return "حساب محدد";
+    return acc.kind === "cash" ? "بدون بطاقة (نقد)" : acc.titleAr;
+  }, [cardFilter, accounts]);
+
   const flowBuckets = useMemo(
     () => buildFlowBuckets(active?.lines ?? []),
     [active?.lines]
@@ -201,7 +215,10 @@ export default function VaultPage() {
     if (!accounts.some((a) => a.key === activeKey)) {
       setActiveKey(accounts[0].key);
     }
-  }, [accounts, activeKey]);
+    if (cardFilter !== "all" && !accounts.some((a) => a.key === cardFilter)) {
+      setCardFilter("all");
+    }
+  }, [accounts, activeKey, cardFilter]);
 
   const apply = () => {
     setApplied({
@@ -227,9 +244,11 @@ export default function VaultPage() {
   const toReportAccounts = (list: VaultAccountStatement[]) =>
     list.map((acc) => ({
       titleAr: acc.titleAr,
+      kind: acc.kind,
       openingBeforeFrom: acc.openingBeforeFrom,
       periodDebit: acc.periodDebit,
       periodCredit: acc.periodCredit,
+      periodNet: acc.periodNet,
       closingBalance: acc.closingBalance,
       lines: acc.lines.map((l) => ({
         dateLabel: formatDate(l.date),
@@ -242,34 +261,70 @@ export default function VaultPage() {
       })),
     }));
 
-  const printA4 = () => {
-    if (!data) return;
-    printVaultReportA4({
+  const buildReportPayload = (statement: VaultStatementResponse) => {
+    const list =
+      cardFilter === "all"
+        ? statement.accounts
+        : statement.accounts.filter((a) => a.key === cardFilter);
+    const filterLabel =
+      cardFilter === "all"
+        ? "كل الحسابات (نقد + بطاقات)"
+        : list[0]
+          ? list[0].kind === "cash"
+            ? "بدون بطاقة (نقد)"
+            : list[0].titleAr
+          : cardFilterLabel;
+    return {
       restaurantName: settings?.restaurantName?.trim() || "المطعم",
       logoUrl: settings?.logoUrl,
       mobile: settings?.mobile,
-      fromLabel: formatDate(data.from),
-      toLabel: formatDate(data.to),
-      openingAsOfLabel: formatDate(data.openingAsOf),
-      accounts: toReportAccounts(data.accounts),
+      branchLabel: branchLabel || "كل الفروع",
+      cardFilterLabel: filterLabel,
+      fromLabel: formatDate(statement.from),
+      toLabel: formatDate(statement.to),
+      openingAsOfLabel: formatDate(statement.openingAsOf),
+      accounts: toReportAccounts(list.length ? list : statement.accounts),
       formatMoney: fmtMoney,
-    });
+    };
+  };
+
+  const [printing, setPrinting] = useState<"a4" | "thermal" | null>(null);
+
+  const printWithFilters = async (kind: "a4" | "thermal") => {
+    const nextFrom = from || todayDate();
+    const nextTo = to || todayDate();
+    setApplied({ from: nextFrom, to: nextTo });
+    setPrinting(kind);
+    try {
+      const statement = await getVaultStatement({
+        from: nextFrom,
+        to: nextTo,
+        filterBranchId:
+          typeof selectedBranchId === "number" ? selectedBranchId : undefined,
+      });
+      const payload = buildReportPayload(statement);
+      if (kind === "a4") printVaultReportA4(payload);
+      else printVaultReportThermal(payload);
+      void queryClient.setQueryData(
+        getVaultStatementQueryKey({
+          from: nextFrom,
+          to: nextTo,
+          filterBranchId:
+            typeof selectedBranchId === "number" ? selectedBranchId : undefined,
+        }),
+        statement
+      );
+    } finally {
+      setPrinting(null);
+    }
+  };
+
+  const printA4 = () => {
+    void printWithFilters("a4");
   };
 
   const printThermal = () => {
-    if (!data) return;
-    printVaultReportThermal({
-      restaurantName: settings?.restaurantName?.trim() || "المطعم",
-      logoUrl: settings?.logoUrl,
-      mobile: settings?.mobile,
-      fromLabel: formatDate(data.from),
-      toLabel: formatDate(data.to),
-      openingAsOfLabel: formatDate(data.openingAsOf),
-      accounts: toReportAccounts(
-        active ? [active] : data.accounts.filter((a) => a.kind === "cash").slice(0, 1)
-      ),
-      formatMoney: fmtMoney,
-    });
+    void printWithFilters("thermal");
   };
 
   return (
@@ -318,18 +373,26 @@ export default function VaultPage() {
                 variant="outline"
                 className="h-11 rounded-full px-4 font-bold gap-2"
                 onClick={printA4}
-                disabled={!data}
+                disabled={!data || printing != null}
               >
-                <FileText className="w-4 h-4" />
+                {printing === "a4" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
                 A4
               </Button>
               <Button
                 type="button"
                 className="h-11 rounded-full px-4 font-extrabold gap-2 bg-emerald-600 hover:bg-emerald-500"
                 onClick={printThermal}
-                disabled={!data}
+                disabled={!data || printing != null}
               >
-                <Printer className="w-4 h-4" />
+                {printing === "thermal" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Printer className="w-4 h-4" />
+                )}
                 حراري 80×80
               </Button>
             </div>
@@ -339,7 +402,11 @@ export default function VaultPage() {
         {/* ── TOP: controls + summary ────────────────────── */}
         <section className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-            <div className="lg:col-span-5 rounded-[1.5rem] border border-border/55 bg-background/85 backdrop-blur-sm p-4 sm:p-5 space-y-3 shadow-sm">
+            <div
+              className={`${
+                isSystemAdmin ? "lg:col-span-5" : "lg:col-span-12"
+              } rounded-[1.5rem] border border-border/55 bg-background/85 backdrop-blur-sm p-4 sm:p-5 space-y-3 shadow-sm`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[12px] font-black text-muted-foreground tracking-wide">الفترة</p>
                 {data ? (
@@ -358,6 +425,30 @@ export default function VaultPage() {
                   <YmdDateInput value={to} onChange={setTo} className="h-11 rounded-xl" />
                 </div>
               </div>
+              <div>
+                <label className="text-[11px] font-bold text-muted-foreground mb-1 block">
+                  فلتر البطاقة (للكشف والتقرير)
+                </label>
+                <select
+                  className="w-full h-11 rounded-xl border border-border/60 bg-background px-3 text-[13px] font-extrabold outline-none focus:ring-2 focus:ring-primary/30"
+                  value={cardFilter}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCardFilter(v);
+                    if (v !== "all") setActiveKey(v);
+                  }}
+                >
+                  <option value="all">كل الحسابات (نقد + بطاقات)</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.key} value={acc.key}>
+                      {acc.kind === "cash" ? "بدون بطاقة (نقد)" : `بطاقة · ${acc.titleAr}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-[11px] font-bold text-muted-foreground">
+                الفرع الحالي: {branchLabel || "كل الفروع"} · التقارير تتبع الفرع والبطاقة والتاريخين
+              </p>
               <Button
                 type="button"
                 className="w-full h-11 rounded-full font-extrabold"
@@ -367,44 +458,46 @@ export default function VaultPage() {
               </Button>
             </div>
 
-            <div className="lg:col-span-7 rounded-[1.5rem] border border-emerald-500/25 bg-gradient-to-l from-emerald-500/[0.08] via-background/90 to-background/90 p-4 sm:p-5 space-y-3 shadow-sm">
-              <p className="text-[12px] font-black text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
-                <Banknote className="w-4 h-4" />
-                رصيد افتتاحي للقاصة (بدون بطاقة)
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  amountPad
-                  dir="ltr"
-                  className="h-12 rounded-xl font-extrabold text-[16px] flex-1"
-                  value={openingDraft}
-                  onChange={(e) =>
-                    setOpeningDraft(
-                      e.target.value === "" ? "" : Math.max(0, Number(e.target.value) || 0)
-                    )
-                  }
-                />
-                <Button
-                  type="button"
-                  className="h-12 rounded-xl px-5 font-extrabold gap-1.5 shrink-0"
-                  disabled={saveOpening.isPending}
-                  onClick={saveCashOpening}
-                >
-                  {saveOpening.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  حفظ
-                </Button>
+            {isSystemAdmin ? (
+              <div className="lg:col-span-7 rounded-[1.5rem] border border-emerald-500/25 bg-gradient-to-l from-emerald-500/[0.08] via-background/90 to-background/90 p-4 sm:p-5 space-y-3 shadow-sm">
+                <p className="text-[12px] font-black text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
+                  <Banknote className="w-4 h-4" />
+                  رصيد افتتاحي للقاصة (بدون بطاقة)
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    amountPad
+                    dir="ltr"
+                    className="h-12 rounded-xl font-extrabold text-[16px] flex-1"
+                    value={openingDraft}
+                    onChange={(e) =>
+                      setOpeningDraft(
+                        e.target.value === "" ? "" : Math.max(0, Number(e.target.value) || 0)
+                      )
+                    }
+                  />
+                  <Button
+                    type="button"
+                    className="h-12 rounded-xl px-5 font-extrabold gap-1.5 shrink-0"
+                    disabled={saveOpening.isPending}
+                    onClick={saveCashOpening}
+                  >
+                    {saveOpening.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    حفظ
+                  </Button>
+                </div>
+                <p className="text-[11px] font-semibold text-muted-foreground leading-relaxed">
+                  رصيد بداية البرنامج لكشف بدون بطاقة. رصيد كل بطاقة يُضبط من شاشة البطاقات.
+                </p>
               </div>
-              <p className="text-[11px] font-semibold text-muted-foreground leading-relaxed">
-                رصيد بداية البرنامج لكشف بدون بطاقة. رصيد كل بطاقة يُضبط من شاشة البطاقات.
-              </p>
-            </div>
+            ) : null}
           </div>
 
           {/* Account selector strip */}
@@ -491,22 +584,22 @@ export default function VaultPage() {
                 {(visibleFlows.length ? visibleFlows : flowBuckets.slice(0, 4)).map((b) => (
                   <div
                     key={b.key}
-                    className={`rounded-2xl border px-3.5 py-3.5 ${
+                    className={`rounded-2xl border px-3.5 py-4 ${
                       b.tone === "in"
                         ? "border-emerald-500/20 bg-emerald-500/[0.06]"
                         : "border-rose-500/20 bg-rose-500/[0.06]"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-[12px] font-extrabold text-foreground/90">{b.label}</span>
+                    <div className="flex items-center justify-between gap-2 mb-2.5">
+                      <span className="text-[14px] font-black text-foreground/95">{b.label}</span>
                       {b.tone === "in" ? (
-                        <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+                        <ArrowDownLeft className="w-4.5 h-4.5 text-emerald-600" />
                       ) : (
-                        <ArrowUpRight className="w-4 h-4 text-rose-600" />
+                        <ArrowUpRight className="w-4.5 h-4.5 text-rose-600" />
                       )}
                     </div>
                     <p
-                      className={`font-display text-[17px] font-black tabular-nums ${
+                      className={`font-display text-[22px] font-black tabular-nums tracking-tight ${
                         b.tone === "in" ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"
                       }`}
                       dir="ltr"
@@ -559,14 +652,14 @@ export default function VaultPage() {
               <table className="w-full text-[13px] min-w-[720px]">
                 <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-md border-b border-border/60">
                   <tr className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-wide">
-                    <th className="px-4 py-3.5 text-start w-12">#</th>
-                    <th className="px-3 py-3.5 text-start">التاريخ</th>
-                    <th className="px-3 py-3.5 text-start">النوع</th>
-                    <th className="px-3 py-3.5 text-start">البيان</th>
-                    <th className="px-3 py-3.5 text-start">الرقم</th>
-                    <th className="px-3 py-3.5 text-start">مدين</th>
-                    <th className="px-3 py-3.5 text-start">دائن</th>
-                    <th className="px-4 py-3.5 text-start">الرصيد</th>
+                    <th className="px-4 py-3.5 text-center w-12">#</th>
+                    <th className="px-3 py-3.5 text-center">التاريخ</th>
+                    <th className="px-3 py-3.5 text-center">النوع</th>
+                    <th className="px-3 py-3.5 text-center">البيان</th>
+                    <th className="px-3 py-3.5 text-center">الرقم</th>
+                    <th className="px-3 py-3.5 text-center">مدين</th>
+                    <th className="px-3 py-3.5 text-center">دائن</th>
+                    <th className="px-4 py-3.5 text-center">الرصيد</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -585,10 +678,10 @@ export default function VaultPage() {
                         key={line.id}
                         className="border-b border-border/25 hover:bg-emerald-500/[0.04] transition-colors"
                       >
-                        <td className="px-4 py-3 font-bold text-muted-foreground tabular-nums">
+                        <td className="px-4 py-3 text-center font-bold text-muted-foreground tabular-nums">
                           {idx + 1}
                         </td>
-                        <td className="px-3 py-3 font-display tabular-nums font-bold" dir="ltr">
+                        <td className="px-3 py-3 text-center font-display tabular-nums font-bold" dir="ltr">
                           {formatDate(line.date)}
                           {line.time ? (
                             <span className="block text-[10px] font-semibold text-muted-foreground mt-0.5">
@@ -596,7 +689,7 @@ export default function VaultPage() {
                             </span>
                           ) : null}
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-3 text-center">
                           <span
                             className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold border ${
                               line.signed >= 0
@@ -607,26 +700,26 @@ export default function VaultPage() {
                             {line.sourceAr}
                           </span>
                         </td>
-                        <td className="px-3 py-3 font-semibold text-foreground/90 max-w-[18rem]">
+                        <td className="px-3 py-3 text-center font-semibold text-foreground/90 max-w-[18rem]">
                           {line.label}
                         </td>
-                        <td className="px-3 py-3 font-display tabular-nums text-muted-foreground" dir="ltr">
+                        <td className="px-3 py-3 text-center font-display tabular-nums text-muted-foreground" dir="ltr">
                           {line.invoiceNo || "—"}
                         </td>
                         <td
-                          className="px-3 py-3 font-display tabular-nums font-extrabold text-rose-600"
+                          className="px-3 py-3 text-center font-display tabular-nums font-extrabold text-rose-600"
                           dir="ltr"
                         >
                           {line.debit ? fmtMoney(line.debit) : "—"}
                         </td>
                         <td
-                          className="px-3 py-3 font-display tabular-nums font-extrabold text-emerald-600"
+                          className="px-3 py-3 text-center font-display tabular-nums font-extrabold text-emerald-600"
                           dir="ltr"
                         >
                           {line.credit ? fmtMoney(line.credit) : "—"}
                         </td>
                         <td
-                          className="px-4 py-3 font-display tabular-nums font-black text-[13.5px]"
+                          className="px-4 py-3 text-center font-display tabular-nums font-black text-[13.5px]"
                           dir="ltr"
                         >
                           {fmtMoney(line.balanceAfter ?? 0)}
