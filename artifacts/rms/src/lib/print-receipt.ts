@@ -40,9 +40,8 @@ function esc(value: string) {
 }
 
 /**
- * Shared 80mm thermal chrome.
- * POS80 printable width is often ~58–68mm (driver margins clip the physical left),
- * so content is kept narrow with extra physical-left padding — never a 4-column table.
+ * Shared 80mm thermal chrome — same proven sizing as the shift report:
+ * body 72mm centered, 12px bold, rounded meta/sum boxes, balanced side margins.
  */
 function thermalBaseStyles() {
   return `
@@ -51,213 +50,256 @@ function thermalBaseStyles() {
     html, body {
       margin: 0;
       padding: 0;
-      width: 80mm;
-      max-width: 80mm;
       background: #fff;
       color: #000;
-      font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", "Arial", sans-serif;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.4;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    /* Narrow ticket + extra padding-left (physical left = amounts side in RTL) */
-    .ticket {
-      width: 58mm;
-      max-width: 58mm;
-      margin: 0 0 0 8mm;
-      padding: 2.5mm 1.5mm 4mm 2mm;
-      overflow: visible;
+    body, .ticket {
+      width: 72mm;
+      max-width: 72mm;
+      margin: 0 auto;
+      padding: 2.5mm 2mm 4mm;
+      font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.4;
     }
     .logo {
       display: block;
-      width: 16mm;
-      height: 16mm;
+      width: 22mm;
+      height: 22mm;
       object-fit: contain;
-      margin: 0 auto 1.5mm;
-      border-radius: 2mm;
-      filter: grayscale(1) contrast(1.18);
+      margin: 0 auto 2.5mm;
+      border-radius: 3mm;
+      filter: grayscale(1) contrast(1.2);
     }
     .brand {
       text-align: center;
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 800;
+      margin: 0 0 2px;
       line-height: 1.25;
-      margin: 0 0 0.8mm;
-      word-break: break-word;
-    }
-    .branch {
-      text-align: center;
-      font-size: 12px;
-      font-weight: 700;
-      margin: 0 0 1.2mm;
       word-break: break-word;
     }
     .kicker {
       text-align: center;
+      margin: 4px 0 2px;
       font-size: 12px;
       font-weight: 800;
-      margin: 0 0 1.8mm;
-      padding: 1.4mm 0;
-      border-top: 1.4px solid #000;
-      border-bottom: 1.4px solid #000;
       letter-spacing: 0.03em;
     }
-    .meta-center {
+    .sub {
       text-align: center;
-      font-size: 12px;
+      font-size: 11px;
+      margin: 1px 0;
       font-weight: 700;
-      line-height: 1.4;
-      margin: 0 0 1.8mm;
       word-break: break-word;
     }
-    .rule {
-      border: 0;
-      border-top: 1.4px solid #000;
-      margin: 2mm 0;
+    .meta {
+      margin: 7px 0 8px;
+      border: 1.5px solid #111;
+      border-radius: 6px;
+      padding: 6px 7px;
     }
-    .rule-dashed {
-      border: 0;
-      border-top: 1.1px dashed #222;
-      margin: 1.8mm 0;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 2mm;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.35;
-      margin: 1mm 0;
-      width: 100%;
-    }
-    .row > span:first-child {
-      flex: 1 1 auto;
-      min-width: 0;
-      word-break: break-word;
-    }
-    .row > .val,
-    .ltr {
-      flex: 0 0 auto;
-      max-width: 62%;
-      font-variant-numeric: tabular-nums;
-      direction: ltr;
-      unicode-bidi: plaintext;
-      text-align: left;
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-    .panel {
-      border: 1.3px solid #000;
-      border-radius: 2mm;
-      padding: 1.6mm 1.8mm;
-      margin: 0 0 1.8mm;
-    }
-    .section-title {
-      text-align: center;
-      font-size: 12px;
-      font-weight: 800;
-      margin: 0 0 1.2mm;
-      letter-spacing: 0.04em;
-    }
-    .line-item {
-      padding: 1.6mm 0;
-      border-bottom: 0.7px dotted #444;
-    }
-    .line-item:last-child { border-bottom: 0; }
-    .line-name {
-      font-size: 12px;
-      font-weight: 800;
-      line-height: 1.3;
-      word-break: break-word;
-      margin: 0 0 0.6mm;
-    }
-    .line-calc {
+    .meta .line,
+    .line {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      gap: 2mm;
+      gap: 8px;
+      margin: 2px 0;
       font-size: 12px;
       font-weight: 700;
+    }
+    .meta .line b,
+    .line b {
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      direction: ltr;
+      unicode-bidi: plaintext;
+    }
+    .sec {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      margin: 9px 0 5px;
+      border-top: 1.5px dashed #000;
+      border-bottom: 1.5px dashed #000;
+      padding: 4px 0;
+    }
+    .item-block {
+      margin: 4px 0;
+      padding-bottom: 3px;
+      border-bottom: 1px dotted #999;
+    }
+    .item-block:last-child { border-bottom: 0; }
+    .item-name {
+      font-size: 12px;
+      font-weight: 800;
+      word-break: break-word;
+      margin: 0 0 2px;
+    }
+    .item-calc {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .item-calc .qty-price {
+      flex: 1 1 auto;
+      min-width: 0;
+      direction: ltr;
+      unicode-bidi: plaintext;
+      text-align: right;
+    }
+    .item-calc .amt {
+      flex: 0 0 auto;
+      font-weight: 800;
+      direction: ltr;
+      unicode-bidi: plaintext;
+      white-space: nowrap;
+    }
+    .sum-box {
+      border: 1px solid #111;
+      border-radius: 5px;
+      padding: 5px 6px;
+      margin: 4px 0 6px;
+    }
+    .grand {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px solid #111;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .grand span:last-child,
+    .grand b {
+      font-variant-numeric: tabular-nums;
+      direction: ltr;
+      unicode-bidi: plaintext;
+      white-space: nowrap;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 9px;
+      padding-top: 5px;
+      border-top: 1.5px dashed #000;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .order-no {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      line-height: 1.1;
+      margin: 4px 0 6px;
       font-variant-numeric: tabular-nums;
       direction: ltr;
       unicode-bidi: plaintext;
     }
-    .line-calc .qty-price { flex: 1 1 auto; text-align: right; }
-    .line-calc .line-total { flex: 0 0 auto; font-weight: 800; text-align: left; }
-    .grand {
+    .chips {
       display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 1mm;
-      margin-top: 1.6mm;
-      padding: 2mm 1.8mm;
-      border: 1.6px solid #000;
-      border-radius: 2mm;
-      font-size: 12px;
-      font-weight: 800;
-      text-align: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 4px;
+      margin: 0 0 6px;
     }
-    .grand .grand-label { font-size: 12px; }
-    .grand .grand-amount {
+    .chip {
+      display: inline-block;
+      border: 1.3px solid #111;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .kitchen-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 4px 0;
+      padding-bottom: 3px;
+      border-bottom: 1px dotted #999;
+    }
+    .kitchen-item:last-child { border-bottom: 0; }
+    .kitchen-qty {
+      flex: 0 0 auto;
+      min-width: 28px;
       font-size: 14px;
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       direction: ltr;
       unicode-bidi: plaintext;
+    }
+    .kitchen-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 800;
       word-break: break-word;
     }
-    .footer {
-      text-align: center;
-      margin-top: 2.5mm;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.35;
-    }
-    .printer-hint {
-      text-align: center;
-      margin-top: 1.8mm;
+    .item-note {
+      margin: 3px 0 0 28px;
       font-size: 11px;
       font-weight: 700;
-      opacity: 0.85;
+      padding: 3px 6px;
+      border: 1px solid #111;
+      border-radius: 4px;
+      word-break: break-word;
+    }
+    .order-notes {
+      margin-top: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.4;
+      padding: 5px 6px;
+      border: 1.5px solid #111;
+      border-radius: 5px;
       word-break: break-word;
     }
     @media print {
-      html, body { width: 80mm !important; max-width: 80mm !important; margin: 0 !important; }
-      .ticket {
-        width: 58mm !important;
-        max-width: 58mm !important;
-        margin: 0 0 0 8mm !important;
+      body, .ticket {
+        width: 72mm !important;
+        max-width: 72mm !important;
+        margin: 0 auto !important;
       }
     }
   `;
 }
 
+function thermalLogoHtml(logoUrl?: string | null) {
+  const src = logoUrl?.trim();
+  return src ? `<img class="logo" src="${esc(src)}" alt="" />` : "";
+}
+
 function buildReceiptHtml(data: ThermalReceiptData) {
   const phones = [data.mobile1, data.mobile2].filter((v) => Boolean(v && String(v).trim()));
-  // Stacked lines (not 4 columns) — prevents left-edge cut on POS80 rolls
   const itemsHtml = data.items
     .map((item) => {
       const qty = Number(item.quantity) || 0;
       const unit = data.formatMoney(item.unitPrice);
       const total = data.formatMoney(item.lineTotal);
       return `
-      <div class="line-item">
-        <div class="line-name">${esc(item.name)}</div>
-        <div class="line-calc">
+      <div class="item-block">
+        <div class="item-name">${esc(item.name)}</div>
+        <div class="item-calc">
           <span class="qty-price">${esc(String(qty))} × ${esc(unit)}</span>
-          <span class="line-total">${esc(total)}</span>
+          <span class="amt">${esc(total)}</span>
         </div>
       </div>`;
     })
     .join("");
 
-  const logo = data.logoUrl?.trim()
-    ? `<img class="logo" src="${esc(data.logoUrl.trim())}" alt="" />`
-    : "";
   const printerTitle = data.printerName?.trim() || "فاتورة حرارية 80×80";
 
   return `<!DOCTYPE html>
@@ -269,66 +311,55 @@ function buildReceiptHtml(data: ThermalReceiptData) {
 </head>
 <body>
   <div class="ticket">
-    ${logo}
-    <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
-    <p class="branch">${esc(data.branchName || "")}</p>
+    ${thermalLogoHtml(data.logoUrl)}
+    <p class="brand">${esc(data.restaurantName || "المطعم")}</p>
     <div class="kicker">فاتورة مبيعات</div>
-    ${
-      phones.length || data.address?.trim()
-        ? `<p class="meta-center">
-            ${phones.map((p) => esc(String(p))).join(" · ")}
-            ${data.address?.trim() ? `<br/>${esc(data.address.trim())}` : ""}
-          </p>`
-        : ""
-    }
-    <div class="panel">
-      <div class="row"><span>رقم الفاتورة</span><span class="val ltr">${esc(data.invoiceNumber)}</span></div>
-      <div class="row"><span>التاريخ</span><span class="val ltr">${esc(data.dateLabel)}</span></div>
-      <div class="row"><span>الوقت</span><span class="val ltr">${esc(data.timeLabel)}</span></div>
-      <div class="row"><span>نوع الطلب</span><span class="val">${esc(data.orderTypeLabel)}</span></div>
+    ${data.branchName?.trim() ? `<div class="sub">${esc(data.branchName.trim())}</div>` : ""}
+    ${phones.length ? `<div class="sub" dir="ltr">${phones.map((p) => esc(String(p))).join(" · ")}</div>` : ""}
+    ${data.address?.trim() ? `<div class="sub">${esc(data.address.trim())}</div>` : ""}
+
+    <div class="meta">
+      <div class="line"><span>رقم الفاتورة</span><b>${esc(data.invoiceNumber)}</b></div>
+      <div class="line"><span>التاريخ</span><b>${esc(data.dateLabel)}</b></div>
+      <div class="line"><span>الوقت</span><b>${esc(data.timeLabel)}</b></div>
+      <div class="line"><span>نوع الطلب</span><b style="direction:rtl;unicode-bidi:plaintext;white-space:normal;">${esc(data.orderTypeLabel)}</b></div>
       ${
         data.seatLabel
-          ? `<div class="row"><span>المكان</span><span class="val">${esc(data.seatLabel)}</span></div>`
+          ? `<div class="line"><span>المكان</span><b style="direction:rtl;unicode-bidi:plaintext;white-space:normal;">${esc(data.seatLabel)}</b></div>`
           : ""
       }
-      <div class="row"><span>الدفع</span><span class="val">${esc(data.paymentLabel)}</span></div>
+      <div class="line"><span>الدفع</span><b style="direction:rtl;unicode-bidi:plaintext;white-space:normal;">${esc(data.paymentLabel)}</b></div>
     </div>
-    <p class="section-title">تفاصيل الفاتورة</p>
-    ${itemsHtml || `<p class="meta-center">لا توجد أصناف</p>`}
-    <hr class="rule-dashed" />
-    <div class="totals">
-      <div class="row"><span>المجموع الفرعي</span><span class="val ltr">${esc(data.formatMoney(data.subtotal))}</span></div>
+
+    <div class="sec">تفاصيل الفاتورة</div>
+    ${itemsHtml || `<div class="sub">لا توجد أصناف</div>`}
+
+    <div class="sum-box">
+      <div class="line"><span>المجموع الفرعي</span><b>${esc(data.formatMoney(data.subtotal))}</b></div>
       ${
         data.discount > 0
-          ? `<div class="row"><span>الخصم</span><span class="val ltr">- ${esc(data.formatMoney(data.discount))}</span></div>`
+          ? `<div class="line"><span>الخصم</span><b>- ${esc(data.formatMoney(data.discount))}</b></div>`
           : ""
       }
       ${
         (data.deliveryFee ?? 0) > 0
-          ? `<div class="row"><span>التوصيل</span><span class="val ltr">${esc(data.formatMoney(data.deliveryFee ?? 0))}</span></div>`
+          ? `<div class="line"><span>التوصيل</span><b>${esc(data.formatMoney(data.deliveryFee ?? 0))}</b></div>`
           : ""
       }
-      <div class="grand">
-        <span class="grand-label">الإجمالي</span>
-        <strong class="grand-amount">${esc(data.formatMoney(data.total))}</strong>
-      </div>
+      <div class="grand"><span>الإجمالي</span><span>${esc(data.formatMoney(data.total))}</span></div>
       ${
         data.received != null
-          ? `<div class="row"><span>الواصل</span><span class="val ltr">${esc(data.formatMoney(data.received))}</span></div>`
+          ? `<div class="line"><span>الواصل</span><b>${esc(data.formatMoney(data.received))}</b></div>`
           : ""
       }
       ${
         data.change != null && data.change > 0
-          ? `<div class="row"><span>الباقي</span><span class="val ltr">${esc(data.formatMoney(data.change))}</span></div>`
+          ? `<div class="line"><span>الباقي</span><b>${esc(data.formatMoney(data.change))}</b></div>`
           : ""
       }
     </div>
-    <p class="footer">شكراً لزيارتكم<br/>نتمنى لكم وجبة شهية</p>
-    ${
-      data.printerName?.trim()
-        ? `<p class="printer-hint">طابعة: ${esc(data.printerName.trim())}</p>`
-        : `<p class="printer-hint">فاتورة حرارية 80mm</p>`
-    }
+
+    <div class="footer">شكراً لزيارتكم · نتمنى لكم وجبة شهية</div>
   </div>
 </body>
 </html>`;
@@ -472,9 +503,6 @@ export type KitchenTicketThermalData = {
 };
 
 function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
-  const logo = data.logoUrl?.trim()
-    ? `<img class="logo" src="${esc(data.logoUrl.trim())}" alt="" />`
-    : "";
   const itemCount = data.items.reduce((s, i) => s + Math.abs(Number(i.quantity) || 0), 0);
   const itemsHtml = data.items
     .map((item) => {
@@ -482,12 +510,12 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
         ? `<div class="item-note">※ ${esc(item.notes.trim())}</div>`
         : "";
       return `
-      <div class="item">
-        <div class="item-row">
-          <span class="qty">${esc(String(item.quantity))}×</span>
-          <span class="name">${esc(item.name)}</span>
+      <div class="kitchen-item">
+        <span class="kitchen-qty">${esc(String(item.quantity))}×</span>
+        <div style="flex:1;min-width:0;">
+          <div class="kitchen-name">${esc(item.name)}</div>
+          ${note}
         </div>
-        ${note}
       </div>`;
     })
     .join("");
@@ -506,103 +534,14 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
 <head>
   <meta charset="utf-8" />
   <title>${esc(printerTitle)}</title>
-  <style>
-    ${thermalBaseStyles()}
-    .order-no {
-      text-align: center;
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: 0.03em;
-      line-height: 1.1;
-      margin: 1.5mm 0 2mm;
-      font-variant-numeric: tabular-nums;
-      direction: ltr;
-      unicode-bidi: plaintext;
-    }
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 1.5mm;
-      margin: 0 0 2mm;
-    }
-    .chip {
-      display: inline-block;
-      border: 1.3px solid #000;
-      border-radius: 999px;
-      padding: 1mm 2.4mm;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.2;
-      max-width: 100%;
-      word-break: break-word;
-    }
-    .item {
-      padding: 1.8mm 0;
-      border-bottom: 1px dotted #666;
-    }
-    .item:last-child { border-bottom: 0; }
-    .item-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 2.5mm;
-      width: 100%;
-    }
-    .qty {
-      flex: 0 0 auto;
-      min-width: 8mm;
-      font-size: 14px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      line-height: 1.25;
-      direction: ltr;
-      unicode-bidi: plaintext;
-    }
-    .name {
-      flex: 1 1 auto;
-      min-width: 0;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.4;
-      word-break: break-word;
-    }
-    .item-note {
-      margin: 1.2mm 0 0 10mm;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.35;
-      padding: 1.2mm 1.8mm;
-      border: 1px solid #000;
-      border-radius: 1.5mm;
-      word-break: break-word;
-    }
-    .count {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 3mm;
-      font-size: 12px;
-      font-weight: 800;
-      margin-top: 1mm;
-    }
-    .order-notes {
-      margin-top: 2.5mm;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1.4;
-      padding: 2mm;
-      border: 1.4px solid #000;
-      border-radius: 2mm;
-      word-break: break-word;
-    }
-  </style>
+  <style>${thermalBaseStyles()}</style>
 </head>
 <body>
   <div class="ticket">
-    ${logo}
-    <h1 class="brand">${esc(data.restaurantName || "المطعم")}</h1>
-    <p class="branch">${esc(data.branchName || "")}</p>
+    ${thermalLogoHtml(data.logoUrl)}
+    <p class="brand">${esc(data.restaurantName || "المطعم")}</p>
     <div class="kicker">تذكرة مطبخ</div>
+    ${data.branchName?.trim() ? `<div class="sub">${esc(data.branchName.trim())}</div>` : ""}
     <div class="order-no">#${esc(String(orderTail))}</div>
     <div class="chips">
       ${typeChip ? `<span class="chip">${esc(typeChip)}</span>` : ""}
@@ -613,27 +552,21 @@ function buildKitchenTicketHtml(data: KitchenTicketThermalData) {
           : ""
       }
     </div>
-    <p class="meta-center ltr" style="max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;">
-      ${esc(data.dateLabel)} · ${esc(data.timeLabel)}
-    </p>
-    <hr class="rule" />
-    <p class="section-title">الأصناف</p>
-    ${itemsHtml || `<p class="meta-center">لا توجد أصناف</p>`}
-    <hr class="rule-dashed" />
-    <div class="count">
-      <span>عدد القطع</span>
-      <span class="ltr" style="max-width:40%;">${itemCount}</span>
+    <div class="sub" dir="ltr">${esc(data.dateLabel)} · ${esc(data.timeLabel)}</div>
+
+    <div class="meta">
+      <div class="line"><span>رقم الفاتورة</span><b>${esc(data.invoiceNumber)}</b></div>
+      <div class="line"><span>عدد القطع</span><b>${itemCount}</b></div>
     </div>
+
+    <div class="sec">الأصناف</div>
+    ${itemsHtml || `<div class="sub">لا توجد أصناف</div>`}
     ${
       data.orderNotes?.trim()
         ? `<div class="order-notes"><strong>ملاحظة الطلب:</strong> ${esc(data.orderNotes.trim())}</div>`
         : ""
     }
-    ${
-      data.printerName?.trim()
-        ? `<p class="printer-hint">طابعة: ${esc(data.printerName.trim())} · 80mm</p>`
-        : ""
-    }
+    <div class="footer">تذكرة مطبخ · حراري</div>
   </div>
 </body>
 </html>`;
@@ -2906,10 +2839,6 @@ export type ShiftThermalReportData = {
 
 function buildShiftThermalHtml(data: ShiftThermalReportData) {
   const money = (n: number) => esc(data.formatMoney(n));
-  const logoSrc = (data.logoUrl?.trim() || "").replace(/"/g, "");
-  const logo = logoSrc
-    ? `<img class="logo" src="${logoSrc}" alt="" />`
-    : "";
   const phone = data.mobile?.trim() || "";
 
   const catRows = data.sales.byCategory
@@ -3016,55 +2945,9 @@ function buildShiftThermalHtml(data: ShiftThermalReportData) {
 <meta charset="utf-8" />
 <title>تقرير وردية</title>
 <style>
-  @page { size: 80mm auto; margin: 0; }
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; background: #fff; color: #000;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-  }
-  body {
-    width: 72mm; margin: 0 auto; padding: 2.5mm 2mm 4mm;
-    font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", Arial, sans-serif;
-    font-size: 12px; font-weight: 700; line-height: 1.4;
-  }
-  .logo {
-    display: block; width: 38px; height: 38px; object-fit: contain;
-    margin: 0 auto 5px; filter: grayscale(1) contrast(1.12);
-  }
-  .brand {
-    text-align: center; font-size: 15px; font-weight: 800; margin: 0 0 2px; line-height: 1.25;
-  }
-  .kicker {
-    text-align: center; margin: 4px 0 2px; font-size: 12px; font-weight: 800;
-    letter-spacing: 0.03em;
-  }
-  .sub { text-align: center; font-size: 11px; margin: 1px 0; font-weight: 700; }
-  .meta {
-    margin: 7px 0 8px; border: 1.5px solid #111; border-radius: 6px; padding: 6px 7px;
-  }
-  .meta div {
-    display: flex; justify-content: space-between; gap: 6px; margin: 2px 0; font-size: 12px; font-weight: 700;
-  }
-  .meta b { font-weight: 800; }
-  .sec {
-    text-align: center; font-size: 12px; font-weight: 800; margin: 9px 0 5px;
-    border-top: 1.5px dashed #000; border-bottom: 1.5px dashed #000; padding: 4px 0;
-  }
+  ${thermalBaseStyles()}
   .subhead {
     font-size: 11px; font-weight: 800; margin: 6px 0 3px; opacity: 0.92;
-  }
-  .line {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-    margin: 2px 0; font-size: 12px; font-weight: 700;
-  }
-  .line b { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .sum-box {
-    border: 1px solid #111; border-radius: 5px; padding: 5px 6px; margin: 4px 0 6px;
-  }
-  .grand {
-    display: flex; justify-content: space-between; gap: 8px;
-    margin-top: 4px; padding-top: 4px; border-top: 1px solid #111;
-    font-size: 12px; font-weight: 800;
   }
   .detail {
     margin: 4px 0; padding-bottom: 3px; border-bottom: 1px dotted #999;
@@ -3074,37 +2957,34 @@ function buildShiftThermalHtml(data: ShiftThermalReportData) {
   }
   .detail-top b { font-weight: 800; font-variant-numeric: tabular-nums; }
   .muted { font-size: 11px; opacity: 0.8; margin-top: 1px; font-weight: 700; }
-  .footer {
-    text-align: center; margin-top: 9px; padding-top: 5px;
-    border-top: 1.5px dashed #000; font-size: 11px; font-weight: 700;
-  }
 </style>
 </head>
 <body>
-  ${logo}
+  <div class="ticket">
+  ${thermalLogoHtml(data.logoUrl)}
   <p class="brand">${esc(data.restaurantName)}</p>
   <div class="kicker">تقرير الوردية</div>
   ${phone ? `<div class="sub" dir="ltr">${esc(phone)}</div>` : ""}
   ${data.branchAddress?.trim() ? `<div class="sub">${esc(data.branchAddress.trim())}</div>` : ""}
 
   <div class="meta">
-    <div><span>الفرع</span><b>${esc(data.branchName)}</b></div>
-    <div><span>الوردية</span><b>${esc(data.shiftKindLabel)}</b></div>
-    <div><span>الافتتاح</span><b dir="ltr">${esc(data.openedAtLabel)}</b></div>
-    <div><span>الإغلاق</span><b dir="ltr">${esc(data.closedAtLabel)}</b></div>
+    <div class="line"><span>الفرع</span><b style="direction:rtl;unicode-bidi:plaintext;white-space:normal;">${esc(data.branchName)}</b></div>
+    <div class="line"><span>الوردية</span><b style="direction:rtl;unicode-bidi:plaintext;white-space:normal;">${esc(data.shiftKindLabel)}</b></div>
+    <div class="line"><span>الافتتاح</span><b>${esc(data.openedAtLabel)}</b></div>
+    <div class="line"><span>الإغلاق</span><b>${esc(data.closedAtLabel)}</b></div>
   </div>
 
   <div class="sec">المبيعات حسب الفئة</div>
   ${catRows || `<div class="sub">لا مبيعات</div>`}
   <div class="sum-box">
-    <div class="line"><span>مجموع المبيعات</span><b dir="ltr">${money(data.sales.total)}</b></div>
-    <div class="line"><span>خصومات المبيعات</span><b dir="ltr">${money(data.sales.discountTotal)}</b></div>
-    <div class="grand"><span>الواصل من المبيعات</span><span dir="ltr">${money(data.sales.receivedTotal)}</span></div>
+    <div class="line"><span>مجموع المبيعات</span><b>${money(data.sales.total)}</b></div>
+    <div class="line"><span>خصومات المبيعات</span><b>${money(data.sales.discountTotal)}</b></div>
+    <div class="grand"><span>الواصل من المبيعات</span><span>${money(data.sales.receivedTotal)}</span></div>
   </div>
 
   <div class="sec">المصاريف</div>
   <div class="sum-box">
-    <div class="line"><span>مجموع المصاريف</span><b dir="ltr">${money(data.expenses.total)}</b></div>
+    <div class="line"><span>مجموع المصاريف</span><b>${money(data.expenses.total)}</b></div>
   </div>
   ${expenseRows ? `<div class="subhead">تفاصيل المصاريف</div>${expenseRows}` : ""}
 
@@ -3112,6 +2992,7 @@ function buildShiftThermalHtml(data: ShiftThermalReportData) {
   ${supplierBlock}
 
   <div class="footer">تقرير وردية · حراري</div>
+  </div>
 </body>
 </html>`;
 }
