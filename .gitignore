@@ -16,6 +16,10 @@ node_modules
 .env.*
 !.env.example
 
+# runtime uploads / local agent
+uploads/
+.cursor/
+
 # IDEs and editors
 /.idea
 .project

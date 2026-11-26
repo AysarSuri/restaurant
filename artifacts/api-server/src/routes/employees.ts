@@ -4,6 +4,7 @@ import { employeesTable, employeeBranchesTable } from "@workspace/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { parseBranchScope } from "../lib/branch-scope";
 import { ensureEmployeeColumns } from "../lib/ensure-employee-columns";
+import { stripEmployeePin } from "../lib/auth-token";
 
 const router: IRouter = Router();
 
@@ -100,8 +101,9 @@ function withBranches<T extends { id: number; role: string; allBranches?: boolea
   branchMap: Map<number, number[]>
 ) {
   const allBranches = roleUsesAllBranches(emp.role) || Boolean(emp.allBranches);
+  const safe = stripEmployeePin(emp as T & Record<string, unknown>);
   return {
-    ...emp,
+    ...safe,
     allBranches,
     branchIds: allBranches ? [] : branchMap.get(emp.id) ?? [],
   };

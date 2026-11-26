@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import menuRouter from "./menu";
 import tablesRouter from "./tables";
 import ordersRouter from "./orders";
@@ -18,10 +19,12 @@ import shiftsRouter from "./shifts";
 import suppliersRouter from "./suppliers";
 import systemResetRouter from "./system-reset";
 import vaultRouter from "./vault";
+import { requireRoles } from "../middleware/require-auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/auth", authRouter);
 router.use("/menu", menuRouter);
 router.use("/tables", tablesRouter);
 router.use("/orders", ordersRouter);
@@ -38,7 +41,7 @@ router.use("/drivers", driversRouter);
 router.use("/reports", reportsRouter);
 router.use("/shifts", shiftsRouter);
 router.use("/suppliers", suppliersRouter);
-router.use("/system-reset", systemResetRouter);
+router.use("/system-reset", requireRoles("admin"), systemResetRouter);
 router.use("/vault", vaultRouter);
 
 export default router;

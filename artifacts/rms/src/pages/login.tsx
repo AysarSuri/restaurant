@@ -24,8 +24,6 @@ const ROLES = [
 ] as const;
 
 export type RoleType = (typeof ROLES)[number]["value"];
-const DEMO_PIN = "1234";
-
 /* ─── Combobox ─────────────────────────────────────────────── */
 function Combobox({ items, value, onChange, disabled, placeholder, isTable }: {
   items: ComboItem[]; value: string; onChange: (l: string) => void;
@@ -304,6 +302,7 @@ export default function Login() {
   const [pin, setPin] = useState("");
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const pinInputRef = useRef<HTMLInputElement>(null);
   const pinInputDesktopRef = useRef<HTMLInputElement>(null);
 
@@ -444,7 +443,8 @@ export default function Login() {
     setError("");
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (submitting) return;
     if (!selectedRole)     { setError(t("auth.selectRoleFirst")); return; }
     if (isTableRole && (selectedBranchId == null || selectedBranchId === "all")) {
       setError(t("auth.selectBranchFirst"));
@@ -453,52 +453,103 @@ export default function Login() {
     if (!selection.trim()) { setError(isTableRole ? t("auth.selectTable") : t("auth.selectEmployee")); return; }
     if (!isTableRole && selectedBranchId == null) { setError(t("auth.selectBranch")); return; }
     if (!pin)              { setError(t("auth.enterPin")); return; }
-    const expectedPin = isTableRole
-      ? DEMO_PIN
-      : (selectedEmployee?.pin?.trim() || DEMO_PIN);
-    if (pin !== expectedPin)  { setError(t("auth.pinIncorrect")); return; }
 
     const branchName =
       selectedBranchId === "all"
         ? t("auth.allBranches")
         : allBranches.find((b) => b.id === selectedBranchId)?.name;
 
+    const body: Record<string, unknown> = {
+      role: selectedRole,
+      pin,
+    };
+
     if (isTableRole) {
-      const item = comboItems.find(i => i.label === selection.trim());
-      const table = allTables.find(t => t.id === item?.id);
-      login({
-        name: selection.trim(),
-        role: selectedRole,
-        tableId: item?.id,
-        tableNumber: table?.number,
-        allBranches: false,
-        branchIds: typeof selectedBranchId === "number" ? [selectedBranchId] : [],
-        selectedBranchId: selectedBranchId!,
-        branchName,
-      });
+      const item = comboItems.find((i) => i.label === selection.trim());
+      if (!item?.id) {
+        setError(t("auth.selectTable"));
+        return;
+      }
+      body.tableId = item.id;
     } else {
-      const emp = selectedEmployee;
-      const isFullAdmin =
-        selectedRole === "admin" ||
-        selectedRole === "manager" ||
-        emp?.role === "admin" ||
-        emp?.role === "manager";
-      const listPermissions = isFullAdmin
-        ? fullListPermissionsMap()
-        : listPermissionsFromEmployee(emp ?? { role: selectedRole });
-      login({
-        name: selection.trim(),
-        role: selectedRole,
-        employeeId: emp?.id,
-        allBranches: employeeCanAllBranches,
-        branchIds: employeeCanAllBranches ? [] : emp?.branchIds ?? [],
-        selectedBranchId: selectedBranchId!,
-        branchName,
-        listPermissions,
-        menuPermissions: toLegacyMenuPermissions(listPermissions),
-      });
+      if (!selectedEmployee?.id) {
+        setError(t("auth.selectEmployee"));
+        return;
+      }
+      body.employeeId = selectedEmployee.id;
     }
-    navigate(roleConfig!.redirect);
+
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | {
+            success?: boolean;
+            message?: string;
+            token?: string;
+            user?: Record<string, unknown>;
+          }
+        | null;
+      if (!res.ok || !data?.token || !data.user) {
+        setError(data?.message || t("auth.pinIncorrect"));
+        return;
+      }
+
+      if (isTableRole) {
+        const item = comboItems.find((i) => i.label === selection.trim());
+        const table = allTables.find((tbl) => tbl.id === item?.id);
+        login(
+          {
+            name: String(data.user.name ?? selection.trim()),
+            role: "table",
+            tableId: item?.id ?? (data.user.tableId as number | undefined),
+            tableNumber:
+              table?.number ??
+              (data.user.tableNumber as string | undefined),
+            allBranches: false,
+            branchIds:
+              typeof selectedBranchId === "number" ? [selectedBranchId] : [],
+            selectedBranchId: selectedBranchId!,
+            branchName,
+          },
+          data.token
+        );
+      } else {
+        const emp = selectedEmployee;
+        const isFullAdmin =
+          selectedRole === "admin" ||
+          selectedRole === "manager" ||
+          emp?.role === "admin" ||
+          emp?.role === "manager";
+        const listPermissions = isFullAdmin
+          ? fullListPermissionsMap()
+          : listPermissionsFromEmployee(emp ?? { role: selectedRole });
+        login(
+          {
+            name: String(data.user.name ?? selection.trim()),
+            role: selectedRole,
+            employeeId: emp?.id,
+            allBranches: employeeCanAllBranches,
+            branchIds: employeeCanAllBranches ? [] : emp?.branchIds ?? [],
+            selectedBranchId: selectedBranchId!,
+            branchName,
+            listPermissions,
+            menuPermissions: toLegacyMenuPermissions(listPermissions),
+          },
+          data.token
+        );
+      }
+      navigate(roleConfig!.redirect);
+    } catch {
+      setError(t("auth.pinIncorrect"));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const branchPicker = (() => {
@@ -747,7 +798,7 @@ export default function Login() {
 
         {/* ── BOTTOM: PIN Pad — always visible, never hidden ── */}
         <div className="flex-shrink-0 border-t border-border/50 bg-secondary px-4 pt-3 pb-4">
-          <MobileKeyboard value={pin} onChange={updatePin} onEnter={handleLogin} disabled={!pinReady} />
+          <MobileKeyboard value={pin} onChange={updatePin} onEnter={handleLogin} disabled={!pinReady || submitting} />
         </div>
       </div>
 
@@ -893,7 +944,7 @@ export default function Login() {
 
         {/* Desktop Keyboard */}
         <div className="border-t border-border/50 bg-secondary flex-1 min-h-0 flex flex-col px-4 pt-2 pb-2">
-          <DesktopKeyboard value={pin} onChange={updatePin} onEnter={handleLogin} disabled={!pinReady} />
+          <DesktopKeyboard value={pin} onChange={updatePin} onEnter={handleLogin} disabled={!pinReady || submitting} />
         </div>
       </div>
     </div>

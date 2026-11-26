@@ -1,5 +1,9 @@
-import express, { type Express } from "express";
+import path from "node:path";
+import fs from "node:fs";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -7,6 +11,12 @@ import { ensureCategoryUploadsDir, UPLOADS_ROOT } from "./lib/category-image";
 import { ensureSalesDeviceColumns } from "./lib/ensure-sales-columns";
 import { ensureEmployeeColumns } from "./lib/ensure-employee-columns";
 import { ensureVaultColumns } from "./lib/ensure-vault-columns";
+import {
+  attachAuthIfPresent,
+  isPublicApiPath,
+  requireAuth,
+  type AuthedRequest,
+} from "./middleware/require-auth";
 
 const app: Express = express();
 
@@ -14,6 +24,48 @@ ensureCategoryUploadsDir();
 void ensureSalesDeviceColumns();
 void ensureEmployeeColumns();
 void ensureVaultColumns();
+
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+const corsOrigins = (process.env.CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Same-origin / server-to-server / health checks often omit Origin.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (corsOrigins.length === 0) {
+        if (process.env.NODE_ENV === "production") {
+          callback(new Error("CORS_ORIGIN is not configured"));
+          return;
+        }
+        callback(null, true);
+        return;
+      }
+      if (corsOrigins.includes(origin) || corsOrigins.includes("*")) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+    credentials: true,
+  })
+);
+
 app.use("/uploads", express.static(UPLOADS_ROOT));
 
 app.use(
@@ -33,12 +85,129 @@ app.use(
         };
       },
     },
-  }),
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "body.pin",
+        "body.password",
+      ],
+      remove: true,
+    },
+  })
 );
-app.use(cors());
+
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
+const generalLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 900,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "طلبات كثيرة — حاول بعد لحظات",
+    error: "rate_limited",
+  },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "محاولات دخول كثيرة — انتظر قليلاً ثم أعد المحاولة",
+    error: "login_rate_limited",
+  },
+});
+
+const resetLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "تم تجاوز حد عمليات التصفير",
+    error: "reset_rate_limited",
+  },
+});
+
+app.use("/api", generalLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/system-reset", resetLimiter);
+
+app.use("/api", (req: AuthedRequest, res: Response, next: NextFunction) => {
+  attachAuthIfPresent(req, res, () => {
+    if (isPublicApiPath(req.method, req.path)) {
+      next();
+      return;
+    }
+    requireAuth(req, res, next);
+  });
+});
+
 app.use("/api", router);
+
+function resolveStaticDir(): string | null {
+  const fromEnv = process.env.STATIC_DIR?.trim();
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  const candidates = [
+    path.resolve(process.cwd(), "public"),
+    path.resolve(process.cwd(), "artifacts/rms/dist/public"),
+    "/app/public",
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  return null;
+}
+
+const staticDir = resolveStaticDir();
+if (staticDir) {
+  logger.info({ staticDir }, "Serving SPA static files");
+  app.use(
+    express.static(staticDir, {
+      index: false,
+      maxAge: process.env.NODE_ENV === "production" ? "1h" : 0,
+    })
+  );
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      next();
+      return;
+    }
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+      next();
+      return;
+    }
+    const indexHtml = path.join(staticDir, "index.html");
+    if (!fs.existsSync(indexHtml)) {
+      next();
+      return;
+    }
+    res.sendFile(indexHtml);
+  });
+}
+
+app.use(
+  (
+    err: unknown,
+    _req: Request,
+    res: Response,
+    _next: NextFunction
+  ) => {
+    const message = err instanceof Error ? err.message : "Internal error";
+    if (message.includes("not allowed by CORS") || message.includes("CORS_ORIGIN")) {
+      res.status(403).json({ success: false, message: "CORS blocked", error: "cors" });
+      return;
+    }
+    logger.error({ err }, "Unhandled error");
+    res.status(500).json({ success: false, message: "خطأ في الخادم" });
+  }
+);
 
 export default app;

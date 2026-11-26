@@ -170,7 +170,8 @@ export default function Employees() {
       name: emp.name,
       role,
       phone: emp.phone ?? "",
-      pin: emp.pin?.trim() ?? "",
+      // PIN is never returned by the API — leave blank to keep existing.
+      pin: "",
       isActive: emp.isActive ?? true,
       branchIds: emp.branchIds ?? [],
       listPermissions: listPermissionsFromEmployee(emp),
@@ -184,8 +185,10 @@ export default function Employees() {
     const e: Partial<Record<keyof FormData | "branches", string>> = {};
     if (!form.name.trim()) e.name = "الاسم مطلوب";
     if (!form.role) e.role = "المنصب مطلوب";
-    if (!form.pin.trim()) e.pin = "الرقم السري مطلوب";
-    else if (form.pin.trim().length < 4) e.pin = "الرقم السري يجب أن يكون 4 أحرف على الأقل";
+    if (!editTarget && !form.pin.trim()) e.pin = "الرقم السري مطلوب";
+    else if (form.pin.trim() && form.pin.trim().length < 4) {
+      e.pin = "الرقم السري يجب أن يكون 4 أحرف على الأقل";
+    }
     if (!ALL_BRANCH_ROLES.has(form.role) && form.branchIds.length === 0) {
       e.branches = "اختر فرعاً واحداً على الأقل";
     }
@@ -201,11 +204,10 @@ export default function Employees() {
       ? fullListPermissionsMap()
       : form.listPermissions;
     const menu = listPermissions.menu ?? EMPTY_LIST_PERM;
-    const payload = {
+    const payload: Record<string, unknown> = {
       name: form.name.trim(),
       role: form.role as any,
       phone: form.phone || undefined,
-      pin: form.pin.trim(),
       isActive: form.isActive,
       allBranches: usesAll,
       branchIds: usesAll ? [] : form.branchIds,
@@ -217,15 +219,19 @@ export default function Employees() {
       menuCanDeleteNew: menu.delete !== "none",
       menuCanDeleteOld: menu.delete === "all",
     };
+    // Omit pin on edit when blank → server keeps the existing PIN.
+    if (!editTarget || form.pin.trim()) {
+      payload.pin = form.pin.trim();
+    }
 
     if (editTarget) {
       updateEmployee(
-        { id: editTarget.id, data: payload },
+        { id: editTarget.id, data: payload as any },
         { onSuccess: () => { setFormOpen(false); refetch(); } }
       );
     } else {
       createEmployee(
-        { data: payload },
+        { data: payload as any },
         { onSuccess: () => { setFormOpen(false); refetch(); } }
       );
     }
@@ -619,7 +625,12 @@ export default function Employees() {
 
             <div>
               <label className="block text-sm font-bold mb-1.5">
-                الرقم السري لتسجيل الدخول <span className="text-destructive">*</span>
+                الرقم السري لتسجيل الدخول{" "}
+                {editTarget ? (
+                  <span className="text-muted-foreground font-semibold">(اختياري عند التعديل)</span>
+                ) : (
+                  <span className="text-destructive">*</span>
+                )}
               </label>
               <div
                 className={cn(
@@ -659,7 +670,7 @@ export default function Employees() {
                 <p>
                   يُستخدم عند تسجيل الدخول من شاشة الدخول.
                   {editTarget
-                    ? " يظهر الرقم الحالي ويمكنك تعديله وحفظه."
+                    ? " اتركه فارغاً للإبقاء على الرمز الحالي، أو أدخل رمزاً جديداً."
                     : " اختر رمزاً من 4 أحرف أو أرقام على الأقل."}
                 </p>
               </div>

@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { createContext, useContext, useEffect, useLayoutEffect, useState } from "react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
@@ -157,7 +158,7 @@ export interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null;
-  login: (user: AuthUser) => void;
+  login: (user: AuthUser, token?: string) => void;
   logout: () => void;
 }
 
@@ -171,25 +172,57 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+const AUTH_TOKEN_KEY = "rms-token";
+
+export function getStoredAuthToken(): string | null {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredAuthToken(token: string | null) {
+  try {
+    if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+    else localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem("rms-user");
-      return stored ? JSON.parse(stored) : null;
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!stored || !token) {
+        localStorage.removeItem("rms-user");
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        return null;
+      }
+      return JSON.parse(stored);
     } catch {
       return null;
     }
   });
 
-  const login = (u: AuthUser) => {
+  useEffect(() => {
+    setAuthTokenGetter(() => getStoredAuthToken());
+    return () => setAuthTokenGetter(null);
+  }, []);
+
+  const login = (u: AuthUser, token?: string) => {
     setUser(u);
     localStorage.setItem("rms-user", JSON.stringify(u));
+    if (token) setStoredAuthToken(token);
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem("rms-user");
     localStorage.removeItem("rms-branch");
+    setStoredAuthToken(null);
   };
 
   return (
