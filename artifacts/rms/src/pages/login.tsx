@@ -661,21 +661,34 @@ export default function Login() {
           type="button"
           onClick={() => void toggleFullscreen()}
           title={isFullscreen ? t("auth.unfullscreen") : t("auth.fullscreen")}
+          aria-label={isFullscreen ? t("auth.unfullscreen") : t("auth.fullscreen")}
           aria-pressed={isFullscreen}
-          className={`inline-flex h-10 sm:h-12 items-center gap-1.5 rounded-full border px-3 sm:px-3.5 text-[11px] sm:text-xs font-extrabold tracking-wide transition-all ${
+          className={`group relative inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border transition-all duration-300 overflow-hidden ${
             isFullscreen
-              ? "border-indigo-500/60 bg-indigo-500/15 text-indigo-700 dark:text-indigo-200"
-              : "border-border bg-secondary text-foreground hover:border-primary/40"
+              ? "border-indigo-400/70 bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/30"
+              : "border-border bg-secondary text-foreground hover:border-indigo-400/50 hover:bg-indigo-500/10"
           }`}
         >
-          {isFullscreen ? (
-            <Minimize2 className="w-4 h-4 flex-shrink-0" />
-          ) : (
-            <Maximize2 className="w-4 h-4 flex-shrink-0" />
-          )}
-          <span className="whitespace-nowrap">
-            {isFullscreen ? t("auth.unfullscreen") : t("auth.fullscreen")}
-          </span>
+          <span
+            className={`absolute inset-0 opacity-40 pointer-events-none ${
+              isFullscreen
+                ? "bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.45),transparent_55%)]"
+                : "bg-[radial-gradient(circle_at_30%_25%,hsla(var(--primary),0.12),transparent_55%)]"
+            }`}
+          />
+          <motion.span
+            key={isFullscreen ? "exit-fs" : "enter-fs"}
+            initial={{ opacity: 0, scale: 0.7, rotate: -12 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 22 }}
+            className="relative z-10"
+          >
+            {isFullscreen ? (
+              <Minimize2 className="w-[1.15rem] h-[1.15rem] sm:w-5 sm:h-5 drop-shadow-sm" strokeWidth={2.4} />
+            ) : (
+              <Maximize2 className="w-[1.15rem] h-[1.15rem] sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" strokeWidth={2.4} />
+            )}
+          </motion.span>
         </button>
       </div>
 

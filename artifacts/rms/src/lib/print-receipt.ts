@@ -1516,13 +1516,59 @@ function buildSupplierStatementA4Html(data: SupplierStatementReceiptData) {
 </html>`;
 }
 
+/** Preview chrome for A4: show report first; user prints manually. */
+function withA4PreviewChrome(html: string) {
+  const bar = `
+<style id="rms-a4-preview-style">
+  .rms-a4-preview-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px;
+    background: #111; color: #fff;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 13px; font-weight: 700;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  }
+  .rms-a4-preview-bar button {
+    cursor: pointer; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: inherit; font-weight: 800;
+  }
+  .rms-a4-preview-bar .print-btn { background: #f59e0b; color: #111; }
+  .rms-a4-preview-bar .close-btn { background: #374151; color: #fff; }
+  body.rms-a4-preview { padding-top: 58px !important; }
+  @media print {
+    .rms-a4-preview-bar { display: none !important; }
+    body.rms-a4-preview { padding-top: 0 !important; }
+  }
+</style>
+<div class="rms-a4-preview-bar" role="toolbar">
+  <span>معاينة تقرير A4 — بدون طباعة مباشرة</span>
+  <button type="button" class="print-btn" onclick="window.print()">طباعة</button>
+  <button type="button" class="close-btn" onclick="window.close()">إغلاق</button>
+</div>
+<script>
+  document.body.classList.add("rms-a4-preview");
+</script>`;
+
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${bar}</body>`);
+  }
+  return `${html}${bar}`;
+}
+
+/**
+ * Opens an HTML document for A4/report preview or thermal print.
+ * Default: preview only (no auto print). Pass `{ autoPrint: true }` for silent/direct print.
+ */
 function openPrintHtmlDocument(
   html: string,
   windowName: string,
-  opts?: { landscape?: boolean }
+  opts?: { landscape?: boolean; autoPrint?: boolean }
 ) {
   const landscape = Boolean(opts?.landscape);
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const autoPrint = opts?.autoPrint === true;
+  const finalHtml = autoPrint ? html : withA4PreviewChrome(html);
+  const blob = new Blob([finalHtml], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const popup = window.open(
     url,
@@ -1533,25 +1579,40 @@ function openPrintHtmlDocument(
   );
 
   if (popup) {
-    let printed = false;
-    const start = () => {
-      if (printed) return;
-      printed = true;
-      printFromWindow(popup);
-      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
-    };
-    popup.onload = start;
-    window.setTimeout(() => {
+    if (autoPrint) {
+      let printed = false;
+      const start = () => {
+        if (printed) return;
+        printed = true;
+        printFromWindow(popup);
+        window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+      };
+      popup.onload = start;
+      window.setTimeout(() => {
+        try {
+          if (popup.document?.readyState === "complete") start();
+        } catch {
+          start();
+        }
+      }, 400);
+    } else {
       try {
-        if (popup.document?.readyState === "complete") start();
+        popup.focus();
       } catch {
-        start();
+        /* ignore */
       }
-    }, 400);
+      window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+    }
     return;
   }
 
   URL.revokeObjectURL(url);
+
+  // Popup blocked: only auto-print via hidden iframe when explicitly requested
+  if (!autoPrint) {
+    throw new Error("تعذر فتح معاينة التقرير — اسمح بالنوافذ المنبثقة ثم أعد المحاولة");
+  }
+
   const iframe = document.createElement("iframe");
   iframe.title = landscape ? "تقرير A4 أفقي" : "تقرير A4";
   iframe.setAttribute("aria-hidden", "true");
@@ -1764,7 +1825,7 @@ export function printExpenseThermal(data: ExpenseThermalReceiptData) {
   }
 
   URL.revokeObjectURL(url);
-  openPrintHtmlDocument(html, "rms-expense-thermal-iframe");
+  openPrintHtmlDocument(html, "rms-expense-thermal-iframe", { autoPrint: true });
 }
 
 export type ExpenseReportA4Line = {
@@ -2795,7 +2856,7 @@ export function printVaultReportThermal(data: VaultReportData) {
     return;
   }
   URL.revokeObjectURL(url);
-  openPrintHtmlDocument(html, "rms-vault-thermal-iframe");
+  openPrintHtmlDocument(html, "rms-vault-thermal-iframe", { autoPrint: true });
 }
 
 export type ShiftThermalReportData = {
