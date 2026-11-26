@@ -420,6 +420,7 @@ router.post("/printers", async (req, res) => {
     formsFullscreen,
     virtualNumericKeypad,
     virtualKeyboard,
+    clickSound,
   } = body;
 
   const key = String(deviceKey ?? "").trim();
@@ -473,6 +474,10 @@ router.post("/printers", async (req, res) => {
           virtualKeyboard != null
             ? Boolean(virtualKeyboard)
             : existing.virtualKeyboard === true,
+        clickSound:
+          clickSound != null
+            ? Boolean(clickSound)
+            : existing.clickSound === true,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, existing.id))
@@ -509,6 +514,7 @@ router.post("/printers", async (req, res) => {
         virtualNumericKeypad:
           virtualNumericKeypad != null ? Boolean(virtualNumericKeypad) : false,
         virtualKeyboard: virtualKeyboard != null ? Boolean(virtualKeyboard) : false,
+        clickSound: clickSound != null ? Boolean(clickSound) : false,
       })
       .returning();
 
@@ -548,6 +554,7 @@ router.post("/printers", async (req, res) => {
         virtualNumericKeypad:
           virtualNumericKeypad != null ? Boolean(virtualNumericKeypad) : false,
         virtualKeyboard: virtualKeyboard != null ? Boolean(virtualKeyboard) : false,
+        clickSound: clickSound != null ? Boolean(clickSound) : false,
         updatedAt: new Date(),
       })
       .where(eq(devicePrintersTable.id, fallbackId))
@@ -579,6 +586,7 @@ router.put("/printers/:id", async (req, res) => {
     formsFullscreen,
     virtualNumericKeypad,
     virtualKeyboard,
+    clickSound,
   } = body;
 
   const [existing] = await db
@@ -610,6 +618,8 @@ router.put("/printers/:id", async (req, res) => {
     virtualKeyboard != null
       ? Boolean(virtualKeyboard)
       : Boolean(existing.virtualKeyboard);
+  const nextClickSound =
+    clickSound != null ? Boolean(clickSound) : Boolean(existing.clickSound);
 
   const [updated] = await db
     .update(devicePrintersTable)
@@ -637,6 +647,7 @@ router.put("/printers/:id", async (req, res) => {
       formsFullscreen: nextFullscreen,
       virtualNumericKeypad: nextNumericKeypad,
       virtualKeyboard: nextVirtualKeyboard,
+      clickSound: nextClickSound,
       updatedAt: new Date(),
     })
     .where(eq(devicePrintersTable.id, id))
@@ -649,6 +660,7 @@ router.put("/printers/:id", async (req, res) => {
       forms_fullscreen = ${nextFullscreen},
       virtual_numeric_keypad = ${nextNumericKeypad},
       virtual_keyboard = ${nextVirtualKeyboard},
+      click_sound = ${nextClickSound},
       updated_at = NOW()
     WHERE id = ${id}
   `);
@@ -668,6 +680,7 @@ router.put("/printers/:id", async (req, res) => {
       formsFullscreen: nextFullscreen,
       virtualNumericKeypad: nextNumericKeypad,
       virtualKeyboard: nextVirtualKeyboard,
+      clickSound: nextClickSound,
       branchName,
     })
   );
