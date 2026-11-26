@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { employeesTable, employeeBranchesTable } from "@workspace/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { parseBranchScope } from "../lib/branch-scope";
+import { ensureEmployeeColumns } from "../lib/ensure-employee-columns";
 
 const router: IRouter = Router();
 
@@ -10,6 +11,55 @@ const ALL_BRANCH_ROLES = new Set(["admin", "manager"]);
 
 function roleUsesAllBranches(role: string) {
   return ALL_BRANCH_ROLES.has(role);
+}
+
+function boolFlag(v: unknown, fallback = false) {
+  if (v == null) return fallback;
+  return Boolean(v);
+}
+
+function pickMenuFlags(body: Record<string, unknown>, existing?: {
+  menuCanAccess?: boolean | null;
+  menuCanCreate?: boolean | null;
+  menuCanEditNew?: boolean | null;
+  menuCanEditOld?: boolean | null;
+  menuCanDeleteNew?: boolean | null;
+  menuCanDeleteOld?: boolean | null;
+  listPermissions?: unknown;
+}) {
+  const listPermissions =
+    body.listPermissions != null && typeof body.listPermissions === "object"
+      ? body.listPermissions
+      : existing?.listPermissions != null && typeof existing.listPermissions === "object"
+        ? existing.listPermissions
+        : {};
+  return {
+    menuCanAccess: boolFlag(
+      body.menuCanAccess,
+      existing?.menuCanAccess ?? false
+    ),
+    menuCanCreate: boolFlag(
+      body.menuCanCreate,
+      existing?.menuCanCreate ?? false
+    ),
+    menuCanEditNew: boolFlag(
+      body.menuCanEditNew,
+      existing?.menuCanEditNew ?? false
+    ),
+    menuCanEditOld: boolFlag(
+      body.menuCanEditOld,
+      existing?.menuCanEditOld ?? false
+    ),
+    menuCanDeleteNew: boolFlag(
+      body.menuCanDeleteNew,
+      existing?.menuCanDeleteNew ?? false
+    ),
+    menuCanDeleteOld: boolFlag(
+      body.menuCanDeleteOld,
+      existing?.menuCanDeleteOld ?? false
+    ),
+    listPermissions,
+  };
 }
 
 async function getBranchIdsForEmployees(employeeIds: number[]) {
@@ -58,6 +108,7 @@ function withBranches<T extends { id: number; role: string; allBranches?: boolea
 }
 
 router.get("/", async (req, res) => {
+  await ensureEmployeeColumns();
   const scope = parseBranchScope(req);
   const employees = await db
     .select()
@@ -75,6 +126,8 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
+  await ensureEmployeeColumns();
+  const body = (req.body ?? {}) as Record<string, unknown>;
   const {
     name,
     role,
@@ -86,14 +139,15 @@ router.post("/", async (req, res) => {
     hireDate,
     allBranches,
     branchIds,
-  } = req.body;
+  } = body;
 
-  if (!name?.trim() || !role) {
+  if (!name || !String(name).trim() || !role) {
     res.status(400).json({ success: false, message: "الاسم والمنصب مطلوبان" });
     return;
   }
 
-  const usesAll = roleUsesAllBranches(role) || allBranches === true;
+  const roleStr = String(role);
+  const usesAll = roleUsesAllBranches(roleStr) || allBranches === true;
   if (!usesAll && (!Array.isArray(branchIds) || branchIds.length === 0)) {
     res.status(400).json({
       success: false,
@@ -104,29 +158,37 @@ router.post("/", async (req, res) => {
 
   const pinValue =
     pin != null && String(pin).trim() !== "" ? String(pin).trim() : null;
+  const menuFlags = pickMenuFlags(body);
 
   const [emp] = await db
     .insert(employeesTable)
     .values({
       name: String(name).trim(),
-      role,
-      phone,
-      email,
+      role: roleStr as typeof employeesTable.$inferInsert.role,
+      phone: phone != null ? String(phone) : null,
+      email: email != null ? String(email) : null,
       pin: pinValue,
-      salary: salary?.toString(),
-      isActive: isActive ?? true,
+      salary: salary != null ? String(salary) : null,
+      isActive: isActive !== false,
       allBranches: usesAll,
-      hireDate: hireDate ? new Date(hireDate) : null,
+      ...menuFlags,
+      hireDate: hireDate ? new Date(String(hireDate)) : null,
     })
     .returning();
 
-  await setEmployeeBranches(emp.id, usesAll, usesAll ? [] : branchIds);
+  await setEmployeeBranches(
+    emp.id,
+    usesAll,
+    usesAll ? [] : (branchIds as number[])
+  );
   const branchMap = await getBranchIdsForEmployees([emp.id]);
   res.status(201).json(withBranches(emp, branchMap));
 });
 
 router.put("/:id", async (req, res) => {
-  const id = parseInt(req.params.id);
+  await ensureEmployeeColumns();
+  const id = parseInt(req.params.id, 10);
+  const body = (req.body ?? {}) as Record<string, unknown>;
   const {
     name,
     role,
@@ -138,14 +200,25 @@ router.put("/:id", async (req, res) => {
     hireDate,
     allBranches,
     branchIds,
-  } = req.body;
+  } = body;
 
-  if (!name?.trim() || !role) {
+  if (!name || !String(name).trim() || !role) {
     res.status(400).json({ success: false, message: "الاسم والمنصب مطلوبان" });
     return;
   }
 
-  const usesAll = roleUsesAllBranches(role) || allBranches === true;
+  const [existing] = await db
+    .select()
+    .from(employeesTable)
+    .where(eq(employeesTable.id, id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ success: false, message: "الموظف غير موجود" });
+    return;
+  }
+
+  const roleStr = String(role);
+  const usesAll = roleUsesAllBranches(roleStr) || allBranches === true;
   if (!usesAll && (!Array.isArray(branchIds) || branchIds.length === 0)) {
     res.status(400).json({
       success: false,
@@ -161,34 +234,32 @@ router.put("/:id", async (req, res) => {
         ? String(pin).trim()
         : null;
 
+  const menuFlags = pickMenuFlags(body, existing);
+
   const [emp] = await db
     .update(employeesTable)
     .set({
       name: String(name).trim(),
-      role,
-      phone,
-      email,
+      role: roleStr as typeof employeesTable.$inferInsert.role,
+      phone: phone != null ? String(phone) : null,
+      email: email != null ? String(email) : null,
       ...(pinValue !== undefined ? { pin: pinValue } : {}),
-      salary: salary?.toString(),
-      isActive,
+      salary: salary != null ? String(salary) : null,
+      isActive: isActive !== false,
       allBranches: usesAll,
-      hireDate: hireDate ? new Date(hireDate) : undefined,
+      ...menuFlags,
+      hireDate: hireDate ? new Date(String(hireDate)) : undefined,
     })
     .where(eq(employeesTable.id, id))
     .returning();
 
-  if (!emp) {
-    res.status(404).json({ success: false, message: "الموظف غير موجود" });
-    return;
-  }
-
-  await setEmployeeBranches(id, usesAll, usesAll ? [] : branchIds ?? []);
+  await setEmployeeBranches(id, usesAll, usesAll ? [] : ((branchIds as number[]) ?? []));
   const branchMap = await getBranchIdsForEmployees([id]);
   res.json(withBranches(emp, branchMap));
 });
 
 router.delete("/:id", async (req, res) => {
-  const id = parseInt(req.params.id);
+  const id = parseInt(req.params.id, 10);
   await db.delete(employeeBranchesTable).where(eq(employeeBranchesTable.employeeId, id));
   await db.delete(employeesTable).where(eq(employeesTable.id, id));
   res.json({ success: true, message: "Deleted" });

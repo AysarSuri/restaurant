@@ -7,6 +7,7 @@ import {
   timestamp,
   integer,
   primaryKey,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -26,6 +27,15 @@ export const employeesTable = pgTable("employees", {
   isActive: boolean("is_active").default(true).notNull(),
   /** admin/manager always all branches; others may be scoped */
   allBranches: boolean("all_branches").default(false).notNull(),
+  /** Menu (قائمة الطعام) permissions — legacy flags kept for migration */
+  menuCanAccess: boolean("menu_can_access").default(false).notNull(),
+  menuCanCreate: boolean("menu_can_create").default(false).notNull(),
+  menuCanEditNew: boolean("menu_can_edit_new").default(false).notNull(),
+  menuCanEditOld: boolean("menu_can_edit_old").default(false).notNull(),
+  menuCanDeleteNew: boolean("menu_can_delete_new").default(false).notNull(),
+  menuCanDeleteOld: boolean("menu_can_delete_old").default(false).notNull(),
+  /** Per-list permissions: access/create + edit/delete age scope (1d|2d|all) */
+  listPermissions: jsonb("list_permissions").$type<Record<string, unknown>>().default({}).notNull(),
   hireDate: timestamp("hire_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

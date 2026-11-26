@@ -424,6 +424,15 @@ export interface Employee {
   allBranches?: boolean;
   /** specific branches when allBranches is false */
   branchIds?: number[];
+  /** Menu page access (legacy) */
+  menuCanAccess?: boolean;
+  menuCanCreate?: boolean;
+  menuCanEditNew?: boolean;
+  menuCanEditOld?: boolean;
+  menuCanDeleteNew?: boolean;
+  menuCanDeleteOld?: boolean;
+  /** Per-list permissions map */
+  listPermissions?: Record<string, unknown>;
   hireDate?: string;
   createdAt?: string;
 }
@@ -451,6 +460,13 @@ export interface CreateEmployeeBody {
   hireDate?: string;
   allBranches?: boolean;
   branchIds?: number[];
+  menuCanAccess?: boolean;
+  menuCanCreate?: boolean;
+  menuCanEditNew?: boolean;
+  menuCanEditOld?: boolean;
+  menuCanDeleteNew?: boolean;
+  menuCanDeleteOld?: boolean;
+  listPermissions?: Record<string, unknown>;
 }
 
 export interface Expense {

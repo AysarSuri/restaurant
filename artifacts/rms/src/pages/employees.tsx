@@ -13,11 +13,24 @@ import {
 } from "@/components/ui-elements";
 import {
   Plus, Search, Edit, Trash2, Users,
-  Phone, Briefcase, BadgeDollarSign,
+  Phone, Briefcase,
   ToggleLeft, ToggleRight, AlertTriangle, Building2, Check,
+  ShieldCheck, Lock, Eye, EyeOff, KeyRound,
 } from "lucide-react";
 import type { Employee } from "@workspace/api-client-react";
-import { useI18n } from "@/i18n";
+import {
+  AGE_SCOPE_OPTIONS,
+  EMPTY_LIST_PERM,
+  LIST_CATALOG,
+  emptyListPermissionsMap,
+  fullListPermissionsMap,
+  listPermissionsFromEmployee,
+  type AgeScope,
+  type ListKey,
+  type ListPerm,
+  type ListPermissionsMap,
+} from "@/lib/list-permissions";
+import { cn } from "@/lib/utils";
 
 const ROLES: { value: string; label: string; color: string }[] = [
   { value: "admin",   label: "مدير النظام",   color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
@@ -36,21 +49,88 @@ const roleInfo = (value: string) =>
     ? { label: "سائق توصيل", color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" }
     : { label: value, color: "bg-secondary text-foreground border-border" });
 
-const formatIQD = (val?: number | string | null) =>
-  val ? new Intl.NumberFormat("en-IQ").format(Number(val)) + " د.ع" : "—";
-
 const EMPTY_FORM = {
   name: "",
   role: "cashier",
   phone: "",
+  pin: "",
   isActive: true,
   branchIds: [] as number[],
+  listPermissions: emptyListPermissionsMap() as ListPermissionsMap,
 };
 
 type FormData = typeof EMPTY_FORM;
 
+function MiniSwitch({
+  on,
+  disabled,
+  onClick,
+}: {
+  on: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors touch-manipulation",
+        disabled && "opacity-40 cursor-not-allowed",
+        on ? "bg-emerald-500" : "bg-secondary"
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all",
+          on ? "start-0.5" : "end-0.5"
+        )}
+      />
+    </button>
+  );
+}
+
+function AgeScopePicker({
+  value,
+  disabled,
+  onChange,
+  label,
+}: {
+  value: AgeScope;
+  disabled?: boolean;
+  onChange: (v: AgeScope) => void;
+  label: string;
+}) {
+  return (
+    <div className={cn("space-y-1.5", disabled && "opacity-45 pointer-events-none")}>
+      <p className="text-[11px] font-bold text-muted-foreground">{label}</p>
+      <div className="grid grid-cols-4 gap-1">
+        {AGE_SCOPE_OPTIONS.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              title={opt.hintAr}
+              onClick={() => onChange(opt.value)}
+              className={cn(
+                "min-h-9 px-1 rounded-xl border text-[10px] sm:text-[11px] font-extrabold transition-all touch-manipulation",
+                active
+                  ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                  : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-border"
+              )}
+            >
+              {opt.labelAr}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Employees() {
-  const { formatDate } = useI18n();
   const { data: employees, isLoading, refetch } = useGetEmployees();
   const { data: branches } = useGetBranches({
     query: { staleTime: 60_000, refetchOnMount: false },
@@ -65,6 +145,7 @@ export default function Employees() {
   const [editTarget, setEditTarget] = useState<Employee | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData | "branches", string>>>({});
+  const [showPin, setShowPin] = useState(false);
 
   const isAllBranchesRole = ALL_BRANCH_ROLES.has(form.role);
 
@@ -78,6 +159,7 @@ export default function Employees() {
     setEditTarget(null);
     setForm(EMPTY_FORM);
     setErrors({});
+    setShowPin(false);
     setFormOpen(true);
   };
 
@@ -88,10 +170,13 @@ export default function Employees() {
       name: emp.name,
       role,
       phone: emp.phone ?? "",
+      pin: emp.pin?.trim() ?? "",
       isActive: emp.isActive ?? true,
       branchIds: emp.branchIds ?? [],
+      listPermissions: listPermissionsFromEmployee(emp),
     });
     setErrors({});
+    setShowPin(false);
     setFormOpen(true);
   };
 
@@ -99,6 +184,8 @@ export default function Employees() {
     const e: Partial<Record<keyof FormData | "branches", string>> = {};
     if (!form.name.trim()) e.name = "الاسم مطلوب";
     if (!form.role) e.role = "المنصب مطلوب";
+    if (!form.pin.trim()) e.pin = "الرقم السري مطلوب";
+    else if (form.pin.trim().length < 4) e.pin = "الرقم السري يجب أن يكون 4 أحرف على الأقل";
     if (!ALL_BRANCH_ROLES.has(form.role) && form.branchIds.length === 0) {
       e.branches = "اختر فرعاً واحداً على الأقل";
     }
@@ -110,13 +197,25 @@ export default function Employees() {
     if (Object.keys(e).length) { setErrors(e); return; }
 
     const usesAll = ALL_BRANCH_ROLES.has(form.role);
+    const listPermissions = usesAll
+      ? fullListPermissionsMap()
+      : form.listPermissions;
+    const menu = listPermissions.menu ?? EMPTY_LIST_PERM;
     const payload = {
       name: form.name.trim(),
       role: form.role as any,
       phone: form.phone || undefined,
+      pin: form.pin.trim(),
       isActive: form.isActive,
       allBranches: usesAll,
       branchIds: usesAll ? [] : form.branchIds,
+      listPermissions,
+      menuCanAccess: menu.access,
+      menuCanCreate: menu.create,
+      menuCanEditNew: menu.edit !== "none",
+      menuCanEditOld: menu.edit === "all",
+      menuCanDeleteNew: menu.delete !== "none",
+      menuCanDeleteOld: menu.delete === "all",
     };
 
     if (editTarget) {
@@ -130,6 +229,30 @@ export default function Employees() {
         { onSuccess: () => { setFormOpen(false); refetch(); } }
       );
     }
+  };
+
+  const patchListPerm = (key: ListKey, patch: Partial<ListPerm>) => {
+    setForm((prev) => {
+      const cur = prev.listPermissions[key] ?? { ...EMPTY_LIST_PERM };
+      const nextRow: ListPerm = { ...cur, ...patch };
+      if (patch.access === false) {
+        nextRow.create = false;
+        nextRow.edit = "none";
+        nextRow.delete = "none";
+      }
+      if (
+        patch.access !== false &&
+        (patch.create ||
+          (patch.edit && patch.edit !== "none") ||
+          (patch.delete && patch.delete !== "none"))
+      ) {
+        nextRow.access = true;
+      }
+      return {
+        ...prev,
+        listPermissions: { ...prev.listPermissions, [key]: nextRow },
+      };
+    });
   };
 
   const handleDelete = () => {
@@ -176,17 +299,11 @@ export default function Employees() {
   return (
     <div className="h-full flex flex-col gap-4 md:gap-6">
       {/* Header Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "إجمالي الموظفين", value: employees?.length ?? 0, icon: Users, color: "text-primary" },
           { label: "نشطون", value: employees?.filter(e => e.isActive).length ?? 0, icon: ToggleRight, color: "text-green-400" },
           { label: "موقوفون", value: employees?.filter(e => !e.isActive).length ?? 0, icon: ToggleLeft, color: "text-red-400" },
-          {
-            label: "إجمالي الرواتب",
-            value: formatIQD(employees?.reduce((s, e) => s + Number(e.salary ?? 0), 0)),
-            icon: BadgeDollarSign,
-            color: "text-amber-400",
-          },
         ].map(({ label, value, icon: Icon, color }) => (
           <Card key={label} className="p-4 flex items-center gap-4 border border-border/50">
             <div className={`w-12 h-12 rounded-xl bg-secondary flex items-center justify-center ${color}`}>
@@ -249,17 +366,22 @@ export default function Employees() {
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <div><span className="text-muted-foreground text-xs">الهاتف: </span><span dir="ltr">{emp.phone || "—"}</span></div>
-                  <div><span className="text-muted-foreground text-xs">الراتب: </span><span className="text-green-400 font-bold">{formatIQD(emp.salary)}</span></div>
                   <div className="col-span-2"><span className="text-muted-foreground text-xs">الفرع: </span><span className="font-semibold">{branchLabel(emp)}</span></div>
-                  <div><span className="text-muted-foreground text-xs">التعيين: </span><span dir="ltr" className="tabular-nums">{emp.hireDate ? formatDate(emp.hireDate) : "—"}</span></div>
-                  <div className="truncate"><span className="text-muted-foreground text-xs">البريد: </span><span dir="ltr" className="text-xs">{emp.email || "—"}</span></div>
                 </div>
                 <div className="flex gap-2 pt-1">
-                  <Button variant="outline" size="sm" className="flex-1 h-8 text-xs gap-1.5" onClick={() => openEdit(emp)}>
-                    <Edit className="w-3.5 h-3.5" /> تعديل
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-11 min-h-[44px] text-sm gap-2 touch-manipulation"
+                    onClick={() => openEdit(emp)}
+                  >
+                    <Edit className="w-4 h-4" /> تعديل
                   </Button>
-                  <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(emp)}>
-                    <Trash2 className="w-3.5 h-3.5" /> حذف
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-11 min-h-[44px] text-sm gap-2 touch-manipulation text-destructive border-destructive/40 hover:bg-destructive/10"
+                    onClick={() => setDeleteTarget(emp)}
+                  >
+                    <Trash2 className="w-4 h-4" /> حذف
                   </Button>
                 </div>
               </div>
@@ -276,9 +398,6 @@ export default function Employees() {
                 <TableHead className="text-primary font-bold">المنصب</TableHead>
                 <TableHead className="text-primary font-bold">الفرع</TableHead>
                 <TableHead className="text-primary font-bold">الهاتف</TableHead>
-                <TableHead className="text-primary font-bold">البريد الإلكتروني</TableHead>
-                <TableHead className="text-primary font-bold">الراتب</TableHead>
-                <TableHead className="text-primary font-bold">تاريخ التعيين</TableHead>
                 <TableHead className="text-primary font-bold">الحالة</TableHead>
                 <TableHead className="text-end text-primary font-bold">الإجراءات</TableHead>
               </TableRow>
@@ -286,13 +405,13 @@ export default function Employees() {
             <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-16">
+                <TableCell colSpan={6} className="text-center py-16">
                   <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-16 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p>لا يوجد موظفون مطابقون للبحث</p>
                 </TableCell>
@@ -326,40 +445,25 @@ export default function Employees() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground" dir="ltr">
-                          {emp.email || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-display font-semibold text-green-400">
-                          {formatIQD(emp.salary)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground font-display tabular-nums" dir="ltr">
-                          {emp.hireDate ? formatDate(emp.hireDate) : "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
                         <Badge variant={emp.isActive ? "success" : "destructive"}>
                           {emp.isActive ? "نشط" : "موقوف"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-end">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2">
                           <Button
-                            variant="ghost" size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            variant="outline"
+                            className="h-11 min-h-[44px] px-3 text-sm gap-2 touch-manipulation"
                             onClick={() => openEdit(emp)}
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="w-4 h-4" /> تعديل
                           </Button>
                           <Button
-                            variant="ghost" size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            variant="outline"
+                            className="h-11 min-h-[44px] px-3 text-sm gap-2 touch-manipulation text-destructive border-destructive/40 hover:bg-destructive/10"
                             onClick={() => setDeleteTarget(emp)}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" /> حذف
                           </Button>
                         </div>
                       </TableCell>
@@ -376,151 +480,341 @@ export default function Employees() {
       <Dialog
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
-        title={editTarget ? `تعديل موظف — ${editTarget.name}` : "إضافة موظف جديد"}
-        maxWidth="max-w-xl"
+        hideHeader
+        maxWidth="max-w-3xl"
       >
         <div className="space-y-5">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <Users className="w-4 h-4 inline me-1 text-primary" />
-              اسم الموظف <span className="text-destructive">*</span>
-            </label>
-            <Input
-              placeholder="أدخل اسم الموظف"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              className={errors.name ? "border-destructive" : ""}
-            />
-            {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
-          </div>
-
-          {/* Role */}
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <Briefcase className="w-4 h-4 inline me-1 text-primary" />
-              المنصب / الدور <span className="text-destructive">*</span>
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {ROLES.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => setRole(r.value)}
-                  className={`py-2 px-3 rounded-xl border text-sm font-semibold transition-all ${
-                    form.role === r.value
-                      ? `${r.color} border-current`
-                      : "border-border bg-secondary/50 text-muted-foreground hover:border-primary/50"
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            {errors.role && <p className="text-xs text-destructive mt-1">{errors.role}</p>}
-          </div>
-
-          {/* Branch assignment */}
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <Building2 className="w-4 h-4 inline me-1 text-primary" />
-              تابع الفرع {!isAllBranchesRole && <span className="text-destructive">*</span>}
-            </label>
-            {isAllBranchesRole ? (
-              <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
-                  <Building2 className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-sm text-foreground">تابع لكل الفروع</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    مدير النظام والمدير مرتبطان تلقائياً بجميع الفروع
-                  </p>
-                </div>
+          <div className="relative overflow-hidden rounded-3xl border border-border/50 bg-gradient-to-br from-primary/15 via-card to-card p-5 sm:p-6">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_hsla(var(--primary),0.18),_transparent_55%)]" />
+            <div className="relative flex items-start gap-4">
+              <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-amber-600 text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center flex-shrink-0">
+                <Users className="w-7 h-7" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary/80">
+                  إدارة الموظفين
+                </p>
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight mt-1">
+                  {editTarget ? `تعديل — ${editTarget.name}` : "إضافة موظف جديد"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+                  عيّن البيانات الأساسية وصلاحيات كل القوائم (دخول · إضافة · تعديل/حذف حسب العمر).
+                </p>
               </div>
-            ) : (branches?.length ?? 0) === 0 ? (
-              <p className="text-xs text-muted-foreground rounded-xl border border-dashed border-border px-3 py-3">
-                لا توجد فروع — أضف فرعاً أولاً من صفحة الفروع
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {branches!.map((b) => {
-                  const selected = form.branchIds.includes(b.id);
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => toggleBranch(b.id)}
-                      className={`h-11 px-3 rounded-xl border-2 text-sm font-bold transition-all flex items-center gap-2 text-start ${
-                        selected
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
-                      }`}
-                    >
-                      <span
-                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                          selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
-                        }`}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border/60 bg-card/80 p-4 sm:p-5 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Briefcase className="w-4 h-4 text-primary" />
+              <h3 className="font-extrabold text-sm">البيانات الأساسية</h3>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-1.5">
+                اسم الموظف <span className="text-destructive">*</span>
+              </label>
+              <Input
+                placeholder="أدخل اسم الموظف"
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                className={cn("min-h-12 h-12 rounded-2xl text-base font-bold", errors.name && "border-destructive")}
+              />
+              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-1.5">
+                المنصب / الدور <span className="text-destructive">*</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {ROLES.map((r) => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    onClick={() => setRole(r.value)}
+                    className={cn(
+                      "min-h-11 py-2.5 px-3 rounded-2xl border-2 text-sm font-extrabold transition-all touch-manipulation",
+                      form.role === r.value
+                        ? `${r.color} border-current shadow-sm`
+                        : "border-border/70 bg-secondary/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              {errors.role && <p className="text-xs text-destructive mt-1">{errors.role}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-1.5">
+                <Building2 className="w-4 h-4 inline me-1 text-primary" />
+                تابع الفرع {!isAllBranchesRole && <span className="text-destructive">*</span>}
+              </label>
+              {isAllBranchesRole ? (
+                <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3.5 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-sm">تابع لكل الفروع</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      مدير النظام والمدير مرتبطان تلقائياً بجميع الفروع
+                    </p>
+                  </div>
+                </div>
+              ) : (branches?.length ?? 0) === 0 ? (
+                <p className="text-xs text-muted-foreground rounded-2xl border border-dashed border-border px-3 py-3">
+                  لا توجد فروع — أضف فرعاً أولاً من صفحة الفروع
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {branches!.map((b) => {
+                    const selected = form.branchIds.includes(b.id);
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => toggleBranch(b.id)}
+                        className={cn(
+                          "min-h-12 px-3.5 rounded-2xl border-2 text-sm font-bold transition-all flex items-center gap-2.5 text-start touch-manipulation",
+                          selected
+                            ? "border-primary bg-primary/15 text-primary"
+                            : "border-border/70 bg-background/50 text-muted-foreground hover:border-primary/35 hover:text-foreground"
+                        )}
                       >
-                        {selected && <Check className="w-3.5 h-3.5" />}
-                      </span>
-                      <span className="truncate">{b.name}</span>
-                    </button>
+                        <span
+                          className={cn(
+                            "w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0",
+                            selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                          )}
+                        >
+                          {selected && <Check className="w-3.5 h-3.5" />}
+                        </span>
+                        <span className="truncate">{b.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {errors.branches && (
+                <p className="text-xs text-destructive mt-1">{errors.branches}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-1.5">
+                <Phone className="w-4 h-4 inline me-1 text-primary" />
+                رقم الهاتف
+              </label>
+              <Input
+                placeholder="07XX-XXX-XXXX"
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                dir="ltr"
+                className="min-h-12 h-12 rounded-2xl text-base font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-1.5">
+                الرقم السري لتسجيل الدخول <span className="text-destructive">*</span>
+              </label>
+              <div
+                className={cn(
+                  "relative flex items-center gap-3 min-h-14 h-14 rounded-2xl border-2 px-4 transition-all",
+                  "bg-gradient-to-l from-primary/5 via-secondary/30 to-secondary/40",
+                  errors.pin
+                    ? "border-destructive ring-4 ring-destructive/10"
+                    : form.pin
+                      ? "border-primary/50 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10"
+                      : "border-border/70 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10"
+                )}
+              >
+                <div className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPin ? "text" : "password"}
+                  inputMode="numeric"
+                  autoComplete="new-password"
+                  value={form.pin}
+                  onChange={(e) => set("pin", e.target.value.replace(/\s/g, ""))}
+                  placeholder="••••"
+                  dir="ltr"
+                  className="flex-1 min-w-0 bg-transparent border-0 outline-none text-lg font-extrabold tracking-[0.35em] text-foreground placeholder:tracking-[0.45em] placeholder:text-muted-foreground/70 placeholder:font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin((v) => !v)}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors touch-manipulation flex-shrink-0"
+                  aria-label={showPin ? "إخفاء الرقم السري" : "إظهار الرقم السري"}
+                >
+                  {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              <div className="mt-2 flex items-start gap-2 text-[11px] text-muted-foreground leading-relaxed">
+                <Lock className="w-3.5 h-3.5 mt-0.5 text-primary/70 flex-shrink-0" />
+                <p>
+                  يُستخدم عند تسجيل الدخول من شاشة الدخول.
+                  {editTarget
+                    ? " يظهر الرقم الحالي ويمكنك تعديله وحفظه."
+                    : " اختر رمزاً من 4 أحرف أو أرقام على الأقل."}
+                </p>
+              </div>
+              {errors.pin && <p className="text-xs text-destructive mt-1">{errors.pin}</p>}
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-2xl border border-border/60 bg-secondary/40">
+              <div>
+                <p className="font-extrabold text-sm">حالة الموظف</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {form.isActive
+                    ? "نشط — يمكنه تسجيل الدخول"
+                    : "موقوف — لا يستطيع الوصول للنظام"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => set("isActive", !form.isActive)}
+                className={cn(
+                  "relative inline-flex h-8 w-14 items-center rounded-full transition-colors",
+                  form.isActive ? "bg-emerald-500" : "bg-destructive/60"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-6 w-6 rounded-full bg-white shadow transition-transform",
+                    form.isActive ? "translate-x-1" : "translate-x-7"
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border/60 bg-card/80 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-base">صلاحيات القوائم</h3>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  لكل قائمة: دخول وإضافة، وتعديل/حذف حسب عمر السجل (خلال يوم · يومين · كل الأيام).
+                  {isAllBranchesRole
+                    ? " مدير النظام والمدير لديهم صلاحية كاملة تلقائياً."
+                    : ""}
+                </p>
+              </div>
+            </div>
+
+            {isAllBranchesRole ? (
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3.5 flex items-center gap-3">
+                <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <p className="text-sm font-bold text-foreground">
+                  هذا الدور يملك كل صلاحيات القوائم تلقائياً عند الدخول.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[min(52vh,440px)] overflow-y-auto pe-1">
+                {LIST_CATALOG.map((item) => {
+                  const perm = form.listPermissions[item.key] ?? EMPTY_LIST_PERM;
+                  return (
+                    <div
+                      key={item.key}
+                      className={cn(
+                        "rounded-2xl border-2 p-3 space-y-2.5 transition-colors",
+                        perm.access
+                          ? "border-emerald-500/35 bg-emerald-500/5"
+                          : "border-border/60 bg-card/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold text-sm leading-tight">{item.nameAr}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5" dir="ltr">
+                            {item.href}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[10px] font-bold text-muted-foreground">دخول</span>
+                          <MiniSwitch
+                            on={perm.access}
+                            onClick={() => patchListPerm(item.key, { access: !perm.access })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-bold text-muted-foreground">إضافة / إنشاء</span>
+                        <MiniSwitch
+                          on={perm.create}
+                          disabled={!perm.access}
+                          onClick={() => patchListPerm(item.key, { create: !perm.create })}
+                        />
+                      </div>
+
+                      {item.dated ? (
+                        <>
+                          <AgeScopePicker
+                            label="تعديل السجلات"
+                            value={perm.edit}
+                            disabled={!perm.access}
+                            onChange={(v) => patchListPerm(item.key, { edit: v })}
+                          />
+                          <AgeScopePicker
+                            label="حذف السجلات"
+                            value={perm.delete}
+                            disabled={!perm.access}
+                            onChange={(v) => patchListPerm(item.key, { delete: v })}
+                          />
+                        </>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex items-center justify-between gap-2 rounded-xl border border-border/50 bg-secondary/30 px-3 py-2">
+                            <span className="text-[11px] font-bold text-muted-foreground">تعديل</span>
+                            <MiniSwitch
+                              on={perm.edit !== "none"}
+                              disabled={!perm.access}
+                              onClick={() =>
+                                patchListPerm(item.key, {
+                                  edit: perm.edit === "none" ? "all" : "none",
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2 rounded-xl border border-border/50 bg-secondary/30 px-3 py-2">
+                            <span className="text-[11px] font-bold text-muted-foreground">حذف</span>
+                            <MiniSwitch
+                              on={perm.delete !== "none"}
+                              disabled={!perm.access}
+                              onClick={() =>
+                                patchListPerm(item.key, {
+                                  delete: perm.delete === "none" ? "all" : "none",
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             )}
-            {errors.branches && (
-              <p className="text-xs text-destructive mt-1">{errors.branches}</p>
-            )}
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold mb-1.5">
-              <Phone className="w-4 h-4 inline me-1 text-primary" />
-              رقم الهاتف
-            </label>
-            <Input
-              placeholder="07XX-XXX-XXXX"
-              value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-              dir="ltr"
-            />
-          </div>
-
-          {/* Active Toggle */}
-          <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl border border-border/50">
-            <div>
-              <p className="font-semibold text-sm">حالة الموظف</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {form.isActive ? "الموظف نشط ويمكنه تسجيل الدخول" : "الموظف موقوف ولا يستطيع الوصول للنظام"}
-              </p>
-            </div>
-            <button
-              onClick={() => set("isActive", !form.isActive)}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
-                form.isActive ? "bg-green-500" : "bg-destructive/60"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  form.isActive ? "translate-x-1" : "translate-x-8"
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-1">
             <Button
               variant="outline"
-              className="flex-1"
+              className="flex-1 min-h-12 h-12 rounded-2xl font-extrabold"
               onClick={() => setFormOpen(false)}
             >
               إلغاء
             </Button>
             <Button
-              className="flex-1"
+              className="flex-1 min-h-12 h-12 rounded-2xl font-extrabold"
               onClick={handleSubmit}
               isLoading={isCreating || isUpdating}
             >
