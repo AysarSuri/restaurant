@@ -32,6 +32,7 @@ import Cashier from "@/pages/cashier";
 import TableOrder from "@/pages/table-order";
 import { BranchProvider } from "@/lib/branch-context";
 import { applyBrandPrimary } from "@/lib/brand-theme";
+import { writeLoginBrandCache } from "@/lib/branding-cache";
 import { LocaleProvider } from "@/i18n";
 import { EnterAsTab } from "@/components/enter-as-tab";
 import { useDeviceFormsFullscreen } from "@/hooks/use-device-forms-fullscreen";
@@ -99,6 +100,14 @@ function BrandThemeSync() {
   useLayoutEffect(() => {
     if (data?.themePrimary) applyBrandPrimary(data.themePrimary);
   }, [data?.themePrimary]);
+
+  useLayoutEffect(() => {
+    if (!data) return;
+    writeLoginBrandCache({
+      restaurantName: data.restaurantName,
+      logoUrl: data.logoUrl,
+    });
+  }, [data?.restaurantName, data?.logoUrl]);
 
   return null;
 }

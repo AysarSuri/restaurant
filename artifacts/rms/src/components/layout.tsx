@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -17,19 +17,93 @@ import { useTheme, useAuth } from "@/App";
 import { useBranch } from "@/lib/branch-context";
 import { useI18n } from "@/i18n";
 import { pageTitleKeys, roleLabelKeys } from "@/i18n/messages";
-import { useGetSettings } from "@workspace/api-client-react";
+import { useGetBranches, useGetSettings } from "@workspace/api-client-react";
+import {
+  readHomeBrandCache,
+  writeHomeBrandCache,
+} from "@/lib/branding-cache";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const { branchLabel } = useBranch();
+  const { selectedBranchId, branchLabel } = useBranch();
   const { t, dateLocale, formatDate, usesYmdSlash } = useI18n();
+  const cachedHomeBrand = useMemo(() => readHomeBrandCache(), []);
   const { data: appSettings } = useGetSettings({
     query: { staleTime: 60_000, refetchOnWindowFocus: false },
   });
-  const restaurantName = appSettings?.restaurantName?.trim() || t("app.name");
-  const logoUrl = appSettings?.logoUrl?.trim() || "";
+  const { data: branches } = useGetBranches({
+    query: {
+      enabled: Boolean(user),
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      // Same key as BranchProvider — instant shared cache
+      queryKey: ["branches", "scoped"],
+    },
+  });
+
+  /** Home header brand = selected branch name + logo (from Branches form). */
+  const homeBrand = useMemo(() => {
+    const list = Array.isArray(branches) ? branches : [];
+    if (typeof selectedBranchId === "number") {
+      const branch = list.find((b) => b.id === selectedBranchId);
+      if (branch) {
+        return {
+          branchId: selectedBranchId as number | "all",
+          name: branch.name?.trim() || "",
+          logoUrl: branch.logoUrl?.trim() || "",
+        };
+      }
+      if (
+        cachedHomeBrand &&
+        cachedHomeBrand.branchId === selectedBranchId &&
+        (cachedHomeBrand.name || cachedHomeBrand.logoUrl)
+      ) {
+        return cachedHomeBrand;
+      }
+    }
+    // «كل الفروع»: settings identity until a concrete branch is picked
+    if (
+      selectedBranchId === "all" &&
+      cachedHomeBrand?.branchId === "all" &&
+      (cachedHomeBrand.name || cachedHomeBrand.logoUrl)
+    ) {
+      return {
+        branchId: "all" as const,
+        name:
+          appSettings?.restaurantName?.trim() ||
+          cachedHomeBrand.name ||
+          t("app.name"),
+        logoUrl:
+          appSettings?.logoUrl?.trim() || cachedHomeBrand.logoUrl || "",
+      };
+    }
+    return {
+      branchId: selectedBranchId ?? null,
+      name: appSettings?.restaurantName?.trim() || t("app.name"),
+      logoUrl: appSettings?.logoUrl?.trim() || "",
+    };
+  }, [
+    branches,
+    selectedBranchId,
+    cachedHomeBrand,
+    appSettings?.restaurantName,
+    appSettings?.logoUrl,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!homeBrand.name && !homeBrand.logoUrl) return;
+    writeHomeBrandCache({
+      branchId: homeBrand.branchId,
+      name: homeBrand.name,
+      logoUrl: homeBrand.logoUrl,
+    });
+  }, [homeBrand.branchId, homeBrand.name, homeBrand.logoUrl]);
+
+  const restaurantName = homeBrand.name || t("app.name");
+  const logoUrl = homeBrand.logoUrl;
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   const handleLogout = () => {
