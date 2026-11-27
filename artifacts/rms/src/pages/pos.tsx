@@ -353,10 +353,15 @@ export default function POS() {
     return `${y}-${m}-${day}`;
   }, [now.getFullYear(), now.getMonth(), now.getDate()]);
 
-  const todayOrdersParams = useMemo(
-    () => ({ date: todayDateKey, limit: 500 }),
-    [todayDateKey]
-  );
+  /** Local calendar day bounds as ISO — Railway UTC must not hide evening invoices */
+  const todayOrdersParams = useMemo(() => {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+    const from = new Date(y, m, d, 0, 0, 0, 0).toISOString();
+    const to = new Date(y, m, d + 1, 0, 0, 0, 0).toISOString();
+    return { date: todayDateKey, from, to, limit: 500 };
+  }, [todayDateKey, now.getFullYear(), now.getMonth(), now.getDate()]);
 
   const { data: todayOrders, refetch: refetchTodayOrders } = useGetOrders(
     todayOrdersParams,
@@ -785,7 +790,8 @@ export default function POS() {
         menuItemId: i.id,
         quantity: cartLineSignedQty(i),
       }));
-      const afterCashierSave = () => {
+      const afterCashierSave = (order?: Order) => {
+        rememberTodayOrder(order);
         const phoneSnapshot = deliveryPhone;
         const addressSnapshot = deliveryAddress;
         void persistDeliveryContactIfNeeded({
@@ -807,7 +813,10 @@ export default function POS() {
               items: lineItems,
             },
           },
-          { onSuccess: afterCashierSave }
+          {
+            onSuccess: (order) => afterCashierSave(order as Order),
+            onError: orderSaveErrorToast,
+          }
         );
         return;
       }
@@ -826,7 +835,10 @@ export default function POS() {
             deviceKey,
           } as any,
         },
-        { onSuccess: afterCashierSave }
+        {
+          onSuccess: (order) => afterCashierSave(order as Order),
+          onError: orderSaveErrorToast,
+        }
       );
       return;
     }
@@ -860,6 +872,29 @@ export default function POS() {
     void refetchTables();
     bumpOrdersLive();
     bumpStockLive();
+  };
+
+  /** Keep «تعديل قوائم» in sync immediately after create/update (before refetch). */
+  const rememberTodayOrder = (order: Order | null | undefined) => {
+    if (!order?.id) return;
+    const key = [...getGetOrdersQueryKey(todayOrdersParams), selectedBranchId];
+    queryClient.setQueryData<Order[]>(key, (prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return [order, ...list.filter((o) => o.id !== order.id)];
+    });
+  };
+
+  const orderSaveErrorToast = (err: unknown) => {
+    const anyErr = err as { message?: string; data?: { message?: string; error?: string } };
+    toast({
+      variant: "destructive",
+      title: t("pos.saveFailed"),
+      description:
+        anyErr?.data?.message ||
+        anyErr?.data?.error ||
+        anyErr?.message ||
+        t("pos.saveFailedHint"),
+    });
   };
 
   useEffect(() => {
@@ -1029,7 +1064,8 @@ export default function POS() {
       quantity: cartLineSignedQty(i),
     }));
 
-    const afterSaveSuccess = () => {
+    const afterSaveSuccess = (order?: Order) => {
+      rememberTodayOrder(order);
       const phoneSnapshot = deliveryPhone;
       const addressSnapshot = deliveryAddress;
       void persistDeliveryContactIfNeeded({
@@ -1068,7 +1104,10 @@ export default function POS() {
             items: lineItems,
           },
         },
-        { onSuccess: afterSaveSuccess }
+        {
+          onSuccess: (order) => afterSaveSuccess(order as Order),
+          onError: orderSaveErrorToast,
+        }
       );
       return;
     }
@@ -1094,7 +1133,10 @@ export default function POS() {
           deviceKey,
         } as any,
       },
-      { onSuccess: afterSaveSuccess }
+      {
+        onSuccess: (order) => afterSaveSuccess(order as Order),
+        onError: orderSaveErrorToast,
+      }
     );
   };
 
