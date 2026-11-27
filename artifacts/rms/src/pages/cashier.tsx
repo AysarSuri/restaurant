@@ -773,9 +773,12 @@ export default function Cashier() {
         allOrders
           .filter((o) => {
             if (!isOrderReceived(o) || o.status === "cancelled") return false;
-            const day = String(o.createdAt || "").slice(0, 10);
+            const created = new Date(o.createdAt || 0);
+            const day = Number.isNaN(created.getTime())
+              ? ""
+              : `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, "0")}-${String(created.getDate()).padStart(2, "0")}`;
             return (
-              day === today ||
+              day === todayParams.date ||
               o.status === "preparing" ||
               o.status === "ready" ||
               o.status === "served"
@@ -783,7 +786,7 @@ export default function Cashier() {
           })
           .map((o) => toCard(o, t))
       ),
-    [allOrders, t, today]
+    [allOrders, t, todayParams.date]
   );
 
   const visible = page === "unpaid" ? unpaid : paid;
