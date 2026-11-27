@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChefHat, ChevronDown, Eye, EyeOff, Lock, User, Grid3x3, Sun, Moon, Delete, Building2, Maximize2, Minimize2 } from "lucide-react";
-import { useGetEmployees, useGetTables, useGetBranches } from "@workspace/api-client-react";
+import { useGetEmployees, useGetTables, useGetBranches, useGetSettings } from "@workspace/api-client-react";
 import { useAuth, useTheme } from "@/App";
 import { useLocation } from "wouter";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -13,6 +13,10 @@ import {
   listPermissionsFromEmployee,
   toLegacyMenuPermissions,
 } from "@/lib/list-permissions";
+import {
+  readLoginBrandCache,
+  writeLoginBrandCache,
+} from "@/lib/branding-cache";
 type BranchPick = number | "all";
 
 type ComboItem = { id: number; label: string; sublabel?: string; icon?: string };
@@ -480,6 +484,26 @@ export default function Login() {
   const { theme, toggleTheme } = useTheme();
   const { isFullscreen, toggleFullscreen } = useBrowserFullscreen();
   const { t } = useI18n();
+  const cachedLoginBrand = useMemo(() => readLoginBrandCache(), []);
+  const { data: appSettings } = useGetSettings({
+    query: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    },
+  });
+  useEffect(() => {
+    if (!appSettings) return;
+    writeLoginBrandCache({
+      restaurantName: appSettings.restaurantName,
+      logoUrl: appSettings.logoUrl,
+    });
+  }, [appSettings?.restaurantName, appSettings?.logoUrl]);
+  const brandName =
+    appSettings?.restaurantName?.trim() ||
+    cachedLoginBrand?.restaurantName ||
+    t("app.name");
+  const brandLogo =
+    appSettings?.logoUrl?.trim() || cachedLoginBrand?.logoUrl || "";
   const employeesQuery = useGetEmployees();
   const tablesQuery = useGetTables();
   const branchesQuery = useGetBranches();
@@ -870,13 +894,17 @@ export default function Login() {
         {/* ── TOP: Logo + Form fields ── */}
         <div className="flex-1 flex flex-col overflow-hidden px-4 pt-12 pb-2 gap-3">
 
-          {/* Logo row */}
+          {/* Logo row — from Settings «اسم المطعم أو كافتيريا» + logo */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="w-11 h-11 bg-gradient-to-br from-primary to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 flex-shrink-0">
-              <ChefHat className="w-6 h-6 text-primary-foreground" />
+            <div className="w-11 h-11 bg-gradient-to-br from-primary to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 flex-shrink-0 overflow-hidden border border-primary/20">
+              {brandLogo ? (
+                <img src={brandLogo} alt={brandName} className="w-full h-full object-cover" />
+              ) : (
+                <ChefHat className="w-6 h-6 text-primary-foreground" />
+              )}
             </div>
-            <div>
-              <h1 className="text-lg font-bold leading-tight">{t("app.name")}</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold leading-tight truncate">{brandName}</h1>
               <p className="text-primary text-[10px] font-bold tracking-widest">RMS 2026</p>
             </div>
             <AnimatePresence mode="wait">
@@ -1016,11 +1044,15 @@ export default function Login() {
 
           {/* Logo column */}
           <div className="w-[22%] flex flex-col items-center justify-center px-4 py-3 border-l border-border/30 flex-shrink-0">
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }} className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-br from-primary to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-xl shadow-primary/35">
-                <ChefHat className="w-9 h-9 text-primary-foreground" />
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.25 }} className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-primary to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-xl shadow-primary/35 overflow-hidden border border-primary/20">
+                {brandLogo ? (
+                  <img src={brandLogo} alt={brandName} className="w-full h-full object-cover" />
+                ) : (
+                  <ChefHat className="w-9 h-9 text-primary-foreground" />
+                )}
               </div>
-              <h1 className="text-2xl font-bold leading-tight mb-0.5">{t("app.name")}</h1>
+              <h1 className="text-2xl font-bold leading-tight mb-0.5 line-clamp-2">{brandName}</h1>
               <p className="text-primary font-display tracking-[0.25em] text-xs uppercase mb-2">RMS 2026</p>
               <p className="text-muted-foreground text-xs max-w-[170px] mx-auto leading-relaxed">{t("app.tagline")}</p>
               <AnimatePresence mode="wait">

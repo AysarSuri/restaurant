@@ -9,6 +9,8 @@ import {
   type Branch,
 } from "@workspace/api-client-react";
 import { Button, Input, Badge, Dialog, Card } from "@/components/ui-elements";
+import { useBranch } from "@/lib/branch-context";
+import { writeHomeBrandCache } from "@/lib/branding-cache";
 import {
   Plus,
   Edit,
@@ -83,6 +85,7 @@ type FormData = typeof EMPTY_FORM;
 
 export default function Branches() {
   const queryClient = useQueryClient();
+  const { selectedBranchId } = useBranch();
   const { data: branches, isLoading } = useGetBranches({
     query: {
       staleTime: 60_000,
@@ -96,6 +99,7 @@ export default function Branches() {
 
   const syncBranches = (next: Branch[]) => {
     queryClient.setQueryData<Branch[]>(getGetBranchesQueryKey(), next);
+    queryClient.setQueryData<Branch[]>(["branches", "scoped"], next);
   };
 
   const showLoader = isLoading && !branches;
@@ -205,6 +209,13 @@ export default function Branches() {
             syncBranches(
               (branches ?? []).map((b) => (b.id === updated.id ? updated : b))
             );
+            if (selectedBranchId === updated.id) {
+              writeHomeBrandCache({
+                branchId: updated.id,
+                name: updated.name,
+                logoUrl: updated.logoUrl,
+              });
+            }
             setFormOpen(false);
           },
           onError: (err: any) => {

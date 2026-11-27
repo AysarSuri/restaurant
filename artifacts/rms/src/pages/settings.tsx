@@ -41,6 +41,7 @@ import {
   hexToHslComponents,
   hslComponentsToHex,
 } from "@/lib/brand-theme";
+import { writeLoginBrandCache } from "@/lib/branding-cache";
 import {
   CURRENCY_PRESETS,
   DEFAULT_CURRENCY,
@@ -468,6 +469,10 @@ export default function SettingsPage() {
           syncSettings(res);
           setLogoUrl(res.logoUrl?.trim() || "");
           setMobile(res.mobile?.trim() || "");
+          writeLoginBrandCache({
+            restaurantName: res.restaurantName,
+            logoUrl: res.logoUrl,
+          });
           notifySaveOk(t("settings.savedRestaurantName"));
         },
         onError: (err: any) =>
