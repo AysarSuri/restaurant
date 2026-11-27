@@ -355,15 +355,23 @@ export default function POS() {
     return `${y}-${m}-${day}`;
   }, [now.getFullYear(), now.getMonth(), now.getDate()]);
 
-  /** Local calendar day bounds as ISO — Railway UTC must not hide evening invoices */
-  const todayOrdersParams = useMemo(() => {
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const d = now.getDate();
-    const from = new Date(y, m, d, 0, 0, 0, 0).toISOString();
-    const to = new Date(y, m, d + 1, 0, 0, 0, 0).toISOString();
-    return { date: todayDateKey, from, to, limit: 500 };
-  }, [todayDateKey, now.getFullYear(), now.getMonth(), now.getDate()]);
+  /**
+   * Use calendar `date` only (server wide TZ-safe window). Avoid device-local
+   * from/to — wrong device clocks/timezones were hiding unpaid lists on some pads.
+   */
+  const todayOrdersParams = useMemo(
+    () => ({ date: todayDateKey, limit: 500 }),
+    [todayDateKey]
+  );
+
+  /** Open غير واصل statuses with no date — same idea as cashier (all devices). */
+  const openEditListsParams = useMemo(
+    () => ({
+      status: "pending,confirmed,preparing,ready,served",
+      limit: 500,
+    }),
+    []
+  );
 
   const { data: todayOrders, refetch: refetchTodayOrders } = useGetOrders(
     todayOrdersParams,
@@ -376,19 +384,32 @@ export default function POS() {
     }
   );
 
+  const { data: openEditListsOrders, refetch: refetchOpenEditLists } = useGetOrders(
+    openEditListsParams,
+    {
+      query: {
+        queryKey: [...getGetOrdersQueryKey(openEditListsParams), selectedBranchId],
+        refetchInterval: 1_500,
+        staleTime: 800,
+      },
+    }
+  );
+
   const todayBranchOrders = useMemo(() => {
-    const list = todayOrders ?? [];
-    const filtered =
-      selectedBranchId === "all"
-        ? list
-        : list.filter((o) => o.branchId === selectedBranchId);
-    // Newest first by created date+time (exclude cancelled from edit picker)
-    return [...filtered]
-      .filter((o) => o.status !== "cancelled")
-      .sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  }, [todayOrders, selectedBranchId]);
+    const map = new Map<number, Order>();
+    for (const o of todayOrders ?? []) map.set(o.id, o);
+    // Merge open unpaid-capable statuses so edit-lists غير واصل never depends on device TZ
+    for (const o of openEditListsOrders ?? []) {
+      if (!map.has(o.id)) map.set(o.id, o);
+    }
+    let merged = [...map.values()].filter((o) => o.status !== "cancelled");
+    if (selectedBranchId !== "all") {
+      merged = merged.filter((o) => o.branchId === selectedBranchId);
+    }
+    return merged.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [todayOrders, openEditListsOrders, selectedBranchId]);
 
   /** Guest-tablet table orders only (source = table_order) */
   const todayTableOrders = useMemo(
@@ -587,6 +608,7 @@ export default function POS() {
     }
     if (mode === "openOrders" || mode === "tableOrders") {
       void refetchTodayOrders();
+      void refetchOpenEditLists();
     }
     setIsTablePickerOpen(true);
   };
@@ -896,6 +918,7 @@ export default function POS() {
     void queryClient.invalidateQueries({ queryKey: ["/api/tables"] });
     void queryClient.invalidateQueries({ queryKey: ["/api/inventory/stock"] });
     void refetchTodayOrders();
+    void refetchOpenEditLists();
     void refetchTables();
     bumpOrdersLive();
     bumpStockLive();
@@ -904,11 +927,24 @@ export default function POS() {
   /** Keep «تعديل قوائم» in sync immediately after create/update (before refetch). */
   const rememberTodayOrder = (order: Order | null | undefined) => {
     if (!order?.id) return;
-    const key = [...getGetOrdersQueryKey(todayOrdersParams), selectedBranchId];
-    queryClient.setQueryData<Order[]>(key, (prev) => {
-      const list = Array.isArray(prev) ? prev : [];
-      return [order, ...list.filter((o) => o.id !== order.id)];
-    });
+    const bump = (params: { date?: string; status?: string; limit?: number }) => {
+      const key = [...getGetOrdersQueryKey(params), selectedBranchId];
+      queryClient.setQueryData<Order[]>(key, (prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        return [order, ...list.filter((o) => o.id !== order.id)];
+      });
+    };
+    bump(todayOrdersParams);
+    const openStatuses = new Set([
+      "pending",
+      "confirmed",
+      "preparing",
+      "ready",
+      "served",
+    ]);
+    if (order.status && openStatuses.has(String(order.status))) {
+      bump(openEditListsParams);
+    }
   };
 
   const orderSaveErrorToast = (err: unknown) => {
@@ -2127,17 +2163,11 @@ export default function POS() {
                 </div>
               ) : null}
 
-              {needsBranchPick ? (
-                <div className="rounded-3xl border border-dashed border-amber-500/40 bg-amber-500/10 py-14 text-center text-amber-700 dark:text-amber-300">
-                  <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
-                  <p className="font-bold">{t("pos.pickBranchFirstTitle")}</p>
-                  <p className="text-xs mt-1 opacity-80">{t("pos.pickBranchFirstHint")}</p>
-                </div>
-              ) : pickerListOrders.length === 0 ? (
+              {pickerListOrders.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
                   {seatPickerMode === "tableOrders" ? (
                     <Table2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  ) : editListsPage === "paid" ? (
+                  ) : seatPickerMode === "openOrders" && editListsPage === "paid" ? (
                     <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   ) : (
                     <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -2145,9 +2175,11 @@ export default function POS() {
                   <p className="font-bold">
                     {seatPickerMode === "tableOrders"
                       ? t("pos.noTableOrderLists")
-                      : editListsPage === "paid"
+                      : seatPickerMode === "openOrders" && editListsPage === "paid"
                         ? t("pos.noPaidLists")
-                        : t("pos.noUnpaidLists")}
+                        : seatPickerMode === "openOrders"
+                          ? t("pos.noUnpaidLists")
+                          : t("pos.noOpenSeats")}
                   </p>
                 </div>
               ) : (
