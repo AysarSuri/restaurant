@@ -578,9 +578,16 @@ export default function Cashier() {
   const { selectedBranchId, branchLabel } = useBranch();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
-  const todayParams = useMemo(() => ({ date: today, limit: 200 }), [today]);
+  const todayParams = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const d = now.getDate();
+    const date = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const from = new Date(y, m, d, 0, 0, 0, 0).toISOString();
+    const to = new Date(y, m, d + 1, 0, 0, 0, 0).toISOString();
+    return { date, from, to, limit: 200 };
+  }, []);
   const openParams = useMemo(
     () => ({ status: "pending,confirmed,preparing,ready", limit: 200 }),
     []

@@ -544,6 +544,10 @@ export type GetOrdersParams = {
   status?: string;
   type?: string;
   date?: string;
+  /** Inclusive local-day start (ISO) — preferred over `date` alone */
+  from?: string;
+  /** Exclusive local-day end (ISO) */
+  to?: string;
   limit?: number;
 };
 

@@ -10,7 +10,7 @@ import {
   appSettingsTable,
   devicePrintersTable,
 } from "@workspace/db/schema";
-import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lt, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 import { ensureVaultColumns } from "../lib/ensure-vault-columns";
@@ -171,7 +171,7 @@ async function getOrderWithDetails(orderId: number) {
 
 // GET /orders
 router.get("/", async (req, res) => {
-  const { status, type, date, limit = "50" } = req.query;
+  const { status, type, date, from, to, limit = "50" } = req.query;
   const scope = parseBranchScope(req);
 
   const conditions = [];
@@ -191,12 +191,40 @@ router.get("/", async (req, res) => {
     }
   }
   if (type) conditions.push(eq(ordersTable.type, type as OrderType));
-  if (date) {
-    const d = new Date(date as string);
-    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-    conditions.push(gte(ordersTable.createdAt, start));
-    conditions.push(lte(ordersTable.createdAt, end));
+  /**
+   * Prefer explicit ISO `from`/`to` (client local day). Fallback `date=YYYY-MM-DD`
+   * must NOT use `new Date("YYYY-MM-DD")` + server-local getDate() — on Railway UTC
+   * that drops Iraq-evening invoices from «تعديل قوائم».
+   */
+  const fromRaw = typeof from === "string" ? from.trim() : "";
+  const toRaw = typeof to === "string" ? to.trim() : "";
+  if (fromRaw && toRaw) {
+    const start = new Date(fromRaw);
+    const end = new Date(toRaw);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      conditions.push(gte(ordersTable.createdAt, start));
+      conditions.push(lt(ordersTable.createdAt, end));
+    }
+  } else if (date) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date).trim());
+    if (match) {
+      const y = Number(match[1]);
+      const mo = Number(match[2]) - 1;
+      const day = Number(match[3]);
+      // Wide window so a civil calendar date is visible from any client TZ (±14h)
+      const start = new Date(Date.UTC(y, mo, day) - 14 * 60 * 60 * 1000);
+      const end = new Date(Date.UTC(y, mo, day + 1) + 14 * 60 * 60 * 1000);
+      conditions.push(gte(ordersTable.createdAt, start));
+      conditions.push(lt(ordersTable.createdAt, end));
+    } else {
+      const d = new Date(date as string);
+      if (!Number.isNaN(d.getTime())) {
+        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+        conditions.push(gte(ordersTable.createdAt, start));
+        conditions.push(lt(ordersTable.createdAt, end));
+      }
+    }
   }
 
   const orders = await db
