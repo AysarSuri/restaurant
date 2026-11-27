@@ -308,6 +308,8 @@ export default function POS() {
   const [isTablePickerOpen, setIsTablePickerOpen] = useState(false);
   /** "all" = seat pick; "openOrders" = all today lists; "tableOrders" = dine-in only */
   const [seatPickerMode, setSeatPickerMode] = useState<"all" | "openOrders" | "tableOrders">("all");
+  /** Edit-lists dialog page: unpaid (default) | paid — only used when seatPickerMode === "openOrders" */
+  const [editListsPage, setEditListsPage] = useState<"unpaid" | "paid">("unpaid");
   const [pickerEntityType, setPickerEntityType] = useState<SeatEntityType>("table");
   const [personSearch, setPersonSearch] = useState("");
   const [isPersonSearchPadOpen, setIsPersonSearchPadOpen] = useState(false);
@@ -399,8 +401,30 @@ export default function POS() {
     [todayTableOrders]
   );
 
-  const pickerListOrders =
-    seatPickerMode === "tableOrders" ? todayTableOrders : todayBranchOrders;
+  /** Edit-lists tabs — already newest-first from todayBranchOrders */
+  const editListsUnpaid = useMemo(
+    () => todayBranchOrders.filter((o) => !isPosOrderReceived(o)),
+    [todayBranchOrders]
+  );
+  const editListsPaid = useMemo(
+    () => todayBranchOrders.filter((o) => isPosOrderReceived(o)),
+    [todayBranchOrders]
+  );
+
+  const pickerListOrders = useMemo(() => {
+    if (seatPickerMode === "tableOrders") return todayTableOrders;
+    if (seatPickerMode === "openOrders") {
+      return editListsPage === "paid" ? editListsPaid : editListsUnpaid;
+    }
+    return todayBranchOrders;
+  }, [
+    seatPickerMode,
+    editListsPage,
+    todayTableOrders,
+    todayBranchOrders,
+    editListsPaid,
+    editListsUnpaid,
+  ]);
 
   const openSeatStages = useMemo(() => {
     const map = new Map<number, { cashier: boolean; kitchen: boolean }>();
@@ -557,6 +581,9 @@ export default function POS() {
     setIsPersonSearchPadOpen(false);
     if (mode === "all") {
       setPickerEntityType("table");
+    }
+    if (mode === "openOrders") {
+      setEditListsPage("unpaid");
     }
     if (mode === "openOrders" || mode === "tableOrders") {
       void refetchTodayOrders();
@@ -2053,6 +2080,53 @@ export default function POS() {
                 </span>
               </div>
 
+              {seatPickerMode === "openOrders" ? (
+                <div className="grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl border border-border/60 bg-secondary/40">
+                  <button
+                    type="button"
+                    onClick={() => setEditListsPage("unpaid")}
+                    className={`h-12 rounded-xl inline-flex items-center justify-center gap-2 font-extrabold text-sm transition-all touch-manipulation ${
+                      editListsPage === "unpaid"
+                        ? "bg-gradient-to-l from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25"
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t("cashier.colUnpaid")}</span>
+                    <span
+                      className={`min-w-6 h-6 px-1.5 rounded-full text-[11px] font-display font-bold tabular-nums inline-flex items-center justify-center ${
+                        editListsPage === "unpaid"
+                          ? "bg-white/25 text-white"
+                          : "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+                      }`}
+                    >
+                      {editListsUnpaid.length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditListsPage("paid")}
+                    className={`h-12 rounded-xl inline-flex items-center justify-center gap-2 font-extrabold text-sm transition-all touch-manipulation ${
+                      editListsPage === "paid"
+                        ? "bg-gradient-to-l from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/25"
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/70"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t("cashier.colPaid")}</span>
+                    <span
+                      className={`min-w-6 h-6 px-1.5 rounded-full text-[11px] font-display font-bold tabular-nums inline-flex items-center justify-center ${
+                        editListsPage === "paid"
+                          ? "bg-white/25 text-white"
+                          : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      }`}
+                    >
+                      {editListsPaid.length}
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+
               {needsBranchPick ? (
                 <div className="rounded-3xl border border-dashed border-amber-500/40 bg-amber-500/10 py-14 text-center text-amber-700 dark:text-amber-300">
                   <Armchair className="w-12 h-12 mx-auto mb-3 opacity-70" />
@@ -2063,13 +2137,17 @@ export default function POS() {
                 <div className="rounded-3xl border border-dashed border-border/70 bg-secondary/30 py-14 text-center text-muted-foreground">
                   {seatPickerMode === "tableOrders" ? (
                     <Table2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  ) : editListsPage === "paid" ? (
+                    <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   ) : (
                     <PencilLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   )}
                   <p className="font-bold">
                     {seatPickerMode === "tableOrders"
                       ? t("pos.noTableOrderLists")
-                      : t("pos.noOpenSeats")}
+                      : editListsPage === "paid"
+                        ? t("pos.noPaidLists")
+                        : t("pos.noUnpaidLists")}
                   </p>
                 </div>
               ) : (
