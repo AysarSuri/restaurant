@@ -21,7 +21,6 @@ import {
   gte,
   isNull,
   lt,
-  lte,
   ne,
   or,
   isNotNull,
@@ -65,12 +64,6 @@ function pad2(n: number) {
 
 function formatHm(d: Date) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function dayBounds(d: Date) {
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
-  return { start, end };
 }
 
 function parseOpenDate(value: unknown): Date | null {
@@ -524,14 +517,15 @@ router.post("/", async (req, res) => {
   }
 
   const meta = KIND_META[normalizedKind];
-  const { start: dayStart, end: dayEnd } = dayBounds(openedAt);
 
-  // Only one open shift per BRANCH (shared across all devices)
+  // Only one OPEN shift per BRANCH (shared across devices).
+  // After closing, a new shift may be opened the same day (morning/evening).
   const [openOnBranch] = await db
     .select({
       id: shiftsTable.id,
       kind: shiftsTable.kind,
       name: shiftsTable.name,
+      openedAt: shiftsTable.openedAt,
     })
     .from(shiftsTable)
     .where(
@@ -544,27 +538,7 @@ router.post("/", async (req, res) => {
     res.status(400).json({
       success: false,
       message: `لا يمكن فتح وردية جديدة — يوجد وردية ${openMeta.name} مفتوحة لهذا الفرع. أغلقها أولاً ثم افتح وردية أخرى.`,
-    });
-    return;
-  }
-
-  // One shift of this kind per branch per calendar day
-  const [sameDay] = await db
-    .select({ id: shiftsTable.id })
-    .from(shiftsTable)
-    .where(
-      and(
-        eq(shiftsTable.branchId, resolvedBranchId),
-        eq(shiftsTable.kind, normalizedKind),
-        gte(shiftsTable.openedAt, dayStart),
-        lte(shiftsTable.openedAt, dayEnd)
-      )
-    )
-    .limit(1);
-  if (sameDay) {
-    res.status(400).json({
-      success: false,
-      message: `وردية ${meta.name} موجودة مسبقاً لهذا الفرع في نفس اليوم`,
+      openShiftId: openOnBranch.id,
     });
     return;
   }

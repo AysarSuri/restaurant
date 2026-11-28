@@ -2,9 +2,10 @@ import { useCallback, useMemo } from "react";
 import { getGetShiftsQueryKey, useGetShifts } from "@workspace/api-client-react";
 import { useI18n } from "@/i18n";
 
-/** Authoritative open flag: not closed yet (per branch in DB). */
-function isShiftOpen(s: { closedAt?: string | null }) {
-  return s.closedAt == null || s.closedAt === "";
+/** Authoritative open flag from API serialize (closedAt null ⇒ isOpen). */
+function isShiftOpen(s: { isOpen?: boolean; closedAt?: string | null }) {
+  if (s.closedAt != null && s.closedAt !== "") return false;
+  return s.isOpen === true;
 }
 
 /**
