@@ -34,6 +34,8 @@ export async function initDatabase() {
   await ensureEmployeeColumns();
   await ensureVaultColumns();
   await migrateUploadImagesToDataUrls();
+  const { ensureSessionForceLogoutTable } = await import("./lib/session-force-logout");
+  await ensureSessionForceLogoutTable();
 }
 
 app.disable("x-powered-by");

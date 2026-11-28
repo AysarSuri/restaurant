@@ -494,7 +494,7 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   await ensureSalesDeviceColumns();
   const scope = parseBranchScope(req);
-  const { kind, branchId, notes, openedAt: openedAtRaw } = req.body ?? {};
+  const { kind, branchId, notes, openedAt: openedAtRaw, deviceKey } = req.body ?? {};
 
   const normalizedKind = normalizeKind(kind);
   if (!normalizedKind) {
@@ -561,6 +561,20 @@ router.post("/", async (req, res) => {
       isActive: true,
     })
     .returning();
+
+  // Kick every other logged-in device; keep only the device that opened this shift
+  try {
+    const { bumpSessionForceLogout } = await import("../lib/session-force-logout");
+    const keepKey =
+      String(deviceKey ?? "").trim() ||
+      String((req.headers["x-device-key"] as string | undefined) ?? "").trim();
+    await bumpSessionForceLogout({
+      keepDeviceKey: keepKey,
+      openedShiftId: created.id,
+    });
+  } catch {
+    /* shift still opens even if gate bump fails */
+  }
 
   const [branch] = await db
     .select({ name: branchesTable.name })

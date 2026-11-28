@@ -14,5 +14,11 @@ export * from "./system-reset";
 export * from "./vault";
 export * from "./reports";
 export * from "./warehouse-stock";
-export { setBaseUrl, setAuthTokenGetter, setBranchIdGetter } from "./custom-fetch";
-export type { AuthTokenGetter, BranchIdGetter } from "./custom-fetch";
+export {
+  setBaseUrl,
+  setAuthTokenGetter,
+  setBranchIdGetter,
+  setDeviceKeyGetter,
+  RMS_FORCE_LOGOUT_EVENT,
+} from "./custom-fetch";
+export type { AuthTokenGetter, BranchIdGetter, DeviceKeyGetter } from "./custom-fetch";

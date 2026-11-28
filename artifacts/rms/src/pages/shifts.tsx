@@ -21,6 +21,7 @@ import { useBranch } from "@/lib/branch-context";
 import { useCurrency } from "@/hooks/use-currency";
 import { useI18n } from "@/i18n";
 import { printShiftReportThermal } from "@/lib/print-receipt";
+import { getOrCreateDeviceKey } from "@/lib/device-id";
 import {
   Plus,
   Trash2,
@@ -318,6 +319,7 @@ export default function ShiftsPage() {
           branchId: writeBranchId,
           openedAt: openDate,
           notes: notes.trim() || null,
+          deviceKey: getOrCreateDeviceKey(),
         },
       },
       {
