@@ -7,6 +7,7 @@ import { employeesTable } from "./employees";
 import { branchesTable } from "./branches";
 import { driversTable } from "./drivers";
 import { cardsTable } from "./cards";
+import { shiftsTable } from "./shifts";
 
 export const ordersTable = pgTable("orders", {
   id: serial("id").primaryKey(),
@@ -19,6 +20,10 @@ export const ordersTable = pgTable("orders", {
   employeeId: integer("employee_id").references(() => employeesTable.id),
   /** Assigned delivery driver */
   driverId: integer("driver_id").references(() => driversTable.id, {
+    onDelete: "set null",
+  }),
+  /** Shift open when the invoice was created (POS/cashier/table). */
+  openedShiftId: integer("opened_shift_id").references(() => shiftsTable.id, {
     onDelete: "set null",
   }),
   subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull().default("0"),
@@ -34,6 +39,12 @@ export const ordersTable = pgTable("orders", {
   }),
   /** Saved from POS without payment — awaiting cashier collection */
   collectAtCashier: boolean("collect_at_cashier").default(false).notNull(),
+  /** When payment was collected (واصل). Null while غير واصل. */
+  paidAt: timestamp("paid_at"),
+  /** Shift that collected the payment — sales belong to this shift, not creation shift. */
+  paidShiftId: integer("paid_shift_id").references(() => shiftsTable.id, {
+    onDelete: "set null",
+  }),
   /** Last time this invoice was edited from the POS form (null = never edited) */
   posEditedAt: timestamp("pos_edited_at"),
   /**

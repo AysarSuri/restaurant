@@ -265,6 +265,9 @@ export interface ShiftReport {
     discountTotal: number;
     receivedTotal: number;
     invoiceCount: number;
+    /** Open-shift only: غير واصل (incl. carryover from previous shifts) */
+    unpaidTotal?: number;
+    unpaidCount?: number;
   };
   expenses: {
     total: number;
