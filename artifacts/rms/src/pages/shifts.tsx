@@ -223,7 +223,9 @@ export default function ShiftsPage() {
 
     const from = filterFrom || todayYmd();
     const to = filterTo || todayYmd();
+    // Always show currently-open shifts so they can be closed (even outside date filter)
     const byDate = scoped.filter((s) => {
+      if (s.isOpen === true && (s.closedAt == null || s.closedAt === "")) return true;
       const od = s.openDate || "";
       return od >= from && od <= to;
     });
@@ -268,13 +270,20 @@ export default function ShiftsPage() {
     void refetchShifts();
   };
 
+  /** True open shift only: server sets isOpen when closedAt is null. */
+  const findOpenForBranch = (bid: number) =>
+    (shifts ?? []).find(
+      (s) =>
+        s.branchId === bid &&
+        s.isOpen === true &&
+        (s.closedAt == null || s.closedAt === "")
+    ) ?? null;
+
   /** Open shift for the selected form branch only (shared DB — all devices). */
   const openShiftForBranch = useMemo(() => {
     if (branchId === "" || !Number(branchId)) return null;
-    const bid = Number(branchId);
-    return (
-      (shifts ?? []).find((s) => s.branchId === bid && !s.closedAt) ?? null
-    );
+    return findOpenForBranch(Number(branchId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- findOpenForBranch uses shifts
   }, [shifts, branchId]);
 
   const handleOpenShift = () => {
@@ -292,15 +301,11 @@ export default function ShiftsPage() {
       setSubmitError(t("shifts.errOpenDate"));
       return;
     }
-    // Fresh check from latest list for THIS branch only
-    const stillOpen =
-      (shifts ?? []).find((s) => s.branchId === writeBranchId && !s.closedAt) ??
-      null;
-    if (stillOpen || openShiftForBranch) {
-      const blocking = stillOpen ?? openShiftForBranch!;
+    const stillOpen = findOpenForBranch(writeBranchId);
+    if (stillOpen) {
       setSubmitError(
         t("shifts.errBranchAlreadyOpen", {
-          name: t(KIND_META[blocking.kind].labelKey),
+          name: t(KIND_META[stillOpen.kind].labelKey),
         })
       );
       void refetchShifts();
@@ -322,7 +327,12 @@ export default function ShiftsPage() {
           setFormOpen(false);
         },
         onError: (err: any) => {
-          setSubmitError(err?.data?.message || err?.message || t("shifts.saveFailed"));
+          const msg =
+            err?.data?.message ||
+            err?.data?.error ||
+            err?.message ||
+            t("shifts.saveFailed");
+          setSubmitError(String(msg));
           void refetchShifts();
         },
       }
