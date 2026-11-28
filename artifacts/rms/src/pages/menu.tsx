@@ -64,6 +64,7 @@ const EMPTY_CATEGORY_FORM: CategoryFormState = {
   imageUrl: "",
 };
 
+/** Compress image to a durable data URL (stored in DB — survives Railway). */
 async function readCategoryImageFile(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error("اختر ملف صورة فقط");
@@ -73,8 +74,28 @@ async function readCategoryImageFile(file: File): Promise<string> {
   }
   return await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("تعذر قراءة الصورة"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("صورة غير صالحة"));
+      img.onload = () => {
+        const maxSide = 512;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("تعذر معالجة الصورة"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = String(reader.result || "");
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -88,11 +109,16 @@ function CategoryImageThumb({
   alt: string;
   className?: string;
 }) {
-  if (src) {
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => {
+    setBroken(false);
+  }, [src]);
+  if (src && !broken) {
     return (
       <img
         src={src}
         alt={alt}
+        onError={() => setBroken(true)}
         className={`${className} rounded-xl object-cover border border-border/50 bg-secondary/40 flex-shrink-0`}
       />
     );

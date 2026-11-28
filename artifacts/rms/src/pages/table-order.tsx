@@ -728,12 +728,19 @@ export default function TableOrder() {
                       key={cat.id}
                       type="button"
                       onClick={() => setActiveCategory(cat.id)}
-                      className={`px-3.5 py-2 rounded-full text-sm font-bold flex-shrink-0 transition-all whitespace-nowrap border ${
+                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-bold flex-shrink-0 transition-all whitespace-nowrap border ${
                         selected
                           ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/25"
                           : "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
                       }`}
                     >
+                      {cat.imageUrl ? (
+                        <img
+                          src={cat.imageUrl}
+                          alt=""
+                          className="w-6 h-6 rounded-full object-cover border border-white/20 flex-shrink-0"
+                        />
+                      ) : null}
                       {cat.nameAr}
                     </button>
                   );

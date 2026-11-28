@@ -7,7 +7,11 @@ import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { ensureCategoryUploadsDir, UPLOADS_ROOT } from "./lib/category-image";
+import {
+  ensureCategoryUploadsDir,
+  migrateUploadImagesToDataUrls,
+  UPLOADS_ROOT,
+} from "./lib/category-image";
 import { ensureSalesDeviceColumns } from "./lib/ensure-sales-columns";
 import { ensureEmployeeColumns } from "./lib/ensure-employee-columns";
 import { ensureVaultColumns } from "./lib/ensure-vault-columns";
@@ -29,6 +33,7 @@ export async function initDatabase() {
   await ensureSalesDeviceColumns();
   await ensureEmployeeColumns();
   await ensureVaultColumns();
+  await migrateUploadImagesToDataUrls();
 }
 
 app.disable("x-powered-by");
@@ -101,8 +106,8 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 app.use("/api", (req, res, next) => {
   cors({

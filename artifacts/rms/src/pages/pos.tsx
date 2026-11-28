@@ -1737,7 +1737,7 @@ export default function POS() {
                 key={cat.id}
                 variant={selected ? "default" : "secondary"}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`rounded-full px-3 sm:px-5 whitespace-nowrap flex-shrink-0 touch-target gap-2 shadow-none hover:translate-y-0 ${
+                className={`rounded-full px-3 sm:px-5 whitespace-nowrap flex-shrink-0 touch-target inline-flex items-center gap-2 shadow-none hover:translate-y-0 ${
                   selected
                     ? "bg-primary hover:bg-primary/90 text-primary-foreground border border-primary from-primary to-primary shadow-md shadow-primary/25"
                     : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 hover:text-primary"
@@ -1747,7 +1747,7 @@ export default function POS() {
                   <img
                     src={cat.imageUrl}
                     alt=""
-                    className="w-6 h-6 rounded-full object-cover border border-white/20"
+                    className="w-6 h-6 rounded-full object-cover border border-white/20 flex-shrink-0"
                   />
                 ) : null}
                 {cat.nameAr}
