@@ -94,7 +94,8 @@ function serializeShift(
   const meta = KIND_META[kind];
   const openedAt = shift.openedAt ? new Date(shift.openedAt) : new Date(shift.createdAt);
   const closedAt = shift.closedAt ? new Date(shift.closedAt) : null;
-  const isOpen = closedAt == null && shift.isActive !== false;
+  // Open = not closed yet (per branch). Device does not matter.
+  const isOpen = closedAt == null;
   return {
     id: shift.id,
     kind,
@@ -525,7 +526,7 @@ router.post("/", async (req, res) => {
   const meta = KIND_META[normalizedKind];
   const { start: dayStart, end: dayEnd } = dayBounds(openedAt);
 
-  // Only one open shift per branch (morning or evening)
+  // Only one open shift per BRANCH (shared across all devices)
   const [openOnBranch] = await db
     .select({
       id: shiftsTable.id,
@@ -534,11 +535,7 @@ router.post("/", async (req, res) => {
     })
     .from(shiftsTable)
     .where(
-      and(
-        eq(shiftsTable.branchId, resolvedBranchId),
-        eq(shiftsTable.isActive, true),
-        isNull(shiftsTable.closedAt)
-      )
+      and(eq(shiftsTable.branchId, resolvedBranchId), isNull(shiftsTable.closedAt))
     )
     .limit(1);
   if (openOnBranch) {
