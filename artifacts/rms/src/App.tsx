@@ -3,8 +3,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { createContext, useContext, useEffect, useLayoutEffect, useState } from "react";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  RMS_FORCE_LOGOUT_EVENT,
+  setAuthTokenGetter,
+  setDeviceKeyGetter,
+} from "@workspace/api-client-react";
+import { getOrCreateDeviceKey } from "@/lib/device-id";
+import { toast } from "@/hooks/use-toast";
 
 import Layout from "@/components/layout";
 import Dashboard from "@/pages/dashboard";
@@ -222,10 +236,15 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
   });
+  const forceLogoutBusy = useRef(false);
 
   useEffect(() => {
     setAuthTokenGetter(() => getStoredAuthToken());
-    return () => setAuthTokenGetter(null);
+    setDeviceKeyGetter(() => getOrCreateDeviceKey());
+    return () => {
+      setAuthTokenGetter(null);
+      setDeviceKeyGetter(null);
+    };
   }, []);
 
   const login = (u: AuthUser, token?: string) => {
@@ -234,12 +253,96 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) setStoredAuthToken(token);
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem("rms-user");
     localStorage.removeItem("rms-branch");
     setStoredAuthToken(null);
-  };
+    try {
+      queryClient.clear();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const applyForceLogout = useCallback(
+    (message?: string) => {
+      if (forceLogoutBusy.current) return;
+      forceLogoutBusy.current = true;
+      logout();
+      toast({
+        title: message || "تم فتح وردية جديدة على جهاز آخر — أعد تسجيل الدخول",
+        variant: "destructive",
+      });
+      window.setTimeout(() => {
+        forceLogoutBusy.current = false;
+      }, 1500);
+    },
+    [logout]
+  );
+
+  useEffect(() => {
+    const onForce = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ message?: string }>).detail;
+      applyForceLogout(detail?.message);
+    };
+    window.addEventListener(RMS_FORCE_LOGOUT_EVENT, onForce);
+    return () => window.removeEventListener(RMS_FORCE_LOGOUT_EVENT, onForce);
+  }, [applyForceLogout]);
+
+  // Poll so idle screens also leave when another device opens a shift
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const check = async () => {
+      const token = getStoredAuthToken();
+      if (!token || cancelled) return;
+      try {
+        const deviceKey = getOrCreateDeviceKey();
+        const res = await fetch("/api/auth/session-check", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Device-Key": deviceKey,
+            Accept: "application/json",
+          },
+        });
+        if (cancelled) return;
+        if (res.status === 401) {
+          applyForceLogout("جلسة غير صالحة — أعد تسجيل الدخول");
+          return;
+        }
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          forceLogout?: boolean;
+          message?: string | null;
+        };
+        if (data?.forceLogout) {
+          applyForceLogout(
+            data.message ||
+              "تم فتح وردية جديدة على جهاز آخر — أعد تسجيل الدخول"
+          );
+        }
+      } catch {
+        /* offline / transient — retry next tick */
+      }
+    };
+
+    void check();
+    const id = window.setInterval(check, 4000);
+    const onFocus = () => {
+      void check();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [user, applyForceLogout]);
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>

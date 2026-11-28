@@ -190,4 +190,51 @@ router.get("/me", (req: AuthedRequest, res) => {
   res.json({ success: true, user: req.auth });
 });
 
+/**
+ * Lightweight poll: other devices learn they must log out after a new shift opens.
+ * Public-ish with bearer — used by logged-in clients.
+ */
+router.get("/session-check", async (req: AuthedRequest, res) => {
+  const {
+    getSessionForceLogoutGate,
+    shouldForceLogoutSession,
+  } = await import("../lib/session-force-logout");
+  const token = (() => {
+    const header = req.headers.authorization;
+    if (typeof header === "string" && header.toLowerCase().startsWith("bearer ")) {
+      return header.slice(7).trim();
+    }
+    return "";
+  })();
+  const { verifyAuthToken } = await import("../lib/auth-token");
+  const claims = token ? verifyAuthToken(token) : null;
+  if (!claims) {
+    res.status(401).json({
+      success: false,
+      forceLogout: true,
+      error: "invalid_token",
+      message: "جلسة غير صالحة",
+    });
+    return;
+  }
+  const deviceKey = String(
+    (req.headers["x-device-key"] as string | undefined) ||
+      (req.query.deviceKey as string | undefined) ||
+      ""
+  ).trim();
+  const gate = await getSessionForceLogoutGate();
+  const forceLogout = shouldForceLogoutSession({
+    tokenIatSec: claims.iat,
+    deviceKey,
+    gate,
+  });
+  res.json({
+    success: true,
+    forceLogout,
+    message: forceLogout
+      ? "تم فتح وردية جديدة على جهاز آخر — أعد تسجيل الدخول"
+      : null,
+  });
+});
+
 export default router;

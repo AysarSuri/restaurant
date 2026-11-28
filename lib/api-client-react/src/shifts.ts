@@ -44,6 +44,8 @@ export interface OpenShiftBody {
   /** YYYY-MM-DD or ISO datetime — defaults to now */
   openedAt?: string;
   notes?: string | null;
+  /** Device that opens the shift stays logged in; others are force-logged out */
+  deviceKey?: string | null;
 }
 
 export interface UpdateShiftBody {

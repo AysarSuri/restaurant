@@ -4,6 +4,10 @@ import {
   type AuthRole,
   verifyAuthToken,
 } from "../lib/auth-token";
+import {
+  getSessionForceLogoutGate,
+  shouldForceLogoutSession,
+} from "../lib/session-force-logout";
 
 export type AuthedRequest = Request & {
   auth?: AuthClaims;
@@ -20,6 +24,40 @@ function extractBearer(req: Request): string | null {
     if (match?.[1]) return decodeURIComponent(match[1]);
   }
   return null;
+}
+
+function extractDeviceKey(req: Request): string {
+  const h = req.headers["x-device-key"];
+  if (typeof h === "string") return h.trim();
+  if (Array.isArray(h) && h[0]) return String(h[0]).trim();
+  return "";
+}
+
+async function rejectIfForceLogout(
+  req: AuthedRequest,
+  res: Response,
+  claims: AuthClaims
+): Promise<boolean> {
+  try {
+    const gate = await getSessionForceLogoutGate();
+    if (
+      shouldForceLogoutSession({
+        tokenIatSec: claims.iat,
+        deviceKey: extractDeviceKey(req),
+        gate,
+      })
+    ) {
+      res.status(401).json({
+        success: false,
+        message: "تم فتح وردية جديدة على جهاز آخر — أعد تسجيل الدخول",
+        error: "force_logout",
+      });
+      return true;
+    }
+  } catch {
+    /* don't block requests if gate table is unavailable */
+  }
+  return false;
 }
 
 export function attachAuthIfPresent(
@@ -58,8 +96,11 @@ export function requireAuth(
     });
     return;
   }
-  req.auth = claims;
-  next();
+  void rejectIfForceLogout(req, res, claims).then((forced) => {
+    if (forced) return;
+    req.auth = claims;
+    next();
+  });
 }
 
 export function requireRoles(...roles: AuthRole[]) {
@@ -90,6 +131,7 @@ export function isPublicApiPath(method: string, path: string): boolean {
   const p = path.split("?")[0] || "/";
   if (p === "/healthz" || p === "/health" || p === "/") return true;
   if (method === "POST" && p === "/auth/login") return true;
+  if (method === "GET" && p === "/auth/session-check") return true;
   // Login screen needs directory data without a token; PINs are stripped.
   if (method === "GET" && (p === "/employees" || p === "/branches" || p === "/tables")) {
     return true;

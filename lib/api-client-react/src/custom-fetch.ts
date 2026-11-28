@@ -9,6 +9,9 @@ export type BodyType<T> = T;
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
 /** Returns branch id number, `"all"`, or null (omit header). */
 export type BranchIdGetter = () => Promise<string | number | null> | string | number | null;
+export type DeviceKeyGetter = () => Promise<string | null> | string | null;
+
+export const RMS_FORCE_LOGOUT_EVENT = "rms-force-logout";
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -20,6 +23,7 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
 let _branchIdGetter: BranchIdGetter | null = null;
+let _deviceKeyGetter: DeviceKeyGetter | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -50,6 +54,25 @@ export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
  */
 export function setBranchIdGetter(getter: BranchIdGetter | null): void {
   _branchIdGetter = getter;
+}
+
+/** Stable per-browser device id for shift open / force-logout keep. */
+export function setDeviceKeyGetter(getter: DeviceKeyGetter | null): void {
+  _deviceKeyGetter = getter;
+}
+
+function emitForceLogout(message?: string) {
+  try {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent(RMS_FORCE_LOGOUT_EVENT, {
+          detail: { message: message || "تم فتح وردية جديدة — أعد تسجيل الدخول" },
+        })
+      );
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -373,12 +396,32 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  if (_deviceKeyGetter && !headers.has("x-device-key")) {
+    const deviceKey = await _deviceKeyGetter();
+    if (deviceKey) headers.set("x-device-key", String(deviceKey));
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
+    const errCode =
+      errorData &&
+      typeof errorData === "object" &&
+      "error" in errorData
+        ? String((errorData as { error?: unknown }).error ?? "")
+        : "";
+    if (response.status === 401 && errCode === "force_logout") {
+      const msg =
+        errorData &&
+        typeof errorData === "object" &&
+        "message" in errorData
+          ? String((errorData as { message?: unknown }).message ?? "")
+          : "";
+      emitForceLogout(msg);
+    }
     throw new ApiError(response, errorData, requestInfo);
   }
 
