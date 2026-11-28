@@ -29,7 +29,7 @@ import {
   Banknote, ChefHat, ArrowLeft, Table2, MapPin, Phone, RefreshCw, X,
   Clock, CheckCircle2, XCircle, Percent, Users, Armchair, Star,
   DoorOpen, UserRound, Lock, Wallet, Printer, PencilLine, RotateCcw,
-  ShoppingBag, Truck, Bike,
+  ShoppingBag, Truck, Bike, LayoutGrid,
 } from "lucide-react";
 import type { MenuItem, Order } from "@workspace/api-client-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
@@ -1706,156 +1706,216 @@ export default function POS() {
           )}
         </header>
 
-        <div className={`py-3 flex gap-2 sm:gap-3 overflow-x-auto relative z-10 scrollbar-hide ${isPortraitPos ? "px-4 xl:px-5" : "px-3 sm:px-5 xl:px-6"}`}>
-          <Button
-            variant={activeCategory === "favorites" ? "default" : "secondary"}
-            onClick={() => setActiveCategory("favorites")}
-            className={`rounded-full px-3 sm:px-5 flex-shrink-0 touch-target gap-1.5 shadow-none hover:translate-y-0 ${
-              activeCategory === "favorites"
-                ? "bg-amber-500 hover:bg-amber-500/90 text-white border border-amber-500 from-amber-500 to-amber-500"
-                : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/15"
-            }`}
-          >
-            <Star className="w-4 h-4 text-black fill-black" />
-            {t("pos.favorites")}
-          </Button>
-          <Button
-            variant={activeCategory === null ? "default" : "secondary"}
-            onClick={() => setActiveCategory(null)}
-            className={`rounded-full px-4 sm:px-6 flex-shrink-0 touch-target shadow-none hover:translate-y-0 ${
-              activeCategory === null
-                ? "bg-primary hover:bg-primary/90 text-primary-foreground border border-primary from-primary to-primary shadow-md shadow-primary/25"
-                : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 hover:text-primary"
-            }`}
-          >
-            {t("common.all")}
-          </Button>
-          {categories?.map((cat) => {
-            const selected = activeCategory === cat.id;
-            return (
-              <Button
-                key={cat.id}
-                variant={selected ? "default" : "secondary"}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`rounded-full px-3 sm:px-5 whitespace-nowrap flex-shrink-0 touch-target inline-flex items-center gap-2 shadow-none hover:translate-y-0 ${
-                  selected
-                    ? "bg-primary hover:bg-primary/90 text-primary-foreground border border-primary from-primary to-primary shadow-md shadow-primary/25"
-                    : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15 hover:text-primary"
-                }`}
-              >
-                {cat.imageUrl ? (
-                  <img
-                    src={cat.imageUrl}
-                    alt=""
-                    className="w-6 h-6 rounded-full object-cover border border-white/20 flex-shrink-0"
-                  />
-                ) : null}
-                {cat.nameAr}
-              </Button>
-            );
-          })}
-        </div>
-
-        <div className={`flex-1 overflow-y-auto relative z-10 ${isCompactPos ? "pb-28 p-3 sm:p-4" : isPortraitPos ? "p-4 xl:p-5" : "p-3 sm:p-4 md:p-5 xl:p-6"}`}>
-          {needsBranchPick && (
-            <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
-              {t("pos.allBranchesBlock")}
-            </div>
-          )}
-          {shiftClosed && (
-            <div className="mb-4 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-700 dark:text-rose-300">
-              {t("pos.shiftClosedBlock")}
-            </div>
-          )}
+        {/* Items + vertical category rail (rail sits on visual left in RTL) */}
+        <div className="flex flex-1 min-h-0 relative z-10">
           <div
-            className={`grid gap-3 md:gap-4 ${
+            className={`flex-1 min-w-0 overflow-y-auto ${
               isCompactPos
-                ? "grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3"
+                ? "pb-28 p-2.5 sm:p-3"
                 : isPortraitPos
-                  ? "grid-cols-2 xl:grid-cols-3"
-                  : isWidePos
-                    ? "grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
-                    : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                  ? "p-3 xl:p-4"
+                  : "p-2.5 sm:p-3 md:p-4"
             }`}
           >
-            <AnimatePresence mode="popLayout">
-              {filteredItems?.map((item) => {
-                const inCart = cart.find(
-                  (c) => c.id === item.id && Boolean(c.isReturn) === isReturnMode
-                );
-                return (
-                  <motion.button
-                    key={item.id}
-                    type="button"
-                    layout
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => addToCart(item)}
-                    className={`text-start bg-card/85 backdrop-blur-sm border rounded-2xl p-3 sm:p-4 cursor-pointer flex flex-col justify-between transition-all relative overflow-hidden
-                      ${
-                        isReturnMode
-                          ? inCart
-                            ? "border-rose-500/80 shadow-lg shadow-rose-500/20 ring-1 ring-rose-500/40"
-                            : "border-rose-500/35 hover:border-rose-500/70 hover:shadow-xl hover:shadow-rose-500/15"
-                          : inCart
-                            ? "border-primary/70 shadow-lg shadow-primary/15 ring-1 ring-primary/30"
-                            : "border-border/50 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10"
-                      }`}
-                  >
-                    {inCart && (
-                      <div
-                        className={`absolute top-2 left-2 min-w-7 h-7 px-1.5 rounded-full flex items-center justify-center text-xs font-bold z-10 shadow-md ${
+            {needsBranchPick && (
+              <div className="mb-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                {t("pos.allBranchesBlock")}
+              </div>
+            )}
+            {shiftClosed && (
+              <div className="mb-3 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-3 py-2.5 text-sm font-semibold text-rose-700 dark:text-rose-300">
+                {t("pos.shiftClosedBlock")}
+              </div>
+            )}
+            <div
+              className={`grid gap-2 sm:gap-2.5 md:gap-3 ${
+                isCompactPos
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : isPortraitPos
+                    ? "grid-cols-2 xl:grid-cols-3"
+                    : isWidePos
+                      ? "grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+                      : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+              }`}
+            >
+              <AnimatePresence mode="popLayout">
+                {filteredItems?.map((item) => {
+                  const inCart = cart.find(
+                    (c) => c.id === item.id && Boolean(c.isReturn) === isReturnMode
+                  );
+                  return (
+                    <motion.button
+                      key={item.id}
+                      type="button"
+                      layout
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => addToCart(item)}
+                      className={`text-start bg-card/85 backdrop-blur-sm border rounded-xl sm:rounded-2xl p-2 sm:p-2.5 cursor-pointer flex flex-col justify-between transition-all relative overflow-hidden
+                        ${
                           isReturnMode
-                            ? "bg-rose-600 text-white"
-                            : "bg-primary text-primary-foreground"
+                            ? inCart
+                              ? "border-rose-500/80 shadow-lg shadow-rose-500/20 ring-1 ring-rose-500/40"
+                              : "border-rose-500/35 hover:border-rose-500/70 hover:shadow-xl hover:shadow-rose-500/15"
+                            : inCart
+                              ? "border-primary/70 shadow-lg shadow-primary/15 ring-1 ring-primary/30"
+                              : "border-border/50 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10"
                         }`}
-                      >
-                        {isReturnMode ? `-${inCart.cartQuantity}` : inCart.cartQuantity}
-                      </div>
-                    )}
-                    {item.isFavorite && (
-                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-amber-500/90 flex items-center justify-center z-10 shadow-md">
-                        <Star className="w-3.5 h-3.5 text-black fill-black" />
-                      </div>
-                    )}
-                    <div className="w-full aspect-[4/3] sm:aspect-square rounded-xl bg-gradient-to-br from-secondary to-secondary/40 mb-2 sm:mb-3 flex items-center justify-center overflow-hidden">
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={menuItemDisplayName(item, locale)}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <ChefHat className="w-10 h-10 sm:w-12 sm:h-12 text-primary/40" />
-                      )}
-                    </div>
-                    <div className="mt-auto">
-                      <h3 className="font-extrabold text-sm sm:text-base leading-tight mb-2 line-clamp-2">
-                        {menuItemDisplayName(item, locale)}
-                      </h3>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-primary font-extrabold font-display text-sm sm:text-lg">
-                          {formatIQD(Number(item.price))}
-                          <span className="text-[10px] ms-1 font-bold opacity-70">{currencySymbol}</span>
-                        </div>
-                        <span
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    >
+                      {inCart && (
+                        <div
+                          className={`absolute top-1.5 left-1.5 min-w-6 h-6 px-1 rounded-full flex items-center justify-center text-[11px] font-bold z-10 shadow-md ${
                             isReturnMode
-                              ? "bg-rose-500/15 text-rose-600"
-                              : "bg-primary/15 text-primary"
+                              ? "bg-rose-600 text-white"
+                              : "bg-primary text-primary-foreground"
                           }`}
                         >
-                          <Plus className="w-4 h-4" />
-                        </span>
+                          {isReturnMode ? `-${inCart.cartQuantity}` : inCart.cartQuantity}
+                        </div>
+                      )}
+                      {item.isFavorite && (
+                        <div className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-amber-500/90 flex items-center justify-center z-10 shadow-md">
+                          <Star className="w-3 h-3 text-black fill-black" />
+                        </div>
+                      )}
+                      <div className="w-full aspect-[4/3] sm:aspect-square rounded-lg sm:rounded-xl bg-gradient-to-br from-secondary to-secondary/40 mb-1.5 sm:mb-2 flex items-center justify-center overflow-hidden">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={menuItemDisplayName(item, locale)}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ChefHat className="w-8 h-8 sm:w-10 sm:h-10 text-primary/40" />
+                        )}
                       </div>
-                    </div>
-                  </motion.button>
+                      <div className="mt-auto">
+                        <h3 className="font-extrabold text-xs sm:text-sm leading-tight mb-1 line-clamp-2">
+                          {menuItemDisplayName(item, locale)}
+                        </h3>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="text-primary font-extrabold font-display text-xs sm:text-sm">
+                            {formatIQD(Number(item.price))}
+                            <span className="text-[9px] ms-0.5 font-bold opacity-70">
+                              {currencySymbol}
+                            </span>
+                          </div>
+                          <span
+                            className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                              isReturnMode
+                                ? "bg-rose-500/15 text-rose-600"
+                                : "bg-primary/15 text-primary"
+                            }`}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Category names — vertical rail on the left (2nd in RTL flex) */}
+          <aside
+            className={`flex-shrink-0 w-[4.75rem] sm:w-[5.25rem] md:w-[5.75rem] border-s border-border/50 bg-card/70 backdrop-blur-xl overflow-y-auto scrollbar-hide ${
+              isCompactPos ? "pb-28" : ""
+            }`}
+            aria-label={t("pos.categories")}
+          >
+            <div className="flex flex-col gap-1.5 p-1.5 sm:p-2">
+              <button
+                type="button"
+                onClick={() => setActiveCategory("favorites")}
+                className={`group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 transition-all active:scale-[0.97] ${
+                  activeCategory === "favorites"
+                    ? "bg-amber-500 text-white shadow-md shadow-amber-500/25"
+                    : "bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/15"
+                }`}
+              >
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    activeCategory === "favorites" ? "bg-white/20" : "bg-amber-500/15"
+                  }`}
+                >
+                  <Star className="w-4 h-4 text-black fill-black" />
+                </span>
+                <span className="text-[10px] sm:text-[11px] font-extrabold leading-tight text-center line-clamp-2 px-0.5">
+                  {t("pos.favorites")}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className={`group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 transition-all active:scale-[0.97] ${
+                  activeCategory === null
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                    : "bg-secondary/70 text-foreground hover:bg-primary/10 hover:text-primary"
+                }`}
+              >
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    activeCategory === null ? "bg-white/20" : "bg-primary/10 text-primary"
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </span>
+                <span className="text-[10px] sm:text-[11px] font-extrabold leading-tight text-center line-clamp-2 px-0.5">
+                  {t("common.all")}
+                </span>
+              </button>
+
+              <div className="mx-1 my-0.5 h-px bg-border/60" />
+
+              {categories?.map((cat) => {
+                const selected = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveCategory(cat.id)}
+                    title={cat.nameAr}
+                    className={`group relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 transition-all active:scale-[0.97] ${
+                      selected
+                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                        : "bg-secondary/50 text-foreground hover:bg-primary/10 hover:text-primary"
+                    }`}
+                  >
+                    {selected ? (
+                      <span className="absolute inset-y-2 start-0 w-0.5 rounded-full bg-primary-foreground/80" />
+                    ) : null}
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border ${
+                        selected
+                          ? "border-white/25 bg-white/15"
+                          : "border-border/40 bg-background/70"
+                      }`}
+                    >
+                      {cat.imageUrl ? (
+                        <img
+                          src={cat.imageUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[11px] font-black opacity-70">
+                          {cat.nameAr?.charAt(0) || "·"}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] sm:text-[11px] font-extrabold leading-tight text-center line-clamp-2 px-0.5">
+                      {cat.nameAr}
+                    </span>
+                  </button>
                 );
               })}
-            </AnimatePresence>
-          </div>
+            </div>
+          </aside>
         </div>
 
         <footer
