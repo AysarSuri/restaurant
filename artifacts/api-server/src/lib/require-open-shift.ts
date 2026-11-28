@@ -5,26 +5,35 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 export const SHIFT_CLOSED_MESSAGE =
   "لا يمكن إضافة أو تعديل أو حذف أي قائمة — لا توجد وردية مفتوحة لهذا الفرع. افتح وردية من إدارة الورديات أولاً.";
 
-/** Open (active, not closed) shift for a branch, or null. */
+/**
+ * Open shift for a branch = closedAt IS NULL (per branch, not per device).
+ * isActive alone is not enough — heal stale rows when found.
+ */
 export async function getOpenShiftForBranch(
   branchId: number | null | undefined
 ): Promise<{ id: number; branchId: number } | null> {
   if (branchId == null || !Number.isFinite(Number(branchId)) || Number(branchId) <= 0) {
     return null;
   }
+  const bid = Number(branchId);
   const [openShift] = await db
-    .select({ id: shiftsTable.id, branchId: shiftsTable.branchId })
+    .select({
+      id: shiftsTable.id,
+      branchId: shiftsTable.branchId,
+      isActive: shiftsTable.isActive,
+    })
     .from(shiftsTable)
-    .where(
-      and(
-        eq(shiftsTable.branchId, Number(branchId)),
-        eq(shiftsTable.isActive, true),
-        isNull(shiftsTable.closedAt)
-      )
-    )
+    .where(and(eq(shiftsTable.branchId, bid), isNull(shiftsTable.closedAt)))
     .orderBy(desc(shiftsTable.openedAt))
     .limit(1);
-  return openShift ?? null;
+  if (!openShift) return null;
+  if (openShift.isActive === false) {
+    await db
+      .update(shiftsTable)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(and(eq(shiftsTable.id, openShift.id), isNull(shiftsTable.closedAt)));
+  }
+  return { id: openShift.id, branchId: openShift.branchId };
 }
 
 /** Returns true when the branch has an open (active, not closed) shift. */

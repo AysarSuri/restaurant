@@ -109,9 +109,37 @@ export default function ShiftsPage() {
   const { format: fmtMoney } = useCurrency();
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranch();
-  const { locked, forcedBranchId, filterOptions, resolveWriteBranchId, canPickBranch } =
-    useScopedBranch();
-  const { data: shifts, isLoading } = useGetShifts();
+  const {
+    locked,
+    forcedBranchId,
+    filterOptions,
+    resolveWriteBranchId,
+    canPickBranch,
+    canViewAllBranches,
+  } = useScopedBranch();
+  /**
+   * Managers load ALL branch shifts (x-branch-id: all) so open/close rules
+   * are per-branch across devices — not tied to the device's selected branch.
+   * Locked users only see their assigned branch.
+   */
+  const shiftsScopeKey =
+    canViewAllBranches || !locked
+      ? "all"
+      : forcedBranchId != null
+        ? String(forcedBranchId)
+        : "all";
+  const { data: shifts, isLoading, refetch: refetchShifts } = useGetShifts({
+    query: {
+      queryKey: [...getGetShiftsQueryKey(), "form", shiftsScopeKey],
+      staleTime: 1_500,
+      refetchInterval: 4_000,
+      refetchOnWindowFocus: true,
+    },
+    request:
+      shiftsScopeKey === "all"
+        ? { headers: { "x-branch-id": "all" } }
+        : { headers: { "x-branch-id": shiftsScopeKey } },
+  });
   const { data: branches } = useGetBranches();
   const { mutate: createShift, isPending: isCreating } = useCreateShift();
   const { mutate: closeShift, isPending: isClosing } = useCloseShift();
@@ -175,8 +203,12 @@ export default function ShiftsPage() {
     [branchOptions, locked, t]
   );
 
+  const shiftsQueryKey = [...getGetShiftsQueryKey(), "form", shiftsScopeKey] as const;
+
   const syncShifts = (next: Shift[]) => {
+    queryClient.setQueryData<Shift[]>(shiftsQueryKey, next);
     queryClient.setQueryData<Shift[]>(getGetShiftsQueryKey(), next);
+    void queryClient.invalidateQueries({ queryKey: getGetShiftsQueryKey() });
   };
 
   const filtered = useMemo(() => {
@@ -233,12 +265,15 @@ export default function ShiftsPage() {
     setNotes("");
     setSubmitError("");
     setFormOpen(true);
+    void refetchShifts();
   };
 
+  /** Open shift for the selected form branch only (shared DB — all devices). */
   const openShiftForBranch = useMemo(() => {
     if (branchId === "" || !Number(branchId)) return null;
+    const bid = Number(branchId);
     return (
-      (shifts ?? []).find((s) => s.branchId === Number(branchId) && s.isOpen) ?? null
+      (shifts ?? []).find((s) => s.branchId === bid && !s.closedAt) ?? null
     );
   }, [shifts, branchId]);
 
@@ -257,12 +292,18 @@ export default function ShiftsPage() {
       setSubmitError(t("shifts.errOpenDate"));
       return;
     }
-    if (openShiftForBranch) {
+    // Fresh check from latest list for THIS branch only
+    const stillOpen =
+      (shifts ?? []).find((s) => s.branchId === writeBranchId && !s.closedAt) ??
+      null;
+    if (stillOpen || openShiftForBranch) {
+      const blocking = stillOpen ?? openShiftForBranch!;
       setSubmitError(
         t("shifts.errBranchAlreadyOpen", {
-          name: t(KIND_META[openShiftForBranch.kind].labelKey),
+          name: t(KIND_META[blocking.kind].labelKey),
         })
       );
+      void refetchShifts();
       return;
     }
     createShift(
@@ -277,10 +318,12 @@ export default function ShiftsPage() {
       {
         onSuccess: (created) => {
           syncShifts([created, ...(shifts ?? []).filter((s) => s.id !== created.id)]);
+          void refetchShifts();
           setFormOpen(false);
         },
         onError: (err: any) => {
           setSubmitError(err?.data?.message || err?.message || t("shifts.saveFailed"));
+          void refetchShifts();
         },
       }
     );
@@ -293,7 +336,11 @@ export default function ShiftsPage() {
       {
         onSuccess: (updated) => {
           syncShifts((shifts ?? []).map((s) => (s.id === updated.id ? updated : s)));
+          void refetchShifts();
           setCloseTarget(null);
+        },
+        onError: () => {
+          void refetchShifts();
         },
       }
     );
