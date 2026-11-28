@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { logger } from "./logger";
 
 /** Bump when new ALTER COLUMN blocks are added so they run after hot reload / redeploy. */
-const ENSURE_VERSION = 6;
+const ENSURE_VERSION = 7;
 let ensuredVersion = 0;
 let ensurePromise: Promise<void> | null = null;
 
@@ -127,6 +127,47 @@ export async function ensureSalesDeviceColumns() {
         await db.execute(sql`
           ALTER TABLE shifts
           ADD COLUMN IF NOT EXISTS closed_at timestamp
+        `);
+        // Shift accounting: creation shift vs collection shift (غير واصل → وردية جديدة)
+        await db.execute(sql`
+          ALTER TABLE orders
+          ADD COLUMN IF NOT EXISTS opened_shift_id integer REFERENCES shifts(id) ON DELETE SET NULL
+        `);
+        await db.execute(sql`
+          ALTER TABLE orders
+          ADD COLUMN IF NOT EXISTS paid_at timestamp
+        `);
+        await db.execute(sql`
+          ALTER TABLE orders
+          ADD COLUMN IF NOT EXISTS paid_shift_id integer REFERENCES shifts(id) ON DELETE SET NULL
+        `);
+        // Backfill opened_shift_id from historical created_at window
+        await db.execute(sql`
+          UPDATE orders o
+          SET opened_shift_id = (
+            SELECT s.id
+            FROM shifts s
+            WHERE s.branch_id = o.branch_id
+              AND o.created_at >= s.opened_at
+              AND o.created_at < coalesce(s.closed_at, now())
+            ORDER BY s.opened_at DESC
+            LIMIT 1
+          )
+          WHERE o.opened_shift_id IS NULL
+            AND o.branch_id IS NOT NULL
+        `);
+        // Backfill paid_* for already-received invoices (keep historical attribution by creation shift)
+        await db.execute(sql`
+          UPDATE orders
+          SET
+            paid_at = coalesce(paid_at, updated_at, created_at),
+            paid_shift_id = coalesce(paid_shift_id, opened_shift_id)
+          WHERE status <> 'cancelled'
+            AND (
+              payment_method IS NOT NULL
+              OR status = 'paid'
+            )
+            AND (paid_shift_id IS NULL OR paid_at IS NULL)
         `);
       } catch (err) {
         ensurePromise = null;

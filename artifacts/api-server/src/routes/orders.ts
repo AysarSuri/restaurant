@@ -14,7 +14,10 @@ import { eq, desc, and, gte, lt, sql, inArray } from "drizzle-orm";
 import { parseBranchScope, branchEq, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 import { ensureVaultColumns } from "../lib/ensure-vault-columns";
-import { requireOpenShiftForBranch } from "../lib/require-open-shift";
+import {
+  getOpenShiftForBranch,
+  requireOpenShiftForBranch,
+} from "../lib/require-open-shift";
 import {
   isOrderPaymentReceived,
   syncRestaurantSeatFromOrders,
@@ -125,6 +128,9 @@ async function getOrderWithDetails(orderId: number) {
       paymentMethod: ordersTable.paymentMethod,
       cardId: ordersTable.cardId,
       collectAtCashier: ordersTable.collectAtCashier,
+      openedShiftId: ordersTable.openedShiftId,
+      paidAt: ordersTable.paidAt,
+      paidShiftId: ordersTable.paidShiftId,
       posEditedAt: ordersTable.posEditedAt,
       source: ordersTable.source,
       notes: ordersTable.notes,
@@ -246,6 +252,9 @@ router.get("/", async (req, res) => {
       paymentMethod: ordersTable.paymentMethod,
       cardId: ordersTable.cardId,
       collectAtCashier: ordersTable.collectAtCashier,
+      openedShiftId: ordersTable.openedShiftId,
+      paidAt: ordersTable.paidAt,
+      paidShiftId: ordersTable.paidShiftId,
       posEditedAt: ordersTable.posEditedAt,
       source: ordersTable.source,
       notes: ordersTable.notes,
@@ -374,9 +383,13 @@ router.post("/", async (req, res) => {
   }
 
   /** Cannot create any sales list without an open shift for this branch */
-  const shiftErr = await requireOpenShiftForBranch(resolvedBranchId);
-  if (shiftErr) {
-    res.status(400).json({ error: shiftErr, message: shiftErr });
+  const openShift = await getOpenShiftForBranch(resolvedBranchId);
+  if (!openShift) {
+    const shiftErr = await requireOpenShiftForBranch(resolvedBranchId);
+    res.status(400).json({
+      error: shiftErr || "لا توجد وردية مفتوحة",
+      message: shiftErr || "لا توجد وردية مفتوحة",
+    });
     return;
   }
 
@@ -450,6 +463,9 @@ router.post("/", async (req, res) => {
     initialStatus = validPay ? "paid" : "pending";
   }
 
+  const paidImmediately = !collectAtCashier && Boolean(validPay);
+  const paidNow = paidImmediately ? new Date() : null;
+
   const [order] = await db
     .insert(ordersTable)
     .values({
@@ -460,6 +476,7 @@ router.post("/", async (req, res) => {
       tableId: tableId ?? null,
       customerId: customerId ?? null,
       employeeId: employeeId ?? null,
+      openedShiftId: openShift.id,
       subtotal: subtotal.toString(),
       tax: tax.toString(),
       discount: discountAmt.toString(),
@@ -476,6 +493,8 @@ router.post("/", async (req, res) => {
       paymentMethod: collectAtCashier ? null : validPay,
       cardId: resolvedCardId,
       collectAtCashier,
+      paidAt: paidNow,
+      paidShiftId: paidNow ? openShift.id : null,
     })
     .returning();
 
@@ -609,9 +628,13 @@ router.patch("/:id/status", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const shiftErrStatus = await requireOpenShiftForBranch(order.branchId);
-  if (shiftErrStatus) {
-    res.status(400).json({ error: shiftErrStatus, message: shiftErrStatus });
+  const openShiftStatus = await getOpenShiftForBranch(order.branchId);
+  if (!openShiftStatus) {
+    const shiftErrStatus = await requireOpenShiftForBranch(order.branchId);
+    res.status(400).json({
+      error: shiftErrStatus || "لا توجد وردية مفتوحة",
+      message: shiftErrStatus || "لا توجد وردية مفتوحة",
+    });
     return;
   }
 
@@ -622,6 +645,8 @@ router.patch("/:id/status", async (req, res) => {
     patch.paymentMethod = null;
     patch.cardId = null;
     patch.collectAtCashier = true;
+    patch.paidAt = null;
+    patch.paidShiftId = null;
     if (typeof status === "string" && status) {
       patch.status = status;
     } else if (order.status === "paid" || order.status === "served") {
@@ -634,6 +659,9 @@ router.patch("/:id/status", async (req, res) => {
       patch.paymentMethod = paymentMethod;
       patch.cardId = parseOrderCardId(paymentMethod, cardId);
       patch.collectAtCashier = false;
+      // Collection counts on the CURRENT open shift (carryover unpaid → new shift)
+      patch.paidAt = new Date();
+      patch.paidShiftId = openShiftStatus.id;
     }
     // Allow cashier/POS to set invoice discount at collect time (keep signed totals for returns)
     if (discount !== undefined && discount !== null) {
@@ -691,9 +719,13 @@ router.post("/:id/pay", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const shiftErrPay = await requireOpenShiftForBranch(order.branchId);
-  if (shiftErrPay) {
-    res.status(400).json({ error: shiftErrPay, message: shiftErrPay });
+  const openShiftPay = await getOpenShiftForBranch(order.branchId);
+  if (!openShiftPay) {
+    const shiftErrPay = await requireOpenShiftForBranch(order.branchId);
+    res.status(400).json({
+      error: shiftErrPay || "لا توجد وردية مفتوحة",
+      message: shiftErrPay || "لا توجد وردية مفتوحة",
+    });
     return;
   }
 
@@ -702,15 +734,19 @@ router.post("/:id/pay", async (req, res) => {
   const deliveryFeeAmt = parseFloat(order.deliveryFee ?? "0") || 0;
   const total = subtotal - discountAmt + deliveryFeeAmt;
   const resolvedCardId = parseOrderCardId(paymentMethod, cardId);
+  const paidAt = new Date();
 
   await db.update(ordersTable)
     .set({
       status: "paid",
       paymentMethod,
       cardId: resolvedCardId,
+      collectAtCashier: false,
       discount: discountAmt.toString(),
       total: total.toString(),
-      updatedAt: new Date(),
+      paidAt,
+      paidShiftId: openShiftPay.id,
+      updatedAt: paidAt,
     })
     .where(eq(ordersTable.id, id));
 

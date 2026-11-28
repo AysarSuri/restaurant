@@ -249,7 +249,10 @@ router.get("/statement", async (req, res) => {
       const isReturn = amount < 0;
       pushSigned({
         id: `order-${o.id}`,
-        date: dateFromTimestamp(o.createdAt),
+        // Ledger on collection day when paid_at exists (carryover unpaid → new shift)
+        date: dateFromTimestamp(
+          (o as { paidAt?: Date | null }).paidAt ?? o.createdAt
+        ),
         source: "order",
         sourceAr: isReturn ? "مرجع مبيعات" : "مبيعات",
         label:

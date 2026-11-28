@@ -14,7 +14,19 @@ import {
   supplierMovementsTable,
   appSettingsTable,
 } from "@workspace/db/schema";
-import { and, desc, eq, gte, isNull, lt, lte, ne, or, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  isNull,
+  lt,
+  lte,
+  ne,
+  or,
+  isNotNull,
+  sql,
+} from "drizzle-orm";
 import { parseBranchScope, resolveWriteBranchId } from "../lib/branch-scope";
 import { ensureSalesDeviceColumns } from "../lib/ensure-sales-columns";
 
@@ -169,11 +181,22 @@ router.get("/:id/report", async (req, res) => {
     ne(ordersTable.status, "cancelled"),
     or(isNotNull(ordersTable.paymentMethod), eq(ordersTable.status, "paid"))
   );
+  /**
+   * واصل sales belong to the shift that COLLECTED payment (paid_shift_id),
+   * not the creation shift — so late cashier collection after close lands on
+   * the new open shift. Legacy rows without paid_shift_id fall back to createdAt.
+   */
   const orderWindow = and(
     eq(ordersTable.branchId, branchId),
-    gte(ordersTable.createdAt, openedAt),
-    lt(ordersTable.createdAt, closedAt),
-    orderReceived
+    orderReceived,
+    or(
+      eq(ordersTable.paidShiftId, id),
+      and(
+        isNull(ordersTable.paidShiftId),
+        gte(ordersTable.createdAt, openedAt),
+        lt(ordersTable.createdAt, closedAt)
+      )
+    )
   );
 
   // Sales by category
@@ -224,6 +247,33 @@ router.get("/:id/report", async (req, res) => {
   const salesDiscountTotal = money(discountAgg?.total);
   const salesReceivedTotal = money(receivedAgg?.total);
   const salesInvoiceCount = Number(receivedAgg?.count) || 0;
+
+  /**
+   * غير واصل on the open (new) shift: all still-unpaid branch invoices
+   * (carryover from previous shifts + created this shift). Closed shifts do
+   * not keep unpaid in their accounts — they move to the new open shift.
+   */
+  const isOpenShift = !shift.closedAt;
+  let unpaidTotal = 0;
+  let unpaidCount = 0;
+  if (isOpenShift) {
+    const [unpaidAgg] = await db
+      .select({
+        total: sql<number>`coalesce(sum(${ordersTable.total}::numeric), 0)`,
+        count: sql<number>`count(*)`,
+      })
+      .from(ordersTable)
+      .where(
+        and(
+          eq(ordersTable.branchId, branchId),
+          ne(ordersTable.status, "cancelled"),
+          isNull(ordersTable.paymentMethod),
+          ne(ordersTable.status, "paid")
+        )
+      );
+    unpaidTotal = money(unpaidAgg?.total);
+    unpaidCount = Number(unpaidAgg?.count) || 0;
+  }
 
   // Expenses
   const expenseRows = await db
@@ -396,6 +446,8 @@ router.get("/:id/report", async (req, res) => {
       discountTotal: salesDiscountTotal,
       receivedTotal: salesReceivedTotal,
       invoiceCount: salesInvoiceCount,
+      unpaidTotal,
+      unpaidCount,
     },
     expenses: {
       total: expensesTotal,

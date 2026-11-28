@@ -3042,6 +3042,8 @@ export type ShiftThermalReportData = {
     total: number;
     discountTotal: number;
     receivedTotal: number;
+    unpaidTotal?: number;
+    unpaidCount?: number;
   };
   expenses: {
     total: number;
@@ -3210,6 +3212,11 @@ function buildShiftThermalHtml(data: ShiftThermalReportData) {
     <div class="line"><span>مجموع المبيعات</span><b>${money(data.sales.total)}</b></div>
     <div class="line"><span>خصومات المبيعات</span><b>${money(data.sales.discountTotal)}</b></div>
     <div class="grand"><span>الواصل من المبيعات</span><span>${money(data.sales.receivedTotal)}</span></div>
+    ${
+      (data.sales.unpaidCount ?? 0) > 0 || Math.abs(data.sales.unpaidTotal ?? 0) > 0.009
+        ? `<div class="line"><span>غير الواصل (${esc(String(data.sales.unpaidCount ?? 0))})</span><b>${money(data.sales.unpaidTotal ?? 0)}</b></div>`
+        : ""
+    }
   </div>
 
   <div class="sec">المصاريف</div>

@@ -329,6 +329,8 @@ export default function ShiftsPage() {
       total: data.sales.total,
       discountTotal: data.sales.discountTotal,
       receivedTotal: data.sales.receivedTotal,
+      unpaidTotal: data.sales.unpaidTotal ?? 0,
+      unpaidCount: data.sales.unpaidCount ?? 0,
     },
     expenses: {
       total: data.expenses.total,
@@ -1017,6 +1019,21 @@ export default function ShiftsPage() {
                     fmtMoney(report.sales.receivedTotal),
                     true
                   )}
+                  {(report.sales.unpaidCount ?? 0) > 0 ||
+                  Math.abs(report.sales.unpaidTotal ?? 0) > 0.009 ? (
+                    <>
+                      {moneyRow(
+                        t("shifts.salesUnpaid"),
+                        fmtMoney(report.sales.unpaidTotal ?? 0)
+                      )}
+                      <div className="flex justify-between gap-3 text-xs text-muted-foreground mt-1">
+                        <span>{t("shifts.salesUnpaidCount")}</span>
+                        <span className="tabular-nums" dir="ltr">
+                          {report.sales.unpaidCount ?? 0}
+                        </span>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               </section>
 
